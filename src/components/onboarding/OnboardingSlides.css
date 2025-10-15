@@ -1,0 +1,390 @@
+/* components/onboarding/OnboardingSlides.css */
+
+.dark-onboarding {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  background-color: #2E2C34; /* Dark background */
+  padding: 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: white;
+}
+
+.dark-slide-card {
+  position: relative;
+  width: 100%;
+  max-width: 375px;
+  background-color: #3A384A; /* Dark card background */
+  border-radius: 24px;
+  padding: 2rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
+  min-height: 600px;
+  justify-content: center;
+}
+
+.slide-illustration {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 1.5rem auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+/* Logo Image Styling */
+.barber-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 0;
+}
+
+.logo-image-container {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 1rem auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Add a circle around the logo */
+.logo-image-container::before {
+  content: '';
+  position: absolute;
+  width: 205px;
+  height: 205px;
+  border: 2px dashed white;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+/* Fallback logo styling */
+.logo-fallback-text {
+  display: none; /* Hidden by default */
+  font-size: 3rem;
+  font-weight: 900;
+  color: #F8A34A;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* When logo-placeholder class is added, show fallback */
+.logo-placeholder {
+  background-color: #F8A34A;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.logo-placeholder .logo-fallback-text {
+  display: block;
+}
+
+.logo-text {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.logo-text h1 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 900;
+  margin: 0;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.logo-text p {
+  color: #F8A34A;
+  font-size: 1rem;
+  margin-top: 0.2rem;
+}
+
+/* Add decorative elements around the illustration */
+.slide-illustration::before {
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  background-color: rgba(248, 163, 74, 0.15);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.slide-illustration::after {
+  content: '';
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  background-color: rgba(248, 163, 74, 0.05);
+  border-radius: 50%;
+  z-index: -2;
+}
+
+.slide-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.slide-subtitle {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #F8A34A;
+  margin-bottom: 1rem;
+}
+
+.slide-description {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 2rem;
+  max-width: 280px;
+}
+
+.slide-indicators {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.3);
+  margin: 0 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.indicator.active {
+  width: 24px;
+  border-radius: 4px;
+  background-color: #F8A34A;
+}
+
+.action-button {
+  background-color: #F8A34A;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 1rem 0;
+  width: 100%;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(248, 163, 74, 0.3);
+  margin-top: auto;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.action-button:hover {
+  background-color: #E69440;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+}
+
+.action-button:active {
+  transform: translateY(0);
+}
+
+.skip-link {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.skip-link:hover {
+  color: #F8A34A;
+  text-decoration: none;
+}
+
+/* Animation for slide transitions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-illustration,
+.slide-title,
+.slide-subtitle,
+.slide-description {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.slide-title {
+  animation-delay: 0.1s;
+}
+
+.slide-subtitle {
+  animation-delay: 0.2s;
+}
+
+.slide-description {
+  animation-delay: 0.3s;
+}
+
+/* Responsive adjustments */
+@media (max-height: 700px) {
+  .dark-slide-card {
+    padding: 1.5rem;
+    min-height: 500px;
+    justify-content: center;
+  }
+  
+  .slide-illustration {
+    width: 150px;
+    height: 150px;
+    margin: 0 auto 1rem auto;
+  }
+  
+  .slide-illustration::before {
+    width: 190px;
+    height: 190px;
+  }
+  
+  .slide-illustration::after {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .slide-title {
+    margin-bottom: 0.5rem;
+  }
+  
+  .slide-description {
+    margin-bottom: 1.5rem;
+  }
+  
+  .logo-image-container {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .logo-image-container::before {
+    width: 145px;
+    height: 145px;
+  }
+
+  .logo-fallback-text {
+    font-size: 2.5rem;
+  }
+}
+
+/* Notification Slide Styles */
+.notification-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 200px;
+  height: 200px;
+  background-color: #F8A34A;
+  border-radius: 50%;
+  margin-bottom: 2rem;
+  animation: pulse 2s infinite;
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+}
+
+.notification-icon i {
+  color: white !important;
+  font-size: 4rem;
+}
+
+.notification-actions {
+  width: 100%;
+  max-width: 300px;
+}
+
+.notification-actions .btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.notification-actions .action-button {
+  background-color: #F8A34A;
+  border: none;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.notification-actions .action-button:hover {
+  background-color: #E69440;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+}
+
+.notification-actions .btn-outline-secondary {
+  border: 2px solid #6c757d;
+  color: #6c757d;
+  background: transparent;
+}
+
+.notification-actions .btn-outline-secondary:hover {
+  background: #6c757d;
+  color: white;
+  transform: translateY(-2px);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(248, 163, 74, 0.7);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(248, 163, 74, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(248, 163, 74, 0);
+  }
+}
+
+/* Mobile responsive for notification slide */
+@media (max-width: 480px) {
+  .notification-icon {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .notification-icon i {
+    color: white !important;
+    font-size: 3rem;
+  }
+}

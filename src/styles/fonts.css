@@ -1,0 +1,278 @@
+/* San Francisco Font Configuration for R&R Booker */
+
+/* CSS Custom Properties for Font Families */
+:root {
+  /* Primary San Francisco Font Stack */
+  --font-primary: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  
+  /* Secondary Font Stack (for headings) */
+  --font-secondary: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  
+  /* Monospace Font Stack (for code) */
+  --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;
+  
+  /* Font Weights */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+  --font-weight-black: 900;
+  
+  /* Font Sizes */
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  --font-size-5xl: 3rem;      /* 48px */
+  
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+}
+
+/* Base Font Styles */
+body {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-heavy);
+}
+
+h2 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+}
+
+h3 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+h4 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+h5 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+h6 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Paragraphs */
+p {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+  margin: 0;
+}
+
+/* Links */
+a {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+/* Buttons */
+button, .btn {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-base);
+}
+
+/* Form Elements */
+input, textarea, select {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-base);
+}
+
+/* Code */
+code, pre {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-regular);
+}
+
+/* Utility Classes */
+.font-light {
+  font-weight: var(--font-weight-light);
+}
+
+.font-regular {
+  font-weight: var(--font-weight-regular);
+}
+
+.font-medium {
+  font-weight: var(--font-weight-medium);
+}
+
+.font-semibold {
+  font-weight: var(--font-weight-semibold);
+}
+
+.font-bold {
+  font-weight: var(--font-weight-bold);
+}
+
+.font-heavy {
+  font-weight: var(--font-weight-heavy);
+}
+
+.font-black {
+  font-weight: var(--font-weight-black);
+}
+
+/* Font Size Utilities */
+.text-xs {
+  font-size: var(--font-size-xs);
+}
+
+.text-sm {
+  font-size: var(--font-size-sm);
+}
+
+.text-base {
+  font-size: var(--font-size-base);
+}
+
+.text-lg {
+  font-size: var(--font-size-lg);
+}
+
+.text-xl {
+  font-size: var(--font-size-xl);
+}
+
+.text-2xl {
+  font-size: var(--font-size-2xl);
+}
+
+.text-3xl {
+  font-size: var(--font-size-3xl);
+}
+
+.text-4xl {
+  font-size: var(--font-size-4xl);
+}
+
+.text-5xl {
+  font-size: var(--font-size-5xl);
+}
+
+/* Line Height Utilities */
+.leading-tight {
+  line-height: var(--line-height-tight);
+}
+
+.leading-normal {
+  line-height: var(--line-height-normal);
+}
+
+.leading-relaxed {
+  line-height: var(--line-height-relaxed);
+}
+
+/* Special Font Classes for R&R Booker */
+.barber-font {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.brand-font {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-heavy);
+  letter-spacing: 0.5px;
+}
+
+.navigation-font {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+}
+
+.card-title-font {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
+}
+
+.card-text-font {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+/* Responsive Font Sizes */
+@media (max-width: 768px) {
+  :root {
+    --font-size-4xl: 2rem;     /* 32px */
+    --font-size-3xl: 1.5rem;   /* 24px */
+    --font-size-2xl: 1.25rem;  /* 20px */
+  }
+  
+  h1 {
+    font-size: var(--font-size-3xl);
+  }
+  
+  h2 {
+    font-size: var(--font-size-2xl);
+  }
+  
+  h3 {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* Font Loading Optimization */
+@font-face {
+  font-family: 'SF Pro Display';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: local('SF Pro Display');
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: local('SF Pro Text');
+}
+
+@font-face {
+  font-family: 'SF Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: local('SF Mono');
+}

@@ -1,0 +1,424 @@
+/* components/auth/Register.css */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
+
+.register-card {
+  position: relative;
+  width: 100%;
+  max-width: 400px; /* Slightly wider than login for more form fields */
+  min-height: 900px; /* Taller for password strength indicator and requirements */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto; /* Allow scrolling if needed */
+}
+
+.register-form {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+  text-align: left;
+  width: 100%;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.dark-input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.dark-input:focus {
+  outline: none;
+  border-color: #F8A34A;
+  box-shadow: 0 0 0 2px rgba(248, 163, 74, 0.2);
+}
+
+/* Password input container */
+.password-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-container .dark-input {
+  padding-right: 3rem; /* Make room for the eye icon */
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: color 0.3s ease;
+  z-index: 1;
+}
+
+.password-toggle-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.password-toggle-btn:focus {
+  outline: none;
+  color: #F8A34A;
+}
+
+.password-toggle-btn i {
+  font-size: 1.1rem;
+}
+
+/* Form validation messages */
+.form-error {
+  color: #ff6b6b;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.form-success {
+  color: #51cf66;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.form-hint {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+/* Password Strength Indicator */
+.password-strength-container {
+  margin-top: 0.5rem;
+}
+
+.password-strength-bar {
+  width: 100%;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.password-strength-fill {
+  height: 100%;
+  transition: all 0.3s ease;
+  border-radius: 2px;
+}
+
+.password-strength-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.password-score {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+/* Password Requirements */
+.password-requirements {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.requirements-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 0.5rem;
+}
+
+.requirement {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+  transition: color 0.3s ease;
+}
+
+.requirement.met {
+  color: #51cf66;
+}
+
+.requirement.unmet {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.requirement i {
+  font-size: 0.8rem;
+  width: 12px;
+  text-align: center;
+}
+
+.requirement.met i {
+  color: #51cf66;
+}
+
+.requirement.unmet i {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Auth Logo Styles - Using onboarding button colors */
+.auth-logo {
+  max-width: 120px;
+  max-height: 120px;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid #F8A34A;
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+  transition: all 0.3s ease;
+}
+
+.auth-logo:hover {
+  border-color: #E69440;
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+  transform: scale(1.05);
+}
+
+.logo-image-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.logo-fallback-text {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #F8A34A;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.dark-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.dark-select {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' fill='none'%3E%3Cpath fill='rgba(255, 255, 255, 0.5)' d='M6 6 0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  cursor: pointer;
+}
+
+.dark-select:focus {
+  outline: none;
+  border-color: #F8A34A;
+  box-shadow: 0 0 0 2px rgba(248, 163, 74, 0.2);
+}
+
+.dark-select option {
+  background-color: #2E2C34;
+  color: white;
+}
+
+.form-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 0.375rem;
+}
+
+.error-alert {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1.5rem;
+  background-color: rgba(226, 74, 74, 0.1);
+  border: 1px solid rgba(226, 74, 74, 0.3);
+  border-radius: 12px;
+  color: #FF6B6B;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.success-alert {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1.5rem;
+  background-color: rgba(80, 200, 120, 0.1);
+  border: 1px solid rgba(80, 200, 120, 0.3);
+  border-radius: 12px;
+  color: #60E190;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.security-warning {
+  width: 100%;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background-color: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 12px;
+  color: #FFC107;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.security-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.security-header i {
+  margin-right: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.security-details {
+  font-size: 0.85rem;
+}
+
+.security-details p {
+  margin-bottom: 0.5rem;
+}
+
+.security-details ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.security-details li {
+  margin-bottom: 0.25rem;
+}
+
+.risk-very_low {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.risk-low {
+  color: #17a2b8;
+  font-weight: 600;
+}
+
+.risk-medium {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.risk-high {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* Spinner animation for loading state */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 0.8s linear infinite;
+}
+
+.login-link {
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.login-link a {
+  color: #F8A34A;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.login-link a:hover {
+  color: #ffc285;
+  text-decoration: underline;
+}
+
+/* Animation for form transition */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.register-form {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.barber-logo {
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-height: 800px) {
+  .register-card {
+    padding: 1.5rem;
+    min-height: 600px;
+  }
+  
+  .form-group {
+    margin-bottom: 1rem;
+  }
+  
+  .dark-input, .dark-select {
+    padding: 0.75rem;
+  }
+  
+  .barber-logo {
+    margin-bottom: 1rem;
+  }
+}

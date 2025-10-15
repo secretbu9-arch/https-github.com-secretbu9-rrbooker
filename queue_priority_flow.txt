@@ -1,0 +1,110 @@
+QUEUE PRIORITY SYSTEM FLOW
+==========================
+
+1. CUSTOMER BOOKS APPOINTMENT
+   ↓
+   [Default Priority: NORMAL]
+   ↓
+
+2. MANAGER REVIEWS QUEUE
+   ↓
+   [Queue Priority Manager Interface]
+   ↓
+
+3. PRIORITY ASSIGNMENT
+   ↓
+   ┌─────────────────────────────────────┐
+   │  URGENT (Weight: 0) - Red Badge     │
+   │  HIGH (Weight: 1) - Orange Badge    │
+   │  NORMAL (Weight: 2) - Blue Badge    │
+   │  LOW (Weight: 3) - Gray Badge       │
+   └─────────────────────────────────────┘
+   ↓
+
+4. AUTOMATIC QUEUE REORDERING
+   ↓
+   ┌─────────────────────────────────────┐
+   │  Position #1: URGENT Customer A     │
+   │  Position #2: URGENT Customer B     │
+   │  Position #3: HIGH Customer C       │
+   │  Position #4: HIGH Customer D       │
+   │  Position #5: NORMAL Customer E     │
+   │  Position #6: NORMAL Customer F     │
+   │  Position #7: LOW Customer G        │
+   └─────────────────────────────────────┘
+   ↓
+
+5. CUSTOMER NOTIFICATIONS
+   ↓
+   [Push Notification: "Your queue position has changed"]
+   [In-app Notification: "You are now #3 in queue"]
+   ↓
+
+6. REAL-TIME UPDATES
+   ↓
+   [Auto-refresh every 30 seconds]
+   [Manual refresh available]
+   [Live wait time calculations]
+
+MANUAL QUEUE MANAGEMENT
+======================
+
+1. MOVE UP/DOWN BUTTONS
+   ↓
+   [↑ Move Up] [↓ Move Down]
+   ↓
+
+2. POSITION DROPDOWN
+   ↓
+   [→ Move to Position #X]
+   ↓
+
+3. PRIORITY DROPDOWN
+   ↓
+   [Change Priority: Urgent/High/Normal/Low]
+   ↓
+
+4. AUTOMATIC REORDERING
+   ↓
+   [System recalculates all positions]
+   [Updates wait times for everyone]
+   [Sends notifications to affected customers]
+
+PRIORITY RULES
+==============
+
+URGENT > HIGH > NORMAL > LOW
+
+Within same priority: First-Come-First-Served
+
+Example Queue Order:
+1. URGENT - John (arrived 9:00 AM)
+2. URGENT - Sarah (arrived 9:15 AM)  
+3. HIGH - Mike (arrived 8:30 AM)
+4. HIGH - Lisa (arrived 9:00 AM)
+5. NORMAL - Tom (arrived 8:00 AM)
+6. NORMAL - Anna (arrived 8:45 AM)
+7. LOW - Bob (arrived 9:30 AM)
+
+NOTIFICATION FLOW
+=================
+
+Priority Change → Queue Reorder → Wait Time Update → Customer Notification
+
+1. Manager changes priority
+2. System reorders queue
+3. Wait times recalculated
+4. Push notification sent
+5. In-app notification shown
+6. Customer sees new position
+
+ANALYTICS TRACKING
+==================
+
+- Total appointments in queue
+- Priority distribution counts
+- Average wait times by priority
+- Queue completion estimates
+- Manager adjustment history
+- Customer satisfaction metrics
+

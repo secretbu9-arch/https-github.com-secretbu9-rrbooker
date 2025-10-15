@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "160590142868",
+    "project_id": "rrbookerappnotif",
+    "storage_bucket": "rrbookerappnotif.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:160590142868:android:a32ad5c825d4037a6b0381",
+        "android_client_info": {
+          "package_name": "com.rnrbooker.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAP-KcVY2uTMl5aFMquAODPX5IhoiuDh0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

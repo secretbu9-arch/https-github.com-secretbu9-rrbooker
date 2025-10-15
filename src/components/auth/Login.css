@@ -1,0 +1,416 @@
+/* components/onboarding/OnboardingSlides.css */
+
+.dark-onboarding {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  background-color: #2E2C34; /* Dark background */
+  padding: 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: white;
+}
+
+.dark-slide-card {
+  position: relative;
+  width: 100%;
+  max-width: 375px;
+  background-color: #3A384A; /* Dark card background */
+  border-radius: 24px;
+  padding: 2rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  overflow: visible; /* Changed from hidden to visible */
+  min-height: 600px;
+}
+
+.slide-illustration {
+  width: 200px;
+  height: 200px;
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  /* Adjust padding to center the logo */
+  padding-top: 1rem;
+}
+
+/* Logo Image Styling */
+.barber-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  /* Reduce margin to ensure logo is visible */
+  margin-top: 1rem;
+}
+
+.logo-image-container {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 2; /* Ensure logo is above other elements */
+}
+
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 2; /* Ensure image is above other elements */
+}
+
+/* Auth Logo Styles for img tag - Using onboarding button colors */
+.auth-logo {
+  max-width: 120px;
+  max-height: 120px;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid #F8A34A;
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+  transition: all 0.3s ease;
+}
+
+.auth-logo:hover {
+  border-color: #E69440;
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+  transform: scale(1.05);
+}
+
+/* Add a circle around the logo */
+.logo-image-container::before {
+  content: '';
+  position: absolute;
+  width: 185px;
+  height: 185px;
+  border: 2px dashed white;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+/* Fallback logo styling */
+.logo-fallback-text {
+  display: none; /* Hidden by default */
+  font-size: 3rem;
+  font-weight: 900;
+  color: white;
+  z-index: 3; /* Ensure text is above other elements */
+}
+
+/* When logo-placeholder class is added, show fallback */
+.logo-placeholder {
+  background-color: #F8A34A;
+  display: flex !important; /* Force display */
+  justify-content: center;
+  align-items: center;
+}
+
+.logo-placeholder .logo-fallback-text {
+  display: block !important; /* Force display */
+}
+
+.logo-text {
+  text-align: center;
+  margin-top: 1rem;
+  z-index: 2; /* Ensure text is above other elements */
+  position: relative; /* Added to ensure proper stacking */
+}
+
+.logo-text h1 {
+  font-family: var(--font-secondary);
+  font-size: 1.8rem;
+  font-weight: var(--font-weight-heavy);
+  margin: 0;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: white; /* Ensure text is visible */
+}
+
+.logo-text p {
+  color: #F8A34A;
+  font-size: 1rem;
+  margin-top: 0.2rem;
+  display: block !important; /* Force display */
+}
+
+/* Add decorative elements around the illustration */
+.slide-illustration::before {
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  background-color: rgba(248, 163, 74, 0.15);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.slide-illustration::after {
+  content: '';
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  background-color: rgba(248, 163, 74, 0.05);
+  border-radius: 50%;
+  z-index: -2;
+}
+
+.slide-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.5rem;
+  z-index: 2; /* Ensure text is above other elements */
+}
+
+.slide-subtitle {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #F8A34A;
+  margin-bottom: 1rem;
+  z-index: 2; /* Ensure text is above other elements */
+}
+
+.slide-description {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 2rem;
+  max-width: 280px;
+  z-index: 2; /* Ensure text is above other elements */
+}
+
+.slide-indicators {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+  z-index: 2; /* Ensure indicators are above other elements */
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.3);
+  margin: 0 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.indicator.active {
+  width: 24px;
+  border-radius: 4px;
+  background-color: #F8A34A;
+}
+
+.action-button {
+  background-color: #F8A34A;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 1rem 0;
+  width: 100%;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(248, 163, 74, 0.3);
+  margin-top: auto;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  z-index: 3; /* Ensure button is above other elements */
+  position: relative; /* Added to ensure proper stacking */
+}
+
+.action-button:hover {
+  background-color: #E69440;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(248, 163, 74, 0.4);
+}
+
+.action-button:active {
+  transform: translateY(0);
+}
+
+/* Password Toggle Button Styles */
+.password-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #F8A34A;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
+.password-toggle-btn:hover {
+  background-color: rgba(248, 163, 74, 0.1);
+  color: #E69440;
+}
+
+.password-toggle-btn:focus {
+  outline: 2px solid rgba(248, 163, 74, 0.5);
+  outline-offset: 2px;
+}
+
+.password-toggle-btn i {
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.password-toggle-btn:hover i {
+  transform: scale(1.1);
+}
+
+/* Ensure password input has proper padding for the toggle button */
+.password-input-container .dark-input {
+  padding-right: 50px;
+}
+
+.skip-link {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: color 0.2s ease;
+  z-index: 5; /* High z-index to ensure visibility */
+}
+
+.skip-link:hover {
+  color: #F8A34A;
+  text-decoration: none;
+}
+
+/* Animation for slide transitions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-illustration,
+.slide-title,
+.slide-subtitle,
+.slide-description {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.slide-title {
+  animation-delay: 0.1s;
+}
+
+.slide-subtitle {
+  animation-delay: 0.2s;
+}
+
+.slide-description {
+  animation-delay: 0.3s;
+}
+
+/* Responsive adjustments */
+@media (max-height: 700px) {
+  .dark-slide-card {
+    padding: 1.5rem;
+    min-height: 500px;
+  }
+  
+  .slide-illustration {
+    width: 150px;
+    height: 150px;
+    margin-bottom: 1.5rem;
+    /* Reduce padding on smaller screens */
+    padding-top: 0.5rem;
+  }
+  
+  .barber-logo {
+    /* Reduce margin on smaller screens */
+    margin-top: 0.5rem;
+  }
+  
+  .slide-illustration::before {
+    width: 170px;
+    height: 170px;
+  }
+  
+  .slide-illustration::after {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .slide-title {
+    margin-bottom: 0.5rem;
+  }
+  
+  .slide-description {
+    margin-bottom: 1.5rem;
+  }
+  
+  .logo-image-container {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .logo-image-container::before {
+    width: 145px;
+    height: 145px;
+  }
+
+  .logo-fallback-text {
+    font-size: 2.5rem;
+  }
+}
+.a {
+    color: #000;
+}
+.signup-link {
+  font-size: 0.9rem;
+  color: #F8A34A; /* Orange color matching the buttons */
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.register-link a{
+  font-size: 0.9rem;
+  color: #F8A34A; /* Orange color matching the buttons */
+ 
+}
+
+.signup-link:hover {
+  color: #FFC107; /* Brighter orange on hover */
+  text-decoration: underline;
+  transform: translateY(-1px);
+}

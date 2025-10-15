@@ -1,0 +1,362 @@
+/* Advanced Hybrid Queue System Styles */
+
+/* Unified Timeline Styles */
+.unified-timeline {
+  position: relative;
+  padding: 20px 0;
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 30px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 50px;
+  bottom: -30px;
+  width: 2px;
+  background: linear-gradient(to bottom, #007bff, #e9ecef);
+  z-index: 1;
+}
+
+.timeline-marker {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  margin-right: 20px;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.timeline-marker.current {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.timeline-marker.scheduled {
+  background: linear-gradient(135deg, #17a2b8, #6f42c1);
+  box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+}
+
+.timeline-marker.queue {
+  background: linear-gradient(135deg, #ffc107, #fd7e14);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+.timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-content .card {
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.timeline-content .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.timeline-item.current .timeline-content .card {
+  border-left-color: #28a745;
+  box-shadow: 0 4px 20px rgba(40, 167, 69, 0.2);
+}
+
+.timeline-item:not(.current) .timeline-content .card {
+  border-left-color: #6c757d;
+}
+
+/* Current Appointment Highlight */
+.current-appointment {
+  animation: slideInFromLeft 0.5s ease-out;
+}
+
+.current-appointment .timeline-marker {
+  animation: pulse 2s infinite, rotate 3s linear infinite;
+}
+
+/* Queue Position Badges */
+.queue-position-badge {
+  background: linear-gradient(135deg, #ffc107, #fd7e14);
+  color: #212529;
+  font-weight: bold;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+}
+
+.queue-position-badge.urgent {
+  background: linear-gradient(135deg, #dc3545, #e83e8c);
+  color: white;
+  animation: urgentPulse 1.5s infinite;
+}
+
+/* Efficiency Metrics */
+.efficiency-metric {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
+}
+
+.efficiency-metric .metric-value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.efficiency-metric .metric-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+/* Real-time Update Indicators */
+.real-time-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #28a745;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  z-index: 1000;
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.real-time-indicator.offline {
+  background: #dc3545;
+}
+
+.real-time-indicator.updating {
+  background: #ffc107;
+  color: #212529;
+  animation: updatingPulse 1s infinite;
+}
+
+/* Queue Status Cards */
+.queue-status-card {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.queue-status-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.queue-status-card.active {
+  border-color: #28a745;
+  background: linear-gradient(135deg, #d4edda, #c3e6cb);
+}
+
+.queue-status-card.pending {
+  border-color: #ffc107;
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+}
+
+.queue-status-card.urgent {
+  border-color: #dc3545;
+  background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+  animation: urgentGlow 2s infinite;
+}
+
+/* Timeline Animations */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes urgentPulse {
+  0% { transform: scale(1); box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3); }
+  50% { transform: scale(1.05); box-shadow: 0 4px 16px rgba(220, 53, 69, 0.5); }
+  100% { transform: scale(1); box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3); }
+}
+
+@keyframes urgentGlow {
+  0% { box-shadow: 0 0 5px rgba(220, 53, 69, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(220, 53, 69, 0.6); }
+  100% { box-shadow: 0 0 5px rgba(220, 53, 69, 0.3); }
+}
+
+@keyframes slideInFromLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInFromRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes updatingPulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .timeline-item {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .timeline-marker {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .timeline-item:not(:last-child)::before {
+    left: 50%;
+    transform: translateX(-50%);
+    top: 40px;
+    bottom: -30px;
+  }
+  
+  .timeline-content {
+    width: 100%;
+  }
+  
+  .efficiency-metric .metric-value {
+    font-size: 2rem;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .timeline-item:not(:last-child)::before {
+    background: linear-gradient(to bottom, #007bff, #495057);
+  }
+  
+  .queue-status-card {
+    background: linear-gradient(135deg, #343a40, #495057);
+    border-color: #6c757d;
+    color: #f8f9fa;
+  }
+  
+  .queue-status-card.active {
+    background: linear-gradient(135deg, #155724, #1e7e34);
+  }
+  
+  .queue-status-card.pending {
+    background: linear-gradient(135deg, #856404, #b7791f);
+  }
+  
+  .queue-status-card.urgent {
+    background: linear-gradient(135deg, #721c24, #c82333);
+  }
+}
+
+/* Loading States */
+.timeline-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+.timeline-loading .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  color: #007bff;
+}
+
+/* Empty State */
+.timeline-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c757d;
+}
+
+.timeline-empty .empty-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.timeline-empty h4 {
+  margin-bottom: 10px;
+  color: #495057;
+}
+
+.timeline-empty p {
+  margin-bottom: 0;
+  font-size: 1.1rem;
+}
+
+/* Queue Position Updates */
+.queue-position-update {
+  background: linear-gradient(135deg, #17a2b8, #6f42c1);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: 500;
+  margin: 10px 0;
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+@keyframes slideInFromTop {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Service Type Indicators */
+.service-type-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.service-type-indicator.scheduled {
+  background: rgba(23, 162, 184, 0.1);
+  color: #17a2b8;
+  border: 1px solid rgba(23, 162, 184, 0.2);
+}
+
+.service-type-indicator.queue {
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+.service-type-indicator.urgent {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  animation: urgentPulse 1.5s infinite;
+}

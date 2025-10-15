@@ -1,0 +1,65 @@
+{
+  "name": "rnrbooker",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^5.7.8",
+    "@capacitor/cli": "^5.7.8",
+    "@capacitor/core": "^5.7.8",
+    "@capacitor/local-notifications": "^5.0.6",
+    "@capacitor/push-notifications": "^5.1.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "bootstrap": "^5.3.2",
+    "bootstrap-icons": "^1.11.3",
+    "face-api.js": "^0.22.2",
+    "firebase": "^12.3.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "prebuild": "node scripts/sync-firebase-config.js",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "build-mobile": "npm run build && npx cap sync",
+    "android": "npx cap open android",
+    "ios": "npx cap open ios",
+    "sync": "npx cap sync",
+    "sync-firebase-config": "node scripts/sync-firebase-config.js",
+    "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
+    "lint:fix": "eslint src/**/*.{js,jsx,ts,tsx} --fix"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.20",
+    "dotenv": "^16.6.1",
+    "eslint": "^8.38.0",
+    "prettier": "^2.8.7"
+  }
+}

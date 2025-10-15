@@ -1,0 +1,21 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window", "deno.unstable"],
+    "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 80,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  }
+}

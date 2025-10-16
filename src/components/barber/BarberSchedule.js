@@ -519,6 +519,45 @@ const BarberSchedule = () => {
 
       if (error) throw error;
 
+      // If cancelled, collapse queue positions for same barber/date
+      if (status === 'cancelled' && appointment.queue_position != null) {
+        try {
+          console.log(`🔄 Collapsing queue positions after barber cancelling position ${appointment.queue_position}`);
+          
+          const { data: affected, error: fetchErr } = await supabase
+            .from('appointments')
+            .select('id, queue_position')
+            .eq('barber_id', user.id)
+            .eq('appointment_date', appointment.appointment_date)
+            .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+            .gt('queue_position', appointment.queue_position)
+            .order('queue_position', { ascending: true });
+
+          if (!fetchErr && Array.isArray(affected) && affected.length) {
+            console.log(`📝 Found ${affected.length} appointments to update positions`);
+            
+            for (const apt of affected) {
+              const newPosition = apt.queue_position - 1;
+              console.log(`📝 Updating appointment ${apt.id} from position ${apt.queue_position} to ${newPosition}`);
+              
+              await supabase
+                .from('appointments')
+                .update({ 
+                  queue_position: newPosition,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', apt.id);
+            }
+            
+            console.log('✅ Queue positions collapsed successfully');
+          } else {
+            console.log('ℹ️ No appointments found to collapse positions');
+          }
+        } catch (collapseErr) {
+          console.warn('Queue collapse warning (barber):', collapseErr);
+        }
+      }
+
       // Log the action
       await supabase.from('system_logs').insert({
         user_id: user.id,

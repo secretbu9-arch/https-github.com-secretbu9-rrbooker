@@ -937,6 +937,7 @@ textarea.form-control {
   @supports (-webkit-appearance:none) {
     .form-select {
       -webkit-appearance: menulist !important;
+      appearance: menulist !important;
     }
   }
 }

@@ -391,7 +391,13 @@ const CustomerDashboard = () => {
     }
 
     try {
-      const { error } = await supabase
+      // Find appointment details
+      const appointment = upcomingAppointments.find(apt => apt.id === appointmentId);
+      
+      // Store original queue position before updating
+      const originalQueuePosition = appointment?.queue_position;
+
+      const { error: cancelError } = await supabase
         .from('appointments')
         .update({ 
           status: 'cancelled',
@@ -401,10 +407,48 @@ const CustomerDashboard = () => {
         })
         .eq('id', appointmentId);
 
-      if (error) throw error;
+      if (cancelError) throw cancelError;
+
+      // Collapse queue positions if needed
+      if (appointment && originalQueuePosition != null) {
+        try {
+          console.log(`🔄 Collapsing queue positions after cancelling position ${originalQueuePosition}`);
+          
+          const { data: affected, error: fetchErr } = await supabase
+            .from('appointments')
+            .select('id, queue_position')
+            .eq('barber_id', appointment.barber_id)
+            .eq('appointment_date', appointment.appointment_date)
+            .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+            .gt('queue_position', originalQueuePosition)
+            .order('queue_position', { ascending: true });
+
+          if (!fetchErr && Array.isArray(affected) && affected.length) {
+            console.log(`📝 Found ${affected.length} appointments to update positions`);
+            
+            for (const apt of affected) {
+              const newPosition = apt.queue_position - 1;
+              console.log(`📝 Updating appointment ${apt.id} from position ${apt.queue_position} to ${newPosition}`);
+              
+              await supabase
+                .from('appointments')
+                .update({ 
+                  queue_position: newPosition,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', apt.id);
+            }
+            
+            console.log('✅ Queue positions collapsed successfully');
+          } else {
+            console.log('ℹ️ No appointments found to collapse positions');
+          }
+        } catch (collapseErr) {
+          console.warn('Queue collapse warning:', collapseErr);
+        }
+      }
 
       // Create notification for barber
-      const appointment = upcomingAppointments.find(apt => apt.id === appointmentId);
       if (appointment) {
         await supabase.from('notifications').insert({
           user_id: appointment.barber_id,

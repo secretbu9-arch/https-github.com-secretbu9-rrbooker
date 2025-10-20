@@ -721,7 +721,7 @@ const CustomerDashboard = () => {
             <div className="card-body d-flex align-items-center">
               <div>
                 <h6 className="card-title mb-1">Total Spent</h6>
-                <h2 className="mb-0">₱{userStats.totalSpent.toFixed(0)}</h2>
+                <h2 className="mb-0"><span className="currency-amount-large">₱{userStats.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
               </div>
               <div className="ms-auto card-icon">
                 <i className="bi bi-wallet2"></i>

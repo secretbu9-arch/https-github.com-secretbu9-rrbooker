@@ -14,7 +14,8 @@ const Profile = () => {
     full_name: '',
     phone: '',
     email: '',
-    barber_status: 'available'
+    barber_status: 'available',
+    skills: ''
   });
   const [profilePicture, setProfilePicture] = useState(null);
   const [profilePictureUrl, setProfilePictureUrl] = useState('');
@@ -215,6 +216,7 @@ const Profile = () => {
           full_name: formData.full_name.trim(),
           phone: formData.phone.trim(),
           barber_status: formData.barber_status,
+          skills: formData.skills.trim(),
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id);
@@ -243,7 +245,8 @@ const Profile = () => {
       full_name: profile.full_name || '',
       phone: profile.phone || '',
       email: profile.email || '',
-      barber_status: profile.barber_status || 'available'
+      barber_status: profile.barber_status || 'available',
+      skills: profile.skills || ''
     });
     setMessage({ type: '', text: '' });
   };
@@ -530,23 +533,41 @@ const Profile = () => {
                     </div>
                     
                     {profile.role === 'barber' && (
-                      <div className="col-md-6 mb-3">
-                        <label htmlFor="barber_status" className="form-label">
-                          <i className="bi bi-activity me-1"></i>
-                          Availability Status
-                        </label>
-                        <select
-                          className="form-select"
-                          id="barber_status"
-                          name="barber_status"
-                          value={formData.barber_status}
-                          onChange={handleInputChange}
-                        >
-                          <option value="available">Available</option>
-                          <option value="busy">Busy</option>
-                          <option value="unavailable">Unavailable</option>
-                        </select>
-                      </div>
+                      <>
+                        <div className="col-md-6 mb-3">
+                          <label htmlFor="barber_status" className="form-label">
+                            <i className="bi bi-activity me-1"></i>
+                            Availability Status
+                          </label>
+                          <select
+                            className="form-select"
+                            id="barber_status"
+                            name="barber_status"
+                            value={formData.barber_status}
+                            onChange={handleInputChange}
+                          >
+                            <option value="available">Available</option>
+                            <option value="busy">Busy</option>
+                            <option value="unavailable">Unavailable</option>
+                          </select>
+                        </div>
+                        <div className="col-md-6 mb-3">
+                          <label htmlFor="skills" className="form-label">
+                            <i className="bi bi-award me-1"></i>
+                            Skills
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            id="skills"
+                            name="skills"
+                            value={formData.skills}
+                            onChange={handleInputChange}
+                            placeholder="e.g., Haircut, Beard Trim, Styling"
+                          />
+                          <div className="form-text">Enter your specializations separated by commas</div>
+                        </div>
+                      </>
                     )}
                   </div>
                   
@@ -632,6 +653,21 @@ const Profile = () => {
                           <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.6rem' }}></i>
                           {profile.barber_status}
                         </span>
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-award text-primary me-2"></i>
+                          <strong>Skills</strong>
+                        </div>
+                        <p className="text-muted mb-0">
+                          {profile.skills ? (
+                            <span className="badge bg-primary me-1">
+                              {profile.skills}
+                            </span>
+                          ) : (
+                            'No skills specified'
+                          )}
+                        </p>
                       </div>
                     </div>
                   )}

@@ -284,7 +284,7 @@ const AppointmentProductPurchase = ({ appointment, onClose, onSuccess }) => {
                               </p>
                               <div className="d-flex justify-content-between align-items-center">
                                 <span className="h6 text-primary mb-0">
-                                  ₱{product.price.toFixed(2)}
+                                  <span className="currency-amount">₱{product.price.toFixed(2)}</span>
                                 </span>
                                 <button
                                   className="btn btn-primary btn-sm"
@@ -377,7 +377,7 @@ const AppointmentProductPurchase = ({ appointment, onClose, onSuccess }) => {
                               </div>
                               <div className="text-end">
                                 <div className="small text-primary">
-                                  ₱{(item.price * item.quantity).toFixed(2)}
+                                  <span className="currency-amount">₱{(item.price * item.quantity).toFixed(2)}</span>
                                 </div>
                               </div>
                             </div>
@@ -388,7 +388,7 @@ const AppointmentProductPurchase = ({ appointment, onClose, onSuccess }) => {
                         <div className="border-top pt-2 mb-3">
                           <div className="d-flex justify-content-between">
                             <strong>Total:</strong>
-                            <strong className="text-primary">₱{calculateTotal().toFixed(2)}</strong>
+                            <strong className="text-primary currency-amount">₱{calculateTotal().toFixed(2)}</strong>
                           </div>
                         </div>
 

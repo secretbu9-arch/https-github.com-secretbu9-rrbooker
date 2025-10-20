@@ -792,7 +792,7 @@ const ManageServices = () => {
                           </div>
                         </td>
                         <td>{service.description || '-'}</td>
-                        <td>{formatPrice(service.price)}</td>
+                        <td className="currency-table-cell">{formatPrice(service.price)}</td>
                         <td>{service.duration} min</td>
                         <td>
                           <span className={`badge bg-${service.is_active ? 'success' : 'secondary'}`}>
@@ -913,7 +913,7 @@ const ManageServices = () => {
                                   <span className="text-muted">-</span>
                                 )}
                               </td>
-                              <td>{formatPrice(addOn.price)}</td>
+                              <td className="currency-table-cell">{formatPrice(addOn.price)}</td>
                               <td>{addOn.duration} min</td>
                               <td>
                                 <span className={`badge bg-${addOn.is_active ? 'success' : 'secondary'}`}>

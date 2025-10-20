@@ -154,8 +154,9 @@ class AdvancedHybridQueueService {
 
     // First, add all queue appointments starting from work start time
     while (queueIndex < sortedQueue.length) {
-      // Check for lunch break
+      // Check for lunch break - skip if current time is during lunch
       if (currentTime >= lunchStart && currentTime < lunchEnd) {
+        console.log(`🕐 Skipping lunch break period: ${this.LUNCH_BREAK.start} - ${this.LUNCH_BREAK.end}`);
         currentTime = lunchEnd;
         continue;
       }
@@ -216,14 +217,16 @@ class AdvancedHybridQueueService {
 
       // Check for lunch break after scheduled appointment
       if (currentTime >= lunchStart && currentTime < lunchEnd) {
+        console.log(`🕐 Moving to after lunch break after scheduled appointment`);
         currentTime = lunchEnd;
       }
     }
 
     // Add remaining queue appointments
     while (queueIndex < sortedQueue.length && currentTime < workEnd) {
-      // Check for lunch break
+      // Check for lunch break - skip if current time is during lunch
       if (currentTime >= lunchStart && currentTime < lunchEnd) {
+        console.log(`🕐 Skipping lunch break for remaining queue appointments`);
         currentTime = lunchEnd;
         continue;
       }
@@ -336,6 +339,10 @@ class AdvancedHybridQueueService {
         }
       }
 
+      // Calculate queue position and estimated wait time
+      const queuePosition = await this.calculateQueuePosition(barber_id, appointment_date, appointment_type, priority_level);
+      const estimatedWaitTime = await this.calculateEstimatedWaitTime(barber_id, appointment_date, total_duration);
+
       // Convert standardized field names to database column names
       const insertData = {
         customer_id: appointmentData[APPOINTMENT_FIELDS.CUSTOMER_ID],
@@ -359,8 +366,8 @@ class AdvancedHybridQueueService {
           friend_phone: appointmentData[APPOINTMENT_FIELDS.FRIEND_PHONE],
           booked_by: appointmentData[APPOINTMENT_FIELDS.CUSTOMER_ID]
         } : null),
-        queue_position: appointment_type === BOOKING_TYPES.QUEUE ? insertionPoint : null,
-        estimated_wait_time: appointment_type === BOOKING_TYPES.QUEUE ? (estimatedTime ? this.timeToMinutes(estimatedTime) : null) : null,
+        queue_position: queuePosition,
+        estimated_wait_time: estimatedWaitTime,
         created_at: new Date().toISOString()
       };
 
@@ -385,9 +392,11 @@ class AdvancedHybridQueueService {
       return {
         success: true,
         appointment_id: newAppointment.id,
-        position: insertionPoint,
-        estimated_time: estimatedTime,
-        message: `Appointment added at position ${insertionPoint}`
+        position: appointment_type === BOOKING_TYPES.SCHEDULED ? insertionPoint : null, // Only return position for scheduled appointments
+        estimated_time: appointment_type === BOOKING_TYPES.SCHEDULED ? estimatedTime : null, // Only return estimated time for scheduled appointments
+        message: appointment_type === BOOKING_TYPES.SCHEDULED ? 
+          `Appointment scheduled for ${estimatedTime}` : 
+          `Appointment request submitted and pending barber approval`
       };
 
     } catch (error) {
@@ -1223,6 +1232,87 @@ class AdvancedHybridQueueService {
         success: false,
         error: error.message
       };
+    }
+  }
+
+  // ============================================================================
+  // HELPER METHODS
+  // ============================================================================
+
+  /**
+   * Calculate queue position for new appointment
+   */
+  async calculateQueuePosition(barberId, appointmentDate, appointmentType, priorityLevel) {
+    try {
+      // Get current appointments for this barber and date
+      const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select('queue_position, appointment_type, priority_level')
+        .eq('barber_id', barberId)
+        .eq('appointment_date', appointmentDate)
+        .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing'])
+        .order('queue_position', { ascending: true });
+
+      if (error) throw error;
+
+      // For scheduled appointments, use a high position number (they get priority)
+      if (appointmentType === BOOKING_TYPES.SCHEDULED) {
+        return 999; // Scheduled appointments get priority
+      }
+
+      // For queue appointments, calculate next position
+      const queueAppointments = appointments?.filter(apt => 
+        apt.appointment_type === BOOKING_TYPES.QUEUE && apt.queue_position
+      ) || [];
+
+      const maxPosition = queueAppointments.length > 0 
+        ? Math.max(...queueAppointments.map(apt => apt.queue_position || 0))
+        : 0;
+
+      // Urgent appointments get priority (lower position number)
+      if (priorityLevel === PRIORITY_LEVELS.URGENT) {
+        return Math.max(1, maxPosition - 1);
+      }
+
+      return maxPosition + 1;
+
+    } catch (error) {
+      console.error('❌ Error calculating queue position:', error);
+      return 1; // Default to position 1
+    }
+  }
+
+  /**
+   * Calculate estimated wait time for new appointment
+   */
+  async calculateEstimatedWaitTime(barberId, appointmentDate, totalDuration) {
+    try {
+      // Get current appointments for this barber and date
+      const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select('total_duration, queue_position, appointment_type, status')
+        .eq('barber_id', barberId)
+        .eq('appointment_date', appointmentDate)
+        .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing'])
+        .order('queue_position', { ascending: true });
+
+      if (error) throw error;
+
+      // Calculate total wait time based on appointments before this one
+      let totalWaitTime = 0;
+      
+      for (const appointment of appointments || []) {
+        if (appointment.status === 'ongoing') continue; // Skip current appointment
+        
+        const duration = appointment.total_duration || 30;
+        totalWaitTime += duration + 5; // Add 5 minutes buffer between appointments
+      }
+
+      return totalWaitTime;
+
+    } catch (error) {
+      console.error('❌ Error calculating estimated wait time:', error);
+      return 0; // Default to no wait time
     }
   }
 }

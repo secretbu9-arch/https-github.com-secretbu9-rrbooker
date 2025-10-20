@@ -136,7 +136,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
         await supabase.from('notifications').insert({
           user_id: appointment.customer_id,
           title: 'Appointment Cancelled - Barber Unavailable',
-          message: `Your appointment on ${selectedDate} at ${appointment.appointment_time} has been cancelled because your barber is unavailable. Reason: ${reason}. Please reschedule or book with another barber.`,
+          message: `Your appointment on ${selectedDate} at ${appointment.appointment_time} has been cancelled because your barber is unavailable.${reason ? ` Reason: ${reason}` : ''} Please reschedule or book with another barber.`,
           type: 'appointment_cancelled',
           data: {
             appointment_id: appointment.id,
@@ -159,7 +159,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
           await PushService.sendNotificationToUser(
             appointment.customer_id,
             'Appointment Cancelled',
-            `Your appointment on ${selectedDate} has been cancelled. Reason: ${reason}`,
+            `Your appointment on ${selectedDate} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
             {
               type: 'appointment_cancelled',
               appointmentId: appointment.id,
@@ -172,7 +172,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
           try {
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('Appointment Cancelled', {
-                body: `Your appointment on ${selectedDate} has been cancelled. Reason: ${reason}`,
+                body: `Your appointment on ${selectedDate} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
                 icon: '/favicon.ico',
                 tag: `cancelled-${appointment.id}`
               });
@@ -189,7 +189,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
           try {
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('Appointment Cancelled', {
-                body: `Your appointment on ${selectedDate} has been cancelled. Reason: ${reason}`,
+                body: `Your appointment on ${selectedDate} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
                 icon: '/favicon.ico',
                 tag: `cancelled-${appointment.id}`
               });
@@ -215,7 +215,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
                 appointment_date: selectedDate,
                 appointment_time: appointment.appointment_time,
                 total_price: appointment.total_price,
-                notes: `Cancellation Reason: ${reason}`,
+                notes: `Cancellation Reason: ${reason || 'No reason provided'}`,
                 customer: {
                   email: appointment.customers.email
                 }

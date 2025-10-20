@@ -475,27 +475,22 @@ const ManagerDashboard = () => {
         );
         
         await apiService.confirmAppointment(appointmentId, queueNumber);
-        
-        // Use CentralizedNotificationService to prevent duplicates
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-        await centralizedNotificationService.createNotification({
-          userId: appointmentData.customer_id,
-          title: 'Appointment Approved!',
-          message: 'Your appointment has been approved by management.',
-          type: 'appointment_confirmed',
-          data: { appointment_id: appointmentId, queue_position: queueNumber }
-        });
+        // Do NOT send notification here. Approval notifications are handled
+        // centrally in the barber flow to prevent duplicates.
       } else {
         await apiService.declineAppointment(appointmentId, 'Declined by management');
         
         // Use CentralizedNotificationService to prevent duplicates
         const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        // Keep decline notification (distinct event) or move to centralized flow if needed
         await centralizedNotificationService.createNotification({
           userId: appointmentData.customer_id,
           title: 'Appointment Declined',
           message: 'Your appointment request has been declined by management.',
-          type: 'appointment_declined',
-          data: { appointment_id: appointmentId }
+          type: 'appointment',
+          category: 'booking',
+          data: { appointment_id: appointmentId },
+          channels: ['app', 'push']
         });
       }
 
@@ -711,7 +706,7 @@ const ManagerDashboard = () => {
             <div className="card-body d-flex align-items-center">
               <div>
                 <h6 className="card-title mb-1">Total Revenue</h6>
-                <h2 className="mb-0">₱{stats.totalRevenue.toFixed(0)}</h2>
+                <h2 className="mb-0"><span className="currency-amount-large">₱{stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
               </div>
               <div className="ms-auto card-icon">
                 <i className="bi bi-cash-coin"></i>
@@ -839,10 +834,10 @@ const ManagerDashboard = () => {
             <div className="card-body d-flex align-items-center">
               <div>
                 <h6 className="card-title mb-1">Order Revenue</h6>
-                <h2 className="mb-0">₱{stats.orderRevenue.toFixed(0)}</h2>
+                <h2 className="mb-0"><span className="currency-amount-large">₱{stats.orderRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
               </div>
               <div className="ms-auto card-icon">
-                <i className="bi bi-currency-dollar"></i>
+              <i className="bi bi-cash-coin"></i>
               </div>
             </div>
           </div>
@@ -1361,7 +1356,7 @@ const ManagerDashboard = () => {
                           <td>
                             <div className="order-total">
                               <i className="bi bi-cash me-1"></i>
-                              ₱{order.total_amount || 0}
+                              <span className="currency-amount">₱{Number(order.total_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                           </td>
                           <td>
@@ -1501,7 +1496,7 @@ const ManagerDashboard = () => {
                             </div>
                             <div className="text-end">
                               <div className="fw-bold text-warning">
-                                {barber.average_rating?.toFixed(1) || '0.0'}/5
+                                {barber.average_rating || '0'}/5
                               </div>
                               <small className="text-muted">
                                 {barber.total_ratings || 0} reviews

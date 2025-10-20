@@ -13,7 +13,7 @@ class CapacityService {
         .select('appointment_time, total_duration, status, appointment_type')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+        .in('status', ['scheduled', 'confirmed', 'ongoing']);
 
       if (error) throw error;
 
@@ -22,7 +22,7 @@ class CapacityService {
         return total + (apt.total_duration || 30); // Default 30 minutes if no duration
       }, 0);
 
-      // Assume 8-hour work day (480 minutes)
+      // Assume 8-hour work day (480 minutes) with 15 appointment capacity
       const maxCapacity = 480; // 8 hours in minutes
       const availableCapacity = maxCapacity - totalBookedTime;
 
@@ -63,7 +63,7 @@ class CapacityService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -71,7 +71,7 @@ class CapacityService {
       // Generate time slots (9 AM to 5 PM, 30-minute intervals)
       const timeSlots = [];
       for (let hour = 9; hour < 17; hour++) {
-        for (let minute = 0; minute < 60; minute += 30) {
+        for (let minute = 0; minute < 60; minute += 30) { // Reverted to 30-minute intervals
           const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
           timeSlots.push(timeString);
         }

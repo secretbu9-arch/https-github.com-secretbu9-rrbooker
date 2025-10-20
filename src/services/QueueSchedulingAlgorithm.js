@@ -13,7 +13,7 @@ class QueueSchedulingAlgorithm {
         .select('appointment_time, total_duration, status, appointment_type')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -271,7 +271,7 @@ class QueueSchedulingAlgorithm {
   static generateTimeSlots() {
     const slots = [];
     for (let hour = 9; hour < 17; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
+      for (let minute = 0; minute < 60; minute += 30) { // Reverted to 30-minute intervals
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         slots.push(timeString);
       }

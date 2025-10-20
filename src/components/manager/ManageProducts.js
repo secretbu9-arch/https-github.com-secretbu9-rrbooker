@@ -721,7 +721,7 @@ const ManageProducts = () => {
                           <span className="text-muted">—</span>
                         )}
                       </td>
-                      <td>{formatPrice(product.price)}</td>
+                      <td className="currency-table-cell">{formatPrice(product.price)}</td>
                       <td>
                         <span className={`badge bg-${getStockStatusClass(product.stock_quantity)}`}>
                           {product.stock_quantity} in stock

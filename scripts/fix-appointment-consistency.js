@@ -1,169 +1,89 @@
-#!/usr/bin/env node
+// scripts/fix-appointment-consistency.js
+// Fix appointment data consistency issues
 
-/**
- * Appointment Data Consistency Fix Script
- * 
- * This script fixes critical data consistency issues in the appointments table
- * where queue appointments have appointment_time values and missing queue_position
- */
+import { createClient } from '@supabase/supabase-js';
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
-
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Missing Supabase environment variables');
-  process.exit(1);
-}
+// You'll need to replace these with your actual Supabase credentials
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ystajvslfrqdterhpbse.supabase.co';
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_uWkp_QtmqllHu4xfg0vYzA_PfbdY_aa';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function fixAppointmentConsistency() {
-  console.log('🔧 Starting appointment data consistency fix...\n');
-
   try {
-    // Step 1: Identify problematic appointments
-    console.log('📊 Step 1: Identifying problematic appointments...');
-    
-    const { data: problematicAppointments, error: selectError } = await supabase
-      .from('appointments')
-      .select('id, appointment_type, appointment_time, queue_position, status, appointment_date')
-      .or('and(appointment_type.eq.queue,appointment_time.not.is.null),and(appointment_type.eq.queue,queue_position.is.null),and(appointment_type.eq.scheduled,queue_position.not.is.null)');
+    console.log('🔧 Starting appointment data consistency fix...');
 
-    if (selectError) {
-      throw selectError;
-    }
-
-    console.log(`Found ${problematicAppointments.length} problematic appointments:`);
-    problematicAppointments.forEach(apt => {
-      console.log(`  - ${apt.id}: type=${apt.appointment_type}, time=${apt.appointment_time}, position=${apt.queue_position}`);
-    });
-
-    if (problematicAppointments.length === 0) {
-      console.log('✅ No problematic appointments found. Data is already consistent!');
-      return;
-    }
-
-    // Step 2: Fix queue appointments with incorrect appointment_time
-    console.log('\n🔧 Step 2: Fixing queue appointments with appointment_time...');
-    
-    const { error: updateTimeError } = await supabase
+    // Fix queue appointments that have appointment_time (should be null)
+    // Only fix queue appointments that are already scheduled (accepted by barber)
+    console.log('🔧 Fixing queue appointments with appointment_time...');
+    const { data: queueFixes, error: queueError } = await supabase
       .from('appointments')
       .update({ 
         appointment_time: null,
         updated_at: new Date().toISOString()
       })
       .eq('appointment_type', 'queue')
-      .not('appointment_time', 'is', null);
+      .eq('status', 'scheduled') // Only fix accepted queue appointments
+      .not('appointment_time', 'is', null)
+      .select('id');
 
-    if (updateTimeError) {
-      throw updateTimeError;
+    if (queueError) {
+      console.error('❌ Error fixing queue appointments:', queueError);
+    } else {
+      console.log(`✅ Fixed ${queueFixes?.length || 0} queue appointments`);
     }
-    console.log('✅ Fixed queue appointments with incorrect appointment_time');
 
-    // Step 3: Fix scheduled appointments with incorrect queue_position
-    console.log('\n🔧 Step 3: Fixing scheduled appointments with queue_position...');
-    
-    const { error: updatePositionError } = await supabase
+    // Fix scheduled appointments that have queue_position (should be null)
+    // Only fix scheduled appointments that are already scheduled (accepted by barber)
+    console.log('🔧 Fixing scheduled appointments with queue_position...');
+    const { data: scheduledFixes, error: scheduledError } = await supabase
       .from('appointments')
       .update({ 
         queue_position: null,
         updated_at: new Date().toISOString()
       })
       .eq('appointment_type', 'scheduled')
-      .not('queue_position', 'is', null);
+      .eq('status', 'scheduled') // Only fix accepted scheduled appointments
+      .not('queue_position', 'is', null)
+      .select('id');
 
-    if (updatePositionError) {
-      throw updatePositionError;
-    }
-    console.log('✅ Fixed scheduled appointments with incorrect queue_position');
-
-    // Step 4: Fix queue appointments missing queue_position
-    console.log('\n🔧 Step 4: Fixing queue appointments missing queue_position...');
-    
-    // Get all queue appointments that need queue positions
-    const { data: queueAppointments, error: queueSelectError } = await supabase
-      .from('appointments')
-      .select('id, barber_id, appointment_date, created_at, is_urgent')
-      .eq('appointment_type', 'queue')
-      .is('queue_position', null)
-      .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
-
-    if (queueSelectError) {
-      throw queueSelectError;
-    }
-
-    // Group by barber and date, then assign queue positions
-    const appointmentsByBarber = {};
-    queueAppointments.forEach(apt => {
-      const key = `${apt.barber_id}-${apt.appointment_date}`;
-      if (!appointmentsByBarber[key]) {
-        appointmentsByBarber[key] = [];
-      }
-      appointmentsByBarber[key].push(apt);
-    });
-
-    // Assign queue positions
-    for (const [key, appointments] of Object.entries(appointmentsByBarber)) {
-      // Sort by urgency first, then by creation time
-      appointments.sort((a, b) => {
-        if (a.is_urgent && !b.is_urgent) return -1;
-        if (!a.is_urgent && b.is_urgent) return 1;
-        return new Date(a.created_at) - new Date(b.created_at);
-      });
-
-      // Update each appointment with its queue position
-      for (let i = 0; i < appointments.length; i++) {
-        const { error: updateQueueError } = await supabase
-          .from('appointments')
-          .update({ 
-            queue_position: i + 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', appointments[i].id);
-
-        if (updateQueueError) {
-          throw updateQueueError;
-        }
-      }
-    }
-
-    console.log(`✅ Fixed ${queueAppointments.length} queue appointments missing queue_position`);
-
-    // Step 5: Validate fixes
-    console.log('\n📊 Step 5: Validating fixes...');
-    
-    const { data: remainingIssues, error: validateError } = await supabase
-      .from('appointments')
-      .select('id, appointment_type, appointment_time, queue_position')
-      .or('and(appointment_type.eq.queue,appointment_time.not.is.null),and(appointment_type.eq.queue,queue_position.is.null),and(appointment_type.eq.scheduled,queue_position.not.is.null)');
-
-    if (validateError) {
-      throw validateError;
-    }
-
-    if (remainingIssues.length === 0) {
-      console.log('✅ All appointment data consistency issues have been resolved!');
+    if (scheduledError) {
+      console.error('❌ Error fixing scheduled appointments:', scheduledError);
     } else {
-      console.log(`⚠️ ${remainingIssues.length} issues remain:`);
-      remainingIssues.forEach(issue => {
-        console.log(`  - ${issue.id}: type=${issue.appointment_type}, time=${issue.appointment_time}, position=${issue.queue_position}`);
-      });
+      console.log(`✅ Fixed ${scheduledFixes?.length || 0} scheduled appointments`);
     }
 
-    // Step 6: Show summary
-    console.log('\n📈 Summary:');
-    console.log(`  - Fixed queue appointments with appointment_time: ${problematicAppointments.filter(apt => apt.appointment_type === 'queue' && apt.appointment_time).length}`);
-    console.log(`  - Fixed scheduled appointments with queue_position: ${problematicAppointments.filter(apt => apt.appointment_type === 'scheduled' && apt.queue_position).length}`);
-    console.log(`  - Fixed queue appointments missing queue_position: ${queueAppointments.length}`);
+    // Verify the fixes
+    console.log('🔍 Verifying fixes...');
+    const { data: verification, error: verifyError } = await supabase
+      .from('appointments')
+      .select('appointment_type, appointment_time, queue_position')
+      .in('appointment_type', ['scheduled', 'queue']);
 
-    console.log('\n🎉 Appointment data consistency fix completed successfully!');
+    if (verifyError) {
+      console.error('❌ Error verifying fixes:', verifyError);
+    } else {
+      const scheduled = verification.filter(apt => apt.appointment_type === 'scheduled');
+      const queue = verification.filter(apt => apt.appointment_type === 'queue');
+      
+      const scheduledWithQueue = scheduled.filter(apt => apt.queue_position !== null);
+      const queueWithTime = queue.filter(apt => apt.appointment_time !== null);
+      
+      console.log('📊 Verification Results:');
+      console.log(`- Scheduled appointments: ${scheduled.length} total`);
+      console.log(`- Scheduled with queue_position: ${scheduledWithQueue.length} (should be 0)`);
+      console.log(`- Queue appointments: ${queue.length} total`);
+      console.log(`- Queue with appointment_time: ${queueWithTime.length} (should be 0)`);
+      
+      if (scheduledWithQueue.length === 0 && queueWithTime.length === 0) {
+        console.log('✅ All data consistency issues have been fixed!');
+      } else {
+        console.log('⚠️ Some issues may still remain. Please check the data manually.');
+      }
+    }
 
   } catch (error) {
-    console.error('❌ Error fixing appointment consistency:', error);
-    process.exit(1);
+    console.error('❌ Error during consistency fix:', error);
   }
 }
 

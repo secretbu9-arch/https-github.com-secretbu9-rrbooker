@@ -119,7 +119,7 @@ class BarberRecommendationService {
         const avgRating = customerAppointments.reduce((sum, apt) => sum + (apt.customer_rating || 3), 0) / customerAppointments.length;
         const historyScore = (avgRating / 5) * 40;
         score += historyScore;
-        reasons.push(`Previous experience: ${avgRating.toFixed(1)}/5 stars`);
+        reasons.push(`Previous experience: ${avgRating}/5 stars`);
       } else {
         // New barber bonus
         score += 10;
@@ -130,7 +130,7 @@ class BarberRecommendationService {
       const barberRating = barber.total_ratings > 0 ? barber.average_rating : 0.0;
       const ratingScore = (barberRating / 5) * 30;
       score += ratingScore;
-      reasons.push(`Barber rating: ${barberRating.toFixed(1)}/5 (${barber.total_ratings} reviews)`);
+      reasons.push(`Barber rating: ${barberRating}/5 (${barber.total_ratings} reviews)`);
 
       // 3. Availability Score (20% weight)
       const todayBarberAppointments = todayAppointments.filter(apt => apt.barber_id === barber.id);

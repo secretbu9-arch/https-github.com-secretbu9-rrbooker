@@ -562,18 +562,8 @@ const BarberDashboard = () => {
 
         if (error) throw error;
 
-        // Create notification using centralized service (handles both database and push)
-        try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-          await centralizedNotificationService.createBookingConfirmationNotification({
-            userId: appointment.customer_id,
-            appointmentId: appointmentId,
-            queuePosition: updates.queue_position,
-            estimatedTime: null
-          });
-        } catch (notificationError) {
-          console.warn('Failed to send booking confirmation notification:', notificationError);
-        }
+        // Do NOT send approval notification here to avoid duplicates.
+        // Approval notifications are sent from the dedicated BarberSchedule flow.
 
         // Log the action
         await supabase.from('system_logs').insert({
@@ -943,7 +933,7 @@ const BarberDashboard = () => {
           <div className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
             <div className="card-body">
               <h6 className="card-title mb-1">Revenue</h6>
-              <h2 className="mb-0">₱{todayStats.revenue.toFixed(0)}</h2>
+              <h2 className="mb-0"><span className="currency-amount-large">₱{todayStats.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
             </div>
           </div>
         </div>
@@ -980,7 +970,7 @@ const BarberDashboard = () => {
             <div className="card-body">
               <h6 className="card-title mb-1">Rating</h6>
               <h2 className="mb-0">
-                {barberInfo?.average_rating ? barberInfo.average_rating.toFixed(1) : '0.0'}
+                {barberInfo?.average_rating || '0'}
                 <small className="fs-6">/5</small>
               </h2>
               <small className="opacity-75">
@@ -1010,7 +1000,7 @@ const BarberDashboard = () => {
                       <div className="card bg-light">
                         <div className="card-body text-center">
                           <h6 className="card-title text-success">Today</h6>
-                          <h4 className="mb-0">₱{revenueData.today.toFixed(0)}</h4>
+                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.today.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
                         </div>
                       </div>
                     </div>
@@ -1018,7 +1008,7 @@ const BarberDashboard = () => {
                       <div className="card bg-light">
                         <div className="card-body text-center">
                           <h6 className="card-title text-primary">This Week</h6>
-                          <h4 className="mb-0">₱{revenueData.thisWeek.toFixed(0)}</h4>
+                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.thisWeek.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
                         </div>
                       </div>
                     </div>
@@ -1026,7 +1016,7 @@ const BarberDashboard = () => {
                       <div className="card bg-light">
                         <div className="card-body text-center">
                           <h6 className="card-title text-info">This Month</h6>
-                          <h4 className="mb-0">₱{revenueData.thisMonth.toFixed(0)}</h4>
+                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.thisMonth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
                         </div>
                       </div>
                     </div>
@@ -1034,7 +1024,7 @@ const BarberDashboard = () => {
                       <div className="card bg-light">
                         <div className="card-body text-center">
                           <h6 className="card-title text-secondary">Last Month</h6>
-                          <h4 className="mb-0">₱{revenueData.lastMonth.toFixed(0)}</h4>
+                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.lastMonth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
                           {revenueData.lastMonth > 0 && (
                             <small className={`${revenueData.thisMonth > revenueData.lastMonth ? 'text-success' : 'text-danger'}`}>
                               {revenueData.thisMonth > revenueData.lastMonth ? '↗' : '↘'} 
@@ -1054,19 +1044,19 @@ const BarberDashboard = () => {
                         <div className="col-md-4">
                           <div className="d-flex justify-content-between align-items-center p-2 bg-light rounded">
                             <span>Services</span>
-                            <strong>₱{revenueData.breakdown.services.toFixed(0)}</strong>
+                            <strong className="currency-amount">₱{revenueData.breakdown.services.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                           </div>
                         </div>
                         <div className="col-md-4">
                           <div className="d-flex justify-content-between align-items-center p-2 bg-light rounded">
                             <span>Add-ons</span>
-                            <strong>₱{revenueData.breakdown.addOns.toFixed(0)}</strong>
+                            <strong className="currency-amount">₱{revenueData.breakdown.addOns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                           </div>
                         </div>
                         <div className="col-md-4">
                           <div className="d-flex justify-content-between align-items-center p-2 bg-light rounded">
                             <span>Urgent Fees</span>
-                            <strong>₱{revenueData.breakdown.urgentFees.toFixed(0)}</strong>
+                            <strong className="currency-amount">₱{revenueData.breakdown.urgentFees.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                           </div>
                         </div>
                       </div>
@@ -1091,9 +1081,9 @@ const BarberDashboard = () => {
                             {revenueData.dailyTrend.map((day, index) => (
                               <tr key={index}>
                                 <td>{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                                <td>₱{day.revenue.toFixed(0)}</td>
+                                <td className="currency-table-cell">₱{day.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td>{day.appointments}</td>
-                                <td>₱{day.appointments > 0 ? (day.revenue / day.appointments).toFixed(0) : '0'}</td>
+                                <td className="currency-table-cell">₱{day.appointments > 0 ? (day.revenue / day.appointments).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1183,7 +1173,7 @@ const BarberDashboard = () => {
 
                       <div className="mb-2">
                         <strong>Total:</strong> 
-                        <span className="text-success ms-1 fw-bold">₱{getTotalPrice(request)}</span>
+                        <span className="text-success ms-1 fw-bold currency-amount">₱{Number(getTotalPrice(request)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         <small className="text-muted ms-2">
                           ({request.total_duration || (request.service?.duration || 30)} min)
                         </small>
@@ -1394,6 +1384,10 @@ const BarberDashboard = () => {
                 <Link to="/appointment-requests" className="btn btn-warning">
                   <i className="bi bi-clipboard-check me-2"></i>
                   Appointment Requests
+                </Link>
+                <Link to="/day-off-manager" className="btn btn-secondary">
+                  <i className="bi bi-calendar-x me-2"></i>
+                  Day-Off Manager
                 </Link>
                 <button 
                   className="btn btn-success"

@@ -377,7 +377,7 @@ const UnifiedBookingComponent = () => {
                       <option value="">Select a barber</option>
                       {barbers.map(barber => (
                         <option key={barber.id} value={barber.id}>
-                          {barber.full_name}
+                          {barber.full_name}{barber.skills ? ` - ${barber.skills.split(',').slice(0, 2).join(', ')}` : ''}
                         </option>
                       ))}
                     </select>

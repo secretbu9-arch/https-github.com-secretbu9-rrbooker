@@ -468,7 +468,7 @@ const ManageOrders = () => {
                             </span>
                           </td>
                           <td>
-                            <span className="fw-bold">₱{parseFloat(order.total_amount).toFixed(2)}</span>
+                            <span className="fw-bold currency-amount">₱{parseFloat(order.total_amount).toFixed(2)}</span>
                           </td>
                           <td>
                             <div>
@@ -592,7 +592,7 @@ const ManageOrders = () => {
                         </tr>
                         <tr>
                           <td><strong>Total Amount:</strong></td>
-                          <td>₱{parseFloat(orderDetails.order.total_amount).toFixed(2)}</td>
+                          <td className="currency-table-cell">₱{parseFloat(orderDetails.order.total_amount).toFixed(2)}</td>
                         </tr>
                         <tr>
                           <td><strong>Pickup Date:</strong></td>
@@ -709,8 +709,8 @@ const ManageOrders = () => {
                               </div>
                             </td>
                             <td>{item.quantity}</td>
-                            <td>₱{parseFloat(item.unit_price).toFixed(2)}</td>
-                            <td>₱{parseFloat(item.total_price).toFixed(2)}</td>
+                            <td className="currency-table-cell">₱{parseFloat(item.unit_price).toFixed(2)}</td>
+                            <td className="currency-table-cell">₱{parseFloat(item.total_price).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>

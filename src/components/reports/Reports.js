@@ -1168,7 +1168,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-success text-white">
           <div className="card-body">
             <h6>Service Revenue</h6>
-            <h3>₱{(data.summary.totalRevenue || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1176,7 +1176,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-info text-white">
           <div className="card-body">
             <h6>Product Revenue</h6>
-            <h3>₱{(data.summary.totalOrderRevenue || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.totalOrderRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1184,7 +1184,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-primary text-white">
           <div className="card-body">
             <h6>Total Revenue</h6>
-            <h3>₱{(data.summary.totalCombinedRevenue || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.totalCombinedRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1192,7 +1192,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-secondary text-white">
           <div className="card-body">
             <h6>Today's Revenue</h6>
-            <h3>₱{(data.summary.todayRevenue || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1200,7 +1200,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-warning text-white">
           <div className="card-body">
             <h6>Total Deductions</h6>
-            <h3>₱{(deductions.lunch + deductions.supplies + deductions.other).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(deductions.lunch + deductions.supplies + deductions.other).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1208,7 +1208,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-dark text-white">
           <div className="card-body">
             <h6>Net Sales</h6>
-            <h3>₱{((data.summary.totalCombinedRevenue || 0) - (deductions.lunch + deductions.supplies + deductions.other)).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{((data.summary.totalCombinedRevenue || 0) - (deductions.lunch + deductions.supplies + deductions.other)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1235,7 +1235,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-warning text-white">
           <div className="card-body">
             <h6>Avg. Service Value</h6>
-            <h3>₱{(data.summary.averageTransaction || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.averageTransaction || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1243,7 +1243,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
         <div className="card bg-success text-white">
           <div className="card-body">
             <h6>Avg. Order Value</h6>
-            <h3>₱{(data.summary.averageOrderValue || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.averageOrderValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -1265,7 +1265,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
               {(data.revenueByBarber || []).map((barber, index) => (
                 <tr key={index}>
                   <td>{barber.name}</td>
-                  <td><strong>₱{(barber.revenue || 0).toFixed(2)}</strong></td>
+                  <td className="currency-table-cell"><strong>₱{(barber.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
                   <td>{barber.appointments}</td>
                 </tr>
               ))}
@@ -1289,7 +1289,7 @@ const RevenueReportView = ({ data, deductions, setDeductions }) => (
               {(data.revenueByService || []).map((service, index) => (
                 <tr key={index}>
                   <td>{service.name}</td>
-                  <td>₱{(service.revenue || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td>{service.count}</td>
                 </tr>
               ))}
@@ -1469,7 +1469,7 @@ const AppointmentsReportView = ({ data }) => {
                       <td><span className="badge bg-primary">{service.total || 0}</span></td>
                       <td><span className="badge bg-success">{service.completed || 0}</span></td>
                       <td>{service.averageDuration || 0} min</td>
-                      <td>₱{(service.revenue || 0).toFixed(2)}</td>
+                      <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1570,7 +1570,7 @@ const CustomerReportView = ({ data }) => (
             <tr key={customer.id}>
               <td>{customer.full_name}</td>
               <td>{customer.appointments}</td>
-                  <td>₱{(customer.totalSpent || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(customer.totalSpent || 0).toFixed(2)}</td>
               <td>{customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : 'Never'}</td>
             </tr>
           ))}
@@ -1597,7 +1597,7 @@ const ServiceReportView = ({ data }) => (
           <div className="card-body">
             <h6>Highest Revenue Service</h6>
             <h3>{data.mostRevenue?.name || 'N/A'}</h3>
-            <p className="mb-0">₱{(data.mostRevenue?.revenue || 0).toFixed(2)}</p>
+            <p className="mb-0"><span className="currency-amount">₱{(data.mostRevenue?.revenue || 0).toFixed(2)}</span></p>
           </div>
         </div>
       </div>
@@ -1618,7 +1618,7 @@ const ServiceReportView = ({ data }) => (
           {(data.servicePerformance || []).map((service) => (
             <tr key={service.id}>
               <td>{service.name}</td>
-                  <td>₱{(service.price || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(service.price || 0).toFixed(2)}</td>
               <td>{service.bookings}</td>
               <td>₱{(service.revenue || 0).toFixed(2)}</td>
             </tr>
@@ -1703,7 +1703,7 @@ const InventoryReportView = ({ data }) => (
                 <tr key={index}>
                   <td>{product.name}</td>
                   <td>{product.quantity}</td>
-                  <td>₱{(product.revenue || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(product.revenue || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1909,7 +1909,7 @@ const DoubleBookingReportView = ({ data }) => {
           <div className="card bg-primary text-white">
             <div className="card-body">
               <h6>Revenue from Friends</h6>
-              <h3>₱{(summary.doubleBookingRevenue || 0).toFixed(2)}</h3>
+              <h3><span className="currency-amount-large">₱{(summary.doubleBookingRevenue || 0).toFixed(2)}</span></h3>
             </div>
           </div>
         </div>
@@ -1917,7 +1917,7 @@ const DoubleBookingReportView = ({ data }) => {
           <div className="card bg-warning text-white">
             <div className="card-body">
               <h6>Avg Revenue/Booking</h6>
-              <h3>₱{(summary.averageRevenuePerBooking || 0).toFixed(2)}</h3>
+              <h3><span className="currency-amount-large">₱{(summary.averageRevenuePerBooking || 0).toFixed(2)}</span></h3>
             </div>
           </div>
         </div>
@@ -1942,7 +1942,7 @@ const DoubleBookingReportView = ({ data }) => {
                   <td>{barber.name || 'Unknown'}</td>
                   <td>{barber.total || 0}</td>
                   <td>{barber.completed || 0}</td>
-                  <td>₱{(barber.revenue || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(barber.revenue || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1967,7 +1967,7 @@ const DoubleBookingReportView = ({ data }) => {
                 <tr key={index}>
                   <td>{friend.name || 'Unknown'}</td>
                   <td>{friend.bookings || 0}</td>
-                  <td>₱{(friend.totalSpent || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(friend.totalSpent || 0).toFixed(2)}</td>
                   <td>{friend.lastBooking ? new Date(friend.lastBooking).toLocaleDateString() : 'N/A'}</td>
                 </tr>
               ))}
@@ -2019,7 +2019,7 @@ const RealTimeReportView = ({ data }) => (
         <div className="card bg-info text-white">
           <div className="card-body">
             <h6>Today's Revenue</h6>
-            <h3>₱{(data.summary.todayRevenue || 0).toFixed(2)}</h3>
+            <h3><span className="currency-amount-large">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
           </div>
         </div>
       </div>
@@ -2048,7 +2048,7 @@ const RealTimeReportView = ({ data }) => (
                   <td>{barber.completed}</td>
                   <td>{barber.ongoing}</td>
                   <td>{barber.pending}</td>
-                  <td>₱{(barber.revenue || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(barber.revenue || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -2072,7 +2072,7 @@ const RealTimeReportView = ({ data }) => (
                 <tr key={index}>
                   <td>{service.name}</td>
                   <td>{service.bookings}</td>
-                  <td>₱{(service.revenue || 0).toFixed(2)}</td>
+                  <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
               ))}
             </tbody>

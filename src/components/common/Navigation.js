@@ -321,6 +321,19 @@ const Navigation = ({ userRole }) => {
                     Queue
                   </Link>
                 </li>
+                <li 
+                  className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
+                  style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
+                >
+                  <Link 
+                    className={`nav-link ${location.pathname === ROUTES.DAY_OFF_MANAGER ? 'active' : ''}`} 
+                    to={ROUTES.DAY_OFF_MANAGER} 
+                    onClick={handleNavClick}
+                  >
+                    <i className="bi bi-calendar-x me-1"></i>
+                    Day-Off Manager
+                  </Link>
+                </li>
               </>
             )}
             

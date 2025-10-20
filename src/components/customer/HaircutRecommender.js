@@ -1,4 +1,4 @@
-// components/customer/HaircutRecommender.js (Manual face-shape filters with visual overlays)
+// components/customer/HaircutRecommender.js (Simple manual face-shape selection system)
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
@@ -847,7 +847,7 @@ const HaircutRecommender = () => {
                 <img src={logoImage} alt="Raf & Rok" className="recommender-logo me-3" height="40" style={{ backgroundColor: '#ffffff', padding: '3px', borderRadius: '5px' }} />
                   <h1 className="h3 h4-md mb-0 text-white">Haircut Recommender</h1>
                 </div>
-                <p className="text-light mb-0 small"><i className="bi bi-magic me-2"></i>Get haircut recommendations based on your face shape</p>
+                <p className="text-light mb-0 small"><i className="bi bi-scissors me-2"></i>Simple face shape selection for personalized haircut recommendations</p>
               </div>
               <div>
                 <Link to="/dashboard" className="btn btn-light btn-sm"><i className="bi bi-arrow-left me-2"></i>Back to Dashboard</Link>
@@ -893,7 +893,7 @@ const HaircutRecommender = () => {
                               <h5>Drop your photo here</h5>
                               <p className="text-muted">or click to browse</p>
                             </label>
-                            <div className="mt-3"><small className="text-info"><i className="bi bi-info-circle me-1"></i>Use a clear front-facing photo for best results</small></div>
+                            <div className="mt-3"><small className="text-info"><i className="bi bi-info-circle me-1"></i>Upload a clear front-facing photo, then manually select your face shape</small></div>
                           </div>
                         ) : (
                           <div className="text-center">
@@ -1061,11 +1061,11 @@ const HaircutRecommender = () => {
                         </div>
                         <div className="text-center">
                           <button className="btn btn-primary btn-lg rounded-circle" onClick={takePicture} disabled={!isCameraReady} style={{ width: '60px', height: '60px' }}><i className="bi bi-camera-fill"></i></button>
-                          <div className="mt-2"><small className="text-muted">Align your face to the outline, then capture</small></div>
+                          <div className="mt-2"><small className="text-muted">Align your face to the outline, capture, then select your face shape</small></div>
                         </div>
                         {/* Face shape selection while in camera mode */}
                         <div className="mt-3 text-center">
-                          <h6 className="mb-2">Choose a face shape to guide the overlay</h6>
+                          <h6 className="mb-2">Select your face shape to guide the overlay</h6>
                            <div className="mb-3 p-2 bg-light rounded">
                              <small className="text-muted">
                                <i className="bi bi-info-circle me-1"></i>
@@ -1281,7 +1281,7 @@ Face Shape: ${faceShape}`
                       <div className="text-center py-5">
                         <div className="mb-3"><i className="bi bi-scissors display-4 text-muted"></i></div>
                         <h5>No Recommendations Yet</h5>
-                        <p className="text-muted">Select your face shape using the buttons below the image to see personalized haircut recommendations</p>
+                        <p className="text-muted">Manually select your face shape using the buttons below the image to see personalized haircut recommendations</p>
                       </div>
                     )}
                   </div>

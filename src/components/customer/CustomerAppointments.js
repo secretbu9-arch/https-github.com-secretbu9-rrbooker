@@ -996,7 +996,8 @@ const CustomerAppointments = () => {
                         {appointment.total_duration || appointment.service?.duration} min
                       </p>
                       <p className="card-text text-success mb-0 fw-bold">
-                        <i className="bi bi-currency-dollar me-1"></i> ₱{getTotalPrice(appointment)}
+                
+                        <span className="currency-amount">₱{Number(getTotalPrice(appointment)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </p>
                     </div>
                   </div>

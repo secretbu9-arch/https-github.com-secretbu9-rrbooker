@@ -19,7 +19,8 @@ const ManageBarbers = () => {
     email: '',
     phone: '',
     password: '',
-    role: 'barber'
+    role: 'barber',
+    skills: ''
   });
   
   const [formErrors, setFormErrors] = useState({});
@@ -170,7 +171,8 @@ const ManageBarbers = () => {
           .from('users')
           .update({
             full_name: formData.full_name,
-            phone: formData.phone
+            phone: formData.phone,
+            skills: formData.skills
           })
           .eq('id', selectedBarber.id)
           .select();
@@ -192,7 +194,8 @@ const ManageBarbers = () => {
             email: formData.email,
             password: formData.password,
             full_name: formData.full_name,
-            phone: formData.phone || null
+            phone: formData.phone || null,
+            skills: formData.skills || null
           });
           
           if (error) throw error;
@@ -211,7 +214,8 @@ const ManageBarbers = () => {
               data: {
                 full_name: formData.full_name,
                 role: 'barber',
-                phone: formData.phone || ''
+                phone: formData.phone || '',
+                skills: formData.skills || ''
               }
             }
           });
@@ -226,7 +230,8 @@ const ManageBarbers = () => {
               email: formData.email,
               full_name: formData.full_name,
               role: 'barber',
-              phone: formData.phone || ''
+              phone: formData.phone || '',
+              skills: formData.skills || ''
             }])
             .select();
           
@@ -258,7 +263,8 @@ const ManageBarbers = () => {
       email: barber.email,
       phone: barber.phone || '',
       password: '', // Don't populate password for editing
-      role: 'barber'
+      role: 'barber',
+      skills: barber.skills || ''
     });
     setIsEditing(true);
     setShowModal(true);
@@ -297,7 +303,8 @@ const ManageBarbers = () => {
       email: '',
       phone: '',
       password: '',
-      role: 'barber'
+      role: 'barber',
+      skills: ''
     });
     setIsEditing(false);
     setSelectedBarber(null);
@@ -310,7 +317,8 @@ const ManageBarbers = () => {
       email: '',
       phone: '',
       password: '',
-      role: 'barber'
+      role: 'barber',
+      skills: ''
     });
     setFormErrors({});
     setIsEditing(false);
@@ -424,9 +432,21 @@ const ManageBarbers = () => {
                       <span>{barber.email}</span>
                     </div>
                     {barber.phone && (
-                      <div className="d-flex align-items-center">
+                      <div className="d-flex align-items-center mb-2">
                         <i className="bi bi-telephone text-muted me-2"></i>
                         <span>{barber.phone}</span>
+                      </div>
+                    )}
+                    {barber.skills && (
+                      <div className="d-flex align-items-center">
+                        <i className="bi bi-award text-muted me-2"></i>
+                        <div>
+                          {barber.skills.split(',').map((skill, index) => (
+                            <span key={index} className="badge bg-primary me-1 mb-1">
+                              {skill.trim()}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -524,6 +544,23 @@ const ManageBarbers = () => {
                     {formErrors.phone && (
                       <div className="invalid-feedback">{formErrors.phone}</div>
                     )}
+                  </div>
+                  
+                  <div className="mb-3">
+                    <label htmlFor="skills" className="form-label">Skills (optional)</label>
+                    <input
+                      type="text"
+                      className={`form-control ${formErrors.skills ? 'is-invalid' : ''}`}
+                      id="skills"
+                      name="skills"
+                      value={formData.skills}
+                      onChange={handleChange}
+                      placeholder="e.g., Haircut, Beard Trim, Styling"
+                    />
+                    {formErrors.skills && (
+                      <div className="invalid-feedback">{formErrors.skills}</div>
+                    )}
+                    <div className="form-text">Enter specializations separated by commas</div>
                   </div>
                   
                   {!isEditing && (

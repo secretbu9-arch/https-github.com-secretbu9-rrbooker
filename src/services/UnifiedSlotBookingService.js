@@ -6,7 +6,7 @@ class UnifiedSlotBookingService {
   static CONFIG = {
     BUSINESS_HOURS: { start: '08:00', end: '17:00' },
     LUNCH_BREAK: { start: '12:00', end: '13:00' },
-    SLOT_DURATION: 30, // minutes
+    SLOT_DURATION: 30, // minutes - reverted to 30-minute intervals
     MAX_QUEUE_SIZE: 15,
     SLOT_TYPES: {
       AVAILABLE: 'available',
@@ -28,7 +28,7 @@ class UnifiedSlotBookingService {
         .select('*')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -144,6 +144,23 @@ class UnifiedSlotBookingService {
       const businessEnd = this.timeToMinutes(this.CONFIG.BUSINESS_HOURS.end);
       
       if (endTime <= businessEnd) {
+        // Check if this appointment would cross lunch break
+        const lunchStart = this.timeToMinutes(this.CONFIG.LUNCH_BREAK.start);
+        const lunchEnd = this.timeToMinutes(this.CONFIG.LUNCH_BREAK.end);
+        
+        // If appointment crosses lunch break, move it to after lunch
+        if (currentTime < lunchEnd && endTime > lunchStart) {
+          console.log(`🕐 Queue appointment ${appointment.id} would cross lunch break, moving to after lunch`);
+          currentTime = lunchEnd; // Move to after lunch break
+          
+          // Recalculate end time after lunch
+          const newEndTime = currentTime + appointmentDuration;
+          if (newEndTime > businessEnd) {
+            console.warn(`Queue appointment ${appointment.id} cannot fit after lunch break`);
+            return; // Skip this appointment
+          }
+        }
+        
         // Find the slot that corresponds to currentTime
         const assignedSlot = this.minutesToTime(currentTime);
         const slot = slotMap.get(assignedSlot);

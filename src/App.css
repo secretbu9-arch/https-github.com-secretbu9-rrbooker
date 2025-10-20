@@ -3395,3 +3395,39 @@ select.form-select-fix {
     }
   }
 }
+
+/* Currency Display Styles */
+.currency-amount {
+  text-align: right;
+  font-family: 'Segoe UI', monospace;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.currency-amount-small {
+  text-align: right;
+  font-family: 'Segoe UI', monospace;
+  font-weight: 500;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.currency-amount-large {
+  text-align: right;
+  font-family: 'Segoe UI', monospace;
+  font-weight: 700;
+  font-size: 1.2em;
+  white-space: nowrap;
+}
+
+.currency-input {
+  text-align: right;
+  font-family: 'Segoe UI', monospace;
+}
+
+.currency-table-cell {
+  text-align: right;
+  font-family: 'Segoe UI', monospace;
+  font-weight: 500;
+  white-space: nowrap;
+}

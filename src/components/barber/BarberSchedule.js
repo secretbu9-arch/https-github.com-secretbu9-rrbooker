@@ -9,6 +9,7 @@ import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import ComprehensiveQueueManager from '../../services/ComprehensiveQueueManager';
 import TimelineView from './TimelineView';
 import { toISODateString } from '../utils/helpers';
+import EnhancedScheduledQueueIntegration from '../../services/EnhancedScheduledQueueIntegration';
 import '../../styles/barber-appointments.css';
 
 const BarberSchedule = () => {
@@ -23,6 +24,8 @@ const BarberSchedule = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelAppointmentId, setCancelAppointmentId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [enhancedTimeline, setEnhancedTimeline] = useState(null);
+  const [isFixingDataConsistency, setIsFixingDataConsistency] = useState(false);
 
 
   useEffect(() => {
@@ -157,30 +160,85 @@ const BarberSchedule = () => {
     
     if (issues.length > 0) {
       console.warn('⚠️ Appointment data consistency issues:', issues);
-      // Auto-fix data consistency issues
-      fixDataConsistencyIssues();
+      // Only auto-fix if we're not already in the process of fixing
+      if (!isFixingDataConsistency) {
+        fixDataConsistencyIssues();
+      }
     }
     
     return issues.length === 0;
   };
 
   const fixDataConsistencyIssues = async () => {
+    if (isFixingDataConsistency) {
+      console.log('🔧 Already fixing data consistency, skipping...');
+      return;
+    }
+
     try {
+      setIsFixingDataConsistency(true);
       console.log('🔧 Attempting to fix data consistency issues...');
-      const result = await ComprehensiveQueueManager.fixDataConsistency(user?.id);
-      if (result.success) {
-        console.log('✅ Data consistency issues fixed:', result.message);
-        // Refresh appointments after fixing
-        await fetchAppointments();
-      } else {
-        console.warn('⚠️ Failed to fix data consistency issues:', result.message);
+      
+      // Get current appointments to identify issues
+      const currentAppointments = appointments.filter(apt => 
+        apt.appointment_date === `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+      );
+
+      // Fix queue appointments that have appointment_time (should be null)
+      const queueWithTimeIssues = currentAppointments.filter(apt => 
+        apt.appointment_type === 'queue' && apt.appointment_time
+      );
+
+      for (const appointment of queueWithTimeIssues) {
+        console.log(`🔧 Fixing queue appointment ${appointment.id} - removing appointment_time`);
+        await supabase
+          .from('appointments')
+          .update({ 
+            appointment_time: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', appointment.id);
       }
+
+      // Fix scheduled appointments that have queue_position (should be null)
+      const scheduledWithQueueIssues = currentAppointments.filter(apt => 
+        apt.appointment_type === 'scheduled' && apt.queue_position
+      );
+
+      for (const appointment of scheduledWithQueueIssues) {
+        console.log(`🔧 Fixing scheduled appointment ${appointment.id} - removing queue_position`);
+        await supabase
+          .from('appointments')
+          .update({ 
+            queue_position: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', appointment.id);
+      }
+
+      console.log('✅ Data consistency issues fixed directly');
+      
+      // Refresh appointments after fixing (but don't trigger validation again)
+      setTimeout(() => {
+        fetchAppointmentsWithoutValidation();
+      }, 1000);
+
     } catch (error) {
       console.error('❌ Error fixing data consistency issues:', error);
+    } finally {
+      setIsFixingDataConsistency(false);
     }
   };
 
   const fetchAppointments = async () => {
+    await fetchAppointmentsInternal(true);
+  };
+
+  const fetchAppointmentsWithoutValidation = async () => {
+    await fetchAppointmentsInternal(false);
+  };
+
+  const fetchAppointmentsInternal = async (shouldValidate = true) => {
     try {
       setLoading(true);
       
@@ -215,8 +273,8 @@ const BarberSchedule = () => {
       console.log('📅 Selected date (local):', selectedDate.toLocaleDateString());
       console.log('📅 Selected date formatted:', `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`);
       
-      // Validate appointment data consistency
-      if (data && data.length > 0) {
+      // Validate appointment data consistency only if requested
+      if (shouldValidate && data && data.length > 0) {
         validateAppointmentData(data);
       }
       
@@ -262,11 +320,28 @@ const BarberSchedule = () => {
       }
       
       setAppointments(data || []);
+      
+      // Fetch enhanced timeline for the selected date
+      await fetchEnhancedTimeline();
     } catch (err) {
       console.error('Error fetching appointments:', err);
       setError('Failed to load schedule. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEnhancedTimeline = async () => {
+    try {
+      if (!user) return;
+      
+      const selectedDateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+      const timeline = await EnhancedScheduledQueueIntegration.getIntegratedTimeline(user.id, selectedDateString);
+      setEnhancedTimeline(timeline);
+      
+      console.log('📊 Enhanced timeline fetched:', timeline);
+    } catch (error) {
+      console.error('❌ Error fetching enhanced timeline:', error);
     }
   };
 
@@ -372,30 +447,51 @@ const BarberSchedule = () => {
       const appointment = appointments.find(apt => apt.id === appointmentId);
       if (!appointment) return;
 
-      console.log(`🔄 Schedule ${action} booking request:`, appointmentId);
+      console.log(`🔄 Schedule ${action} booking request:`, appointmentId, 'Type:', appointment.appointment_type);
 
       if (action === 'accept') {
-        // Get current queue for this barber and date
-        const dateAppointments = getAppointmentsForDate(selectedDate).filter(apt => apt.status === 'scheduled');
-        
         const updates = {
           status: 'scheduled',
           updated_at: new Date().toISOString()
         };
 
-        if (appointment.is_urgent) {
-          updates.queue_position = 1;
+        // Handle different appointment types differently
+        if (appointment.appointment_type === 'queue') {
+          // For queue appointments, assign queue position and calculate estimated time
+          console.log('📋 Accepting queue appointment - assigning queue position');
           
-          // Increment all existing queue numbers
-          await supabase
-            .from('appointments')
-            .update({ queue_position: supabase.raw('queue_position + 1') })
-            .eq('barber_id', user.id)
-            .eq('appointment_date', appointment.appointment_date)
-            .eq('status', 'scheduled');
-        } else {
-          const maxQueueNumber = Math.max(0, ...dateAppointments.map(apt => apt.queue_position || 0));
-          updates.queue_position = maxQueueNumber + 1;
+          // Get current queue appointments for this barber and date
+          const dateAppointments = getAppointmentsForDate(selectedDate).filter(apt => 
+            apt.status === 'scheduled' && apt.appointment_type === 'queue'
+          );
+          
+          if (appointment.is_urgent) {
+            updates.queue_position = 1;
+            
+            // Increment all existing queue positions
+            await supabase
+              .from('appointments')
+              .update({ queue_position: supabase.raw('queue_position + 1') })
+              .eq('barber_id', user.id)
+              .eq('appointment_date', appointment.appointment_date)
+              .eq('status', 'scheduled')
+              .eq('appointment_type', 'queue');
+          } else {
+            const maxQueueNumber = Math.max(0, ...dateAppointments.map(apt => apt.queue_position || 0));
+            updates.queue_position = maxQueueNumber + 1;
+          }
+          
+          // Calculate estimated wait time based on queue position and existing appointments
+          const totalWaitTime = dateAppointments.reduce((total, apt) => {
+            return total + (apt.total_duration || 30) + 5; // Add 5 minutes buffer
+          }, 0);
+          
+          updates.estimated_wait_time = totalWaitTime;
+          
+        } else if (appointment.appointment_type === 'scheduled') {
+          // For scheduled appointments, don't assign queue position
+          console.log('📅 Accepting scheduled appointment - no queue position needed');
+          // Keep appointment_time as is, don't add queue_position
         }
 
         const { error } = await supabase
@@ -408,13 +504,28 @@ const BarberSchedule = () => {
         // Create notification using centralized service (handles both database and push)
         try {
           const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-          await centralizedNotificationService.createBookingConfirmationNotification({
-            userId: appointment.customer_id,
-            appointmentId: appointmentId,
-            queuePosition: updates.queue_position,
-            estimatedTime: null
-          });
-          console.log('✅ Schedule approval notification sent via CentralizedNotificationService');
+          
+          if (appointment.appointment_type === 'queue') {
+            // For queue appointments, send queue-specific notification
+            await centralizedNotificationService.createBookingConfirmationNotification({
+              userId: appointment.customer_id,
+              appointmentId: appointmentId,
+              queuePosition: updates.queue_position,
+              estimatedTime: null,
+              appointmentType: 'queue'
+            });
+            console.log('✅ Queue appointment approval notification sent');
+          } else {
+            // For scheduled appointments, send scheduled-specific notification
+            await centralizedNotificationService.createBookingConfirmationNotification({
+              userId: appointment.customer_id,
+              appointmentId: appointmentId,
+              queuePosition: null,
+              estimatedTime: appointment.appointment_time,
+              appointmentType: 'scheduled'
+            });
+            console.log('✅ Scheduled appointment approval notification sent');
+          }
         } catch (notificationError) {
           console.warn('Failed to send schedule approval notification:', notificationError);
         }
@@ -1069,6 +1180,36 @@ const BarberSchedule = () => {
                   </div>
                 </div>
               </div>
+              
+              {/* Enhanced Timeline Stats */}
+              {enhancedTimeline && (
+                <div className="row g-2 mt-2">
+                  <div className="col-3">
+                    <div className="text-center">
+                      <div className="small text-muted">Scheduled</div>
+                      <div className="fw-bold text-primary">{enhancedTimeline.stats.totalScheduled}</div>
+                    </div>
+                  </div>
+                  <div className="col-3">
+                    <div className="text-center">
+                      <div className="small text-muted">Queue</div>
+                      <div className="fw-bold text-info">{enhancedTimeline.stats.totalQueue}</div>
+                    </div>
+                  </div>
+                  <div className="col-3">
+                    <div className="text-center">
+                      <div className="small text-muted">Pending</div>
+                      <div className="fw-bold text-warning">{enhancedTimeline.stats.totalPending}</div>
+                    </div>
+                  </div>
+                  <div className="col-3">
+                    <div className="text-center">
+                      <div className="small text-muted">Utilization</div>
+                      <div className="fw-bold text-success">{enhancedTimeline.stats.utilization}%</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -1099,9 +1240,26 @@ const BarberSchedule = () => {
                 </div>
               );
             }
+
+            // Get pending appointments that need barber acceptance
+            const pendingAppointments = dateAppointments.filter(apt => apt.status === 'pending');
             
             return (
               <div className="p-0">
+                {/* Pending Appointments Section */}
+                {pendingAppointments.length > 0 && (
+                  <div className="pending-appointments-section p-3 bg-warning bg-opacity-10 border-bottom">
+                    <h6 className="mb-3 text-warning">
+                      <i className="bi bi-clock-history me-2"></i>
+                      Pending Approval ({pendingAppointments.length})
+                    </h6>
+                    <div className="alert alert-warning mb-0">
+                      <i className="bi bi-exclamation-triangle me-2"></i>
+                      <strong>Action Required:</strong> These appointments need your approval before they can be scheduled.
+                    </div>
+                  </div>
+                )}
+
                 {dateAppointments.map((appointment, index) => (
                   <div key={appointment.id} className={`appointment-card mobile-optimized ${appointment.status === 'ongoing' ? 'current-appointment' : ''} ${appointment.is_urgent ? 'urgent-appointment' : ''}`}>
                     {/* Mobile-Optimized Appointment Card */}
@@ -1120,8 +1278,12 @@ const BarberSchedule = () => {
                               </span>
                             </div>
                             
-                            {/* Queue Position Badge */}
-                            {appointment.queue_position ? (
+                            {/* Appointment Type Badge */}
+                            {appointment.status === 'pending' ? (
+                              <div className="queue-position-badge-mobile pending">
+                                <span className="fw-bold">PENDING</span>
+                              </div>
+                            ) : appointment.queue_position ? (
                               <div className="queue-position-badge-mobile">
                                 <span className="fw-bold">#{appointment.queue_position}</span>
                               </div>
@@ -1230,8 +1392,10 @@ const BarberSchedule = () => {
                                   onClick={() => handleBookingResponse(appointment.id, 'accept')}
                                 >
                                   <i className="bi bi-check-circle me-1"></i>
-                                  <span className="d-none d-sm-inline">Accept</span>
-                                <span className="d-sm-none"></span>
+                                  <span className="d-none d-sm-inline">
+                                    {appointment.appointment_type === 'queue' ? 'Accept to Queue' : 'Accept'}
+                                  </span>
+                                <span className="d-sm-none">Accept</span>
                                 </button>
                             </div>
                             <div className="col-6">
@@ -1246,7 +1410,7 @@ const BarberSchedule = () => {
                                 >
                                   <i className="bi bi-x-circle me-1"></i>
                                   <span className="d-none d-sm-inline">Decline</span>
-                                <span className="d-sm-none"></span>
+                                <span className="d-sm-none">Decline</span>
                                 </button>
                             </div>
                               </>

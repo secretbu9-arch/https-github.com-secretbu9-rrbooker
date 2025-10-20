@@ -60,15 +60,20 @@ export const formatDuration = (durationMinutes) => {
 export const formatPrice = (price, currency = 'PHP') => {
   if (price === undefined || price === null) return '';
   
-  // Format price for Philippine Peso with ₱ symbol
+  // Format price for Philippine Peso with ₱ symbol and comma separators
   if (currency === 'PHP') {
-    return `₱${Number(price).toFixed(2)}`;
+    return `₱${Number(price).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
   }
   
   // For other currencies, use Intl.NumberFormat
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: currency
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(price);
 };
 

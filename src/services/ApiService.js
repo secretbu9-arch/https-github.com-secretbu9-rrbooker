@@ -650,7 +650,7 @@ class ApiService {
     
     if (error) throw error;
     
-    const maxCapacity = 15; // Could be configurable per barber
+    const maxCapacity = 15; // Standardized capacity for all barbers
     return {
       current: count || 0,
       max: maxCapacity,

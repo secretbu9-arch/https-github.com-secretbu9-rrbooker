@@ -1113,7 +1113,7 @@ const BarberQueue = () => {
                         </span>
                         <span className="text-success fw-semibold ms-2">
                           <i className="bi bi-currency-dollar me-1"></i>
-                          ₱{getTotalPrice(appointment)}
+                          <span className="currency-amount">₱{Number(getTotalPrice(appointment)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </span>
                       </div>
                       <div className="addons-info">

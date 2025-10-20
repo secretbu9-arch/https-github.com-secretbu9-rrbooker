@@ -22,6 +22,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Debug components
 import AuthDebug from './components/debug/AuthDebug';
+import DayOffTester from './components/debug/DayOffTester';
 
 // Customer components
 import BookAppointment from './components/customer/BookAppointment';
@@ -33,6 +34,7 @@ import HaircutRecommender from './components/customer/HaircutRecommender';
 import BarberSchedule from './components/barber/BarberSchedule';
 import BarberQueue from './components/barber/BarberQueue';
 import AppointmentRequestManagerBasic from './components/barber/AppointmentRequestManagerBasic';
+import BarberDayOffManager from './components/barber/BarberDayOffManager';
 
 // Manager components
 import ManageBarbers from './components/manager/ManageBarbers';
@@ -345,6 +347,14 @@ function App() {
               <Navigate to="/dashboard" replace />
             } 
           />
+          <Route 
+            path="/day-off-manager" 
+            element={
+              session && userRole === 'barber' ? 
+              <BarberDayOffManager user={session.user} /> : 
+              <Navigate to="/dashboard" replace />
+            } 
+          />
           
           {/* Manager Routes */}
           <Route 
@@ -476,6 +486,14 @@ function App() {
           <Route 
             path="/debug/auth" 
             element={session ? <AuthDebug /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/debug/day-off" 
+            element={
+              session && userRole === 'barber' ? 
+              <DayOffTester user={session.user} /> : 
+              <Navigate to="/dashboard" replace />
+            } 
           />
           
           {/* Default Routes */}

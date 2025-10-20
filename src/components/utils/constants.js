@@ -164,6 +164,7 @@ export const ROUTES = {
   QUEUE: '/queue',
   PENDING_REQUESTS: '/pending',         // New
   BARBER_PROFILE: '/barber-profile',    // New
+  DAY_OFF_MANAGER: '/day-off-manager',  // New
   
   // Manager routes
   MANAGE_BARBERS: '/manage/barbers',

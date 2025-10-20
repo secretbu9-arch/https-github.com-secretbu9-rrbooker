@@ -314,29 +314,25 @@ const ManageAppointments = () => {
 
       if (error) throw error;
 
-      // Generate time slots with lunch break (8:00 AM - 11:30 AM, 1:00 PM - 4:30 PM)
+      // Generate time slots with lunch break (8:00 AM - 11:30 AM, 1:00 PM - 4:30 PM) - 30-minute intervals
       const timeSlots = [];
       
-      // Morning slots: 8:00 AM - 11:30 AM
+      // Morning slots: 8:00 AM - 11:30 AM (30-minute intervals)
       for (let hour = 8; hour <= 11; hour++) {
-        for (let minute of ['00', '30']) {
+        for (let minute = 0; minute < 60; minute += 30) {
           // End at 11:30 AM
-          if (hour === 11 && minute === '30') {
-            const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-            timeSlots.push(time);
-            break;
-          }
-          const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+          if (hour === 11 && minute > 30) break;
+          const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
           timeSlots.push(time);
         }
       }
       
-      // Afternoon slots: 1:00 PM - 4:30 PM
+      // Afternoon slots: 1:00 PM - 4:30 PM (30-minute intervals)
       for (let hour = 13; hour <= 16; hour++) {
-        for (let minute of ['00', '30']) {
-          // End at 4:30 PM (last slot at 4:00 PM for 30-min service ending at 4:30 PM)
-          if (hour === 16 && minute === '30') break;
-          const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+        for (let minute = 0; minute < 60; minute += 30) {
+          // End at 4:30 PM
+          if (hour === 16 && minute > 30) break;
+          const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
           timeSlots.push(time);
         }
       }

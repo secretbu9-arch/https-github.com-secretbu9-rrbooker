@@ -10,6 +10,8 @@ import OverbookingPreventionService from '../../services/OverbookingPreventionSe
 import QueueSchedulingAlgorithm from '../../services/QueueSchedulingAlgorithm';
 import UnifiedSlotBookingService from '../../services/UnifiedSlotBookingService';
 import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
+import EnhancedQueueTimeCalculator from '../../services/EnhancedQueueTimeCalculator';
+import BarberAvailabilityService from '../../services/BarberAvailabilityService';
 import { 
   BOOKING_STATUS, 
   APPOINTMENT_FIELDS, 
@@ -71,7 +73,7 @@ const getIntelligentQueueSlots = async (barberId, date, serviceDuration) => {
 };
 
 // Intelligent Queue Slots Component
-const IntelligentQueueSlotsComponent = ({ barberId, date, serviceDuration, onSlotSelect }) => {
+const IntelligentQueueSlotsComponent = ({ barberId, date, serviceDuration, recommendations = [], conflictInfo = null, onSlotSelect }) => {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -160,6 +162,46 @@ const IntelligentQueueSlotsComponent = ({ barberId, date, serviceDuration, onSlo
             </small>
           </div>
           <div className="card-body">
+            {/* Show conflict warnings and recommendations */}
+            {conflictInfo?.hasConflict && (
+              <div className="alert alert-warning mb-3">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                <strong>Time Conflict Detected:</strong> {conflictInfo.conflictMessage}
+                {conflictInfo.recommendedSlots && conflictInfo.recommendedSlots.length > 0 && (
+                  <div className="mt-2">
+                    <small className="text-muted">Recommended alternatives:</small>
+                    <div className="mt-1">
+                      {conflictInfo.recommendedSlots.slice(0, 3).map((slot, idx) => (
+                        <button
+                          key={idx}
+                          className="btn btn-outline-primary btn-sm me-1 mb-1"
+                          onClick={() => onSlotSelect({ type: 'intelligent_gap', time: slot.time })}
+                        >
+                          {slot.display}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Show recommendations */}
+            {recommendations.length > 0 && (
+              <div className="alert alert-info mb-3">
+                <i className="bi bi-lightbulb me-2"></i>
+                <strong>Smart Recommendations:</strong>
+                <ul className="mb-0 mt-2">
+                  {recommendations.map((rec, idx) => (
+                    <li key={idx}>
+                      <small>{rec.message}</small>
+                      {rec.suggestion && <><br /><small className="text-muted">{rec.suggestion}</small></>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="row g-3">
               {slots.map((slot, index) => (
                 <div key={index} className="col-md-6 col-lg-4">
@@ -291,7 +333,7 @@ const getEstimatedArrivalTime = async (barberId, barberQueues, timeSlots, select
       `)
       .eq('barber_id', barberId)
       .eq('appointment_date', targetDate)
-      .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+      .in('status', ['scheduled', 'confirmed', 'ongoing'])
       .order('appointment_time', { ascending: true });
     
     console.log('🔍 Database query results:');
@@ -819,7 +861,7 @@ const BookAppointment = () => {
         .select('appointment_time, appointment_type, status, queue_position, total_duration, services_data, add_ons_data, estimated_wait_time')
         .eq('appointment_date', date)
         .eq('barber_id', barberId)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+        .in('status', ['scheduled', 'confirmed', 'ongoing']);
 
       if (error) throw error;
       
@@ -833,8 +875,9 @@ const BookAppointment = () => {
       const scheduledAppointments = (booked || []).filter(apt => 
         apt.appointment_type === 'scheduled' && apt.appointment_time
       );
+      // Only accepted queue appointments should block slots
       const queueAppointments = (booked || []).filter(apt => 
-        apt.appointment_type === 'queue'
+        apt.appointment_type === 'queue' && apt.status === 'scheduled' && (apt.queue_position !== null && apt.queue_position !== undefined)
       );
 
       console.log('📅 Scheduled appointments:', scheduledAppointments.length);
@@ -997,12 +1040,20 @@ const BookAppointment = () => {
         while (sortedQueue.length > 0 && currentTime < workEnd) {
           // Check for lunch break
           if (currentTime >= lunchStart && currentTime < lunchEnd) {
+            console.log(`🕐 Queue processing hit lunch break, moving to after lunch`);
             currentTime = lunchEnd;
             continue;
           }
 
           const queueApt = sortedQueue[0];
           const queueDuration = queueApt.total_duration || 30;
+
+          // Check if this queue appointment would cross lunch break
+          if (currentTime < lunchEnd && (currentTime + queueDuration) > lunchStart) {
+            console.log(`🕐 Queue appointment would cross lunch break, moving to after lunch`);
+            currentTime = lunchEnd;
+            continue;
+          }
 
           if (currentTime + queueDuration <= workEnd) {
             // Calculate which time slots this queue appointment would occupy
@@ -1201,11 +1252,11 @@ const BookAppointment = () => {
     return totalDuration || 30; // Default to 30 minutes if no duration found
   };
 
-  // Generate time slots for 8AM-11:30AM and 1PM-4:30PM in 12-hour format
+  // Generate time slots for 8AM-11:30AM and 1PM-4:30PM in 12-hour format with 30-minute intervals
   const generateTimeSlotsWithIntervals = () => {
     const slots = [];
     
-    // Morning slots: 8:00 AM - 11:30 AM
+    // Morning slots: 8:00 AM - 11:30 AM (30-minute intervals)
     for (let hour = 8; hour <= 11; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         if (hour === 11 && minute > 30) break; // Stop after 11:30 AM
@@ -1215,7 +1266,7 @@ const BookAppointment = () => {
       }
     }
     
-    // Afternoon slots: 1:00 PM - 4:30 PM
+    // Afternoon slots: 1:00 PM - 4:30 PM (30-minute intervals)
     for (let hour = 13; hour <= 16; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         if (hour === 16 && minute > 30) break; // Stop at 4:30 PM
@@ -1225,7 +1276,7 @@ const BookAppointment = () => {
       }
     }
     
-    console.log('🕐 Generated time slots:', slots.map(s => s.value));
+    console.log('🕐 Generated time slots (30-min intervals):', slots.map(s => s.value));
     console.log('🕐 Total slots count:', slots.length);
     console.log('🕐 11:30 AM included:', slots.some(s => s.value === '11:30'));
     return slots;
@@ -1243,7 +1294,7 @@ const BookAppointment = () => {
         .select('*')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('queue_position', { ascending: true });
 
       if (error) throw error;
@@ -1710,7 +1761,7 @@ const BookAppointment = () => {
       // Fetch barbers
       const { data: barbersData, error: barbersError } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, barber_status, average_rating, total_ratings')
+        .select('id, full_name, email, phone, barber_status, average_rating, total_ratings, skills')
         .eq('role', 'barber')
         .order('full_name');
 
@@ -1753,7 +1804,7 @@ const BookAppointment = () => {
     if (!queue) return false;
     
     const minServiceDuration = serviceDuration || 30;
-    const maxQueueSize = 15;
+    const maxQueueSize = 15; // Standardized queue capacity
     
     // Check if queue is at maximum capacity
     if (queue.queueCount >= maxQueueSize) return false;
@@ -1889,7 +1940,7 @@ const BookAppointment = () => {
         // 2. Remaining time is less than minimum service duration (30 minutes), OR
         // 3. Queue is at maximum capacity (15 appointments)
         const minServiceDuration = 30; // Minimum service duration
-        const maxQueueSize = 15; // Maximum queue size
+        const maxQueueSize = 15; // Standardized queue capacity // Maximum queue size
         const isFullyScheduled = remainingTime < minServiceDuration || queueAppointments.length >= maxQueueSize;
         
         // Check if barber is at full capacity (queue full OR fully scheduled)
@@ -2663,7 +2714,7 @@ const BookAppointment = () => {
           barber: barber,
           score: score,
           reasons: [
-            `${rating.toFixed(1)}/5 rating`,
+            `${rating}/5 rating`,
             `${reviewCount} reviews`,
             reviewCount > 10 ? 'Experienced barber' : 'New barber'
           ],
@@ -2765,7 +2816,7 @@ const BookAppointment = () => {
         .select('appointment_time, appointment_type, status, queue_position, total_duration, services_data, add_ons_data')
         .eq('appointment_date', date)
         .eq('barber_id', barberId)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+        .in('status', ['scheduled', 'confirmed', 'ongoing']);
 
       if (error) {
         console.error('❌ Database error:', error);
@@ -2978,6 +3029,29 @@ const BookAppointment = () => {
     try {
       console.log('🔍 Validating barber scheduled availability for booking...');
       
+      // First check comprehensive barber availability
+      const availabilityCheck = await BarberAvailabilityService.checkBarberAvailability(barberId, date, selectedTimeSlot);
+      
+      if (!availabilityCheck.isAvailable) {
+        // Provide specific error messages based on unavailability type
+        let errorMessage = availabilityCheck.reason;
+        
+        if (availabilityCheck.type === 'day_off') {
+          errorMessage = `${availabilityCheck.barberName} is on ${availabilityCheck.dayOffType?.replace('_', ' ')} from ${availabilityCheck.startDate} to ${availabilityCheck.endDate}. Please select a different barber or date.`;
+        } else if (availabilityCheck.type === 'offline') {
+          errorMessage = `${availabilityCheck.barberName} is currently offline. Please select a different barber.`;
+        } else if (availabilityCheck.type === 'currently_busy') {
+          errorMessage = `${availabilityCheck.barberName} is currently busy. Estimated available time: ${availabilityCheck.estimatedAvailableTime}. Please try again later or select a different barber.`;
+        } else if (availabilityCheck.type === 'at_capacity') {
+          errorMessage = `${availabilityCheck.barberName} is fully booked for this time slot. Next available time: ${availabilityCheck.nextAvailableTime}. Please select a different time or barber.`;
+        } else if (availabilityCheck.type === 'outside_hours') {
+          errorMessage = `Appointments are only available between 8:00 AM and 5:00 PM. Please select a different time.`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Additional validation for scheduled appointments
       const serviceDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
       const slots = await UnifiedSlotBookingService.getUnifiedSlots(barberId, date, serviceDuration);
       const availableSlots = slots.filter(slot => slot.canBook && slot.type === 'available');
@@ -3016,6 +3090,27 @@ const BookAppointment = () => {
     try {
       console.log('🔍 Validating barber queue availability for booking...');
       
+      // First check comprehensive barber availability
+      const availabilityCheck = await BarberAvailabilityService.checkBarberAvailability(barberId, date);
+      
+      if (!availabilityCheck.isAvailable) {
+        // Provide specific error messages based on unavailability type
+        let errorMessage = availabilityCheck.reason;
+        
+        if (availabilityCheck.type === 'day_off') {
+          errorMessage = `${availabilityCheck.barberName} is on ${availabilityCheck.dayOffType?.replace('_', ' ')} from ${availabilityCheck.startDate} to ${availabilityCheck.endDate}. Please select a different barber or date.`;
+        } else if (availabilityCheck.type === 'offline') {
+          errorMessage = `${availabilityCheck.barberName} is currently offline. Please select a different barber.`;
+        } else if (availabilityCheck.type === 'currently_busy') {
+          errorMessage = `${availabilityCheck.barberName} is currently busy. Estimated available time: ${availabilityCheck.estimatedAvailableTime}. Please try again later or select a different barber.`;
+        } else if (availabilityCheck.type === 'outside_hours') {
+          errorMessage = `Queue appointments are only available during business hours (8:00 AM - 5:00 PM). Please try again during business hours.`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Additional capacity check for queue appointments
       const serviceDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
       const slots = await UnifiedSlotBookingService.getUnifiedSlots(barberId, date, serviceDuration);
       const availableSlots = slots.filter(slot => slot.canBook && slot.type === 'available');
@@ -3286,7 +3381,7 @@ const BookAppointment = () => {
         .select('*')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('queue_position', { ascending: true });
 
       if (error) throw error;
@@ -3625,7 +3720,7 @@ const BookAppointment = () => {
         .select('*')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -4242,7 +4337,7 @@ const BookAppointment = () => {
         `)
         .eq('barber_id', barberId)
         .eq('appointment_date', appointmentDate)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -4469,7 +4564,7 @@ const BookAppointment = () => {
           .eq('barber_id', bookingData.selectedBarber)
           .eq('appointment_date', bookingData.selectedDate)
           .eq('appointment_time', bookingData.selectedTimeSlot)
-          .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+          .in('status', ['scheduled', 'confirmed', 'ongoing']);
           
         if (existingAppointments && existingAppointments.length > 0) {
           throw new Error('Time slot is already booked. Please select a different time.');
@@ -4567,31 +4662,25 @@ const BookAppointment = () => {
       if (result.success) {
         // Show success message with position and estimated time (skip for friend bookings)
         if (!bookingData.bookForFriend) {
-        const successMessage = `✅ Appointment request submitted successfully!\n` +
-          `Your Position: #${result.position}\n` +
-          `Estimated time: ${result.estimated_time || 'TBD'}\n` +
+          let successMessage;
+          
+          if (bookingData.appointmentType === 'scheduled') {
+            successMessage = `✅ Appointment scheduled successfully!\n` +
+              `Time: ${result.estimated_time || 'TBD'}\n` +
           `⏳ Status: Pending confirmation by barber/manager`;
+          } else {
+            successMessage = `✅ Queue appointment request submitted successfully!\n` +
+              `⏳ Status: Pending barber approval\n` +
+              `📋 You will receive a notification once approved`;
+          }
         
         setSuccess(successMessage);
         }
 
         // Email confirmation removed - using push notifications only
 
-        // Create database notification using centralized service
-        try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-          await centralizedNotificationService.createBookingConfirmationNotification({
-            userId: user.id,
-            appointmentId: result.appointment_id,
-            queuePosition: result.position,
-            estimatedTime: result.estimated_time,
-            appointmentType: bookingData.appointmentType,
-            appointmentTime: bookingData.selectedTimeSlot
-          });
-          console.log('✅ Database notification created for booking confirmation');
-        } catch (dbError) {
-          console.error('Error creating database notification:', dbError);
-        }
+        // Do NOT create booking confirmation notification here to avoid duplicates.
+        // Confirmation notifications are sent only upon approval by barber/manager.
 
         // Push notification is now handled by CentralizedNotificationService
 
@@ -5041,6 +5130,13 @@ const Step1DateTypeAndBarber = ({
   const [friendPhone, setFriendPhone] = useState(bookingData.friendPhone || '');
   const [friendEmail, setFriendEmail] = useState(bookingData.friendEmail || '');
   const [checkingAppointment, setCheckingAppointment] = useState(false);
+  
+  // Barber availability warning state
+  const [barberAvailability, setBarberAvailability] = useState(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  
+  // Track availability for each barber
+  const [barberAvailabilityStatus, setBarberAvailabilityStatus] = useState({});
   const [showQueueDetails, setShowQueueDetails] = useState({});
   const [showAvailability, setShowAvailability] = useState(true);
   const [dateValidationMessage, setDateValidationMessage] = useState('');
@@ -5242,16 +5338,6 @@ const Step1DateTypeAndBarber = ({
               </div>
             </div>
           `;
-        } else {
-          warningElement.className = 'alert alert-success border';
-          warningElement.innerHTML = `
-            <div className="d-flex align-items-center">
-              <i className="bi bi-check-circle me-2"></i>
-              <div>
-                <strong>Available:</strong> This barber has ${availableSlots.length} available time slots for your selected services.
-              </div>
-            </div>
-          `;
         }
       }
       
@@ -5415,12 +5501,81 @@ const Step1DateTypeAndBarber = ({
   maxDate.setDate(maxDate.getDate() + 30);
   const maxDateStr = maxDate.toISOString().split('T')[0];
 
+  // Check barber availability for selected date
+  const checkBarberAvailability = async (barberId, date) => {
+    if (!barberId || !date) {
+      setBarberAvailability(null);
+      return;
+    }
+
+    try {
+      setCheckingAvailability(true);
+      console.log('🔍 Checking barber availability for warning:', { barberId, date });
+      
+      const availability = await BarberAvailabilityService.checkBarberAvailability(barberId, date);
+      console.log('📊 Barber availability result:', availability);
+      
+      setBarberAvailability(availability);
+    } catch (error) {
+      console.error('❌ Error checking barber availability:', error);
+      setBarberAvailability(null);
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
+
+  // Check availability for all barbers when date changes
+  const checkAllBarbersAvailability = async (date) => {
+    if (!date || !barbers || barbers.length === 0) return;
+    
+    console.log('🔍 Checking availability for all barbers on date:', date);
+    
+    const availabilityPromises = barbers.map(async (barber) => {
+      try {
+        const availability = await BarberAvailabilityService.checkBarberAvailability(barber.id, date);
+        return { barberId: barber.id, availability };
+      } catch (error) {
+        console.error(`❌ Error checking availability for barber ${barber.id}:`, error);
+        return { barberId: barber.id, availability: { isAvailable: true } };
+      }
+    });
+    
+    const results = await Promise.all(availabilityPromises);
+    const availabilityMap = {};
+    
+    results.forEach(({ barberId, availability }) => {
+      availabilityMap[barberId] = availability;
+    });
+    
+    setBarberAvailabilityStatus(availabilityMap);
+    console.log('📊 All barbers availability status:', availabilityMap);
+  };
+
+  // Check availability when date or barber changes
+  useEffect(() => {
+    if (selectedBarber && selectedDate) {
+      checkBarberAvailability(selectedBarber, selectedDate);
+    }
+  }, [selectedBarber, selectedDate]);
+
+  // Check all barbers availability when date changes
+  useEffect(() => {
+    if (selectedDate && barbers && barbers.length > 0) {
+      checkAllBarbersAvailability(selectedDate);
+    }
+  }, [selectedDate, barbers]);
+
   // Barber selection functions
   const handleBarberSelect = async (barberId) => {
     setSelectedBarber(barberId);
     setShowRecommendations(false);
     
     console.log('🎯 Barber selected:', barberId, 'Date:', selectedDate);
+    
+    // Check availability for the selected barber and date
+    if (selectedDate) {
+      checkBarberAvailability(barberId, selectedDate);
+    }
     
     // Load queue data for this barber and date
     if (selectedDate) {
@@ -5744,10 +5899,28 @@ const Step1DateTypeAndBarber = ({
                                 <div className="mb-2">
                                   <div className="d-flex align-items-center">
                                     <i className="bi bi-star-fill text-warning me-1"></i>
-                                    <span className="fw-bold">{rec.barber.total_ratings > 0 ? (rec.barber.average_rating?.toFixed(1) || '0.0') : '0.0'}/5</span>
+                                    <span className="fw-bold">{rec.barber.total_ratings > 0 ? (rec.barber.average_rating || '0') : '0'}/5</span>
                                     <span className="text-muted ms-1">({rec.barber.total_ratings || 0} reviews)</span>
                                   </div>
                                 </div>
+                                
+                                {/* Skills Display */}
+                                {rec.barber.skills && (
+                                  <div className="mb-2">
+                                    <div className="d-flex flex-wrap gap-1">
+                                      {rec.barber.skills.split(',').slice(0, 3).map((skill, skillIndex) => (
+                                        <span key={skillIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                                          {skill.trim()}
+                                        </span>
+                                      ))}
+                                      {rec.barber.skills.split(',').length > 3 && (
+                                        <span className="badge bg-secondary bg-opacity-10 text-secondary">
+                                          +{rec.barber.skills.split(',').length - 3} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                                 
                                 
                                 <div className="d-flex justify-content-between align-items-center">
@@ -5967,6 +6140,16 @@ const Step1DateTypeAndBarber = ({
                   return null;
                 })()}
 
+                {/* Queue Lunch Break Information */}
+                {bookingData.appointmentType === 'queue' && (
+                  <div className="alert alert-info mt-3 mb-3">
+                    <i className="bi bi-info-circle me-2"></i>
+                    <strong>Queue Information:</strong> Queue appointments are automatically scheduled around the lunch break (12:00 PM - 1:00 PM).
+                    <br />
+                    <small>Your appointment will be scheduled after any existing appointments and will skip the lunch break period.</small>
+                  </div>
+                )}
+
                 <div className="mt-3 d-flex justify-content-between align-items-center">
                   <button 
                     className="btn btn-sm btn-outline-primary"
@@ -6082,6 +6265,23 @@ const Step1DateTypeAndBarber = ({
                                           <small className="text-success">
                                             {alt.recommendation}
                                         </small>
+                                        {/* Skills Display for Alternative Barbers */}
+                                        {alt.barber.skills && (
+                                          <div className="mt-1">
+                                            <div className="d-flex flex-wrap gap-1">
+                                              {alt.barber.skills.split(',').slice(0, 2).map((skill, skillIndex) => (
+                                                <span key={skillIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25" style={{ fontSize: '0.7rem' }}>
+                                                  {skill.trim()}
+                                                </span>
+                                              ))}
+                                              {alt.barber.skills.split(',').length > 2 && (
+                                                <span className="badge bg-secondary bg-opacity-10 text-secondary" style={{ fontSize: '0.7rem' }}>
+                                                  +{alt.barber.skills.split(',').length - 2}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                       <button
                                         type="button"
@@ -6163,14 +6363,49 @@ const Step1DateTypeAndBarber = ({
                     
                           return (
                       <div key={barber.id} className="col-md-6 col-lg-4">
-                        <div className={`card barber-card h-100 ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''} ${isFullSlot ? 'border-secondary bg-light opacity-75' : ''}`}>
-                          <div className="card-body p-3">
+                        {(() => {
+                          const availability = barberAvailabilityStatus[barber.id];
+                          const isUnavailable = availability && !availability.isAvailable;
+                          const isDisabled = isFullSlot || isUnavailable;
+                          
+                          return (
+                            <div className={`card barber-card h-100 ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''} ${isDisabled ? 'border-secondary bg-light opacity-75' : ''}`}>
+                              <div className="card-body p-3">
                             <div className="d-flex justify-content-between align-items-start mb-2">
                               <h6 className="card-title mb-0">{barber.full_name}</h6>
                               <div className="d-flex flex-column align-items-end gap-1">
-                                <span className={`badge ${barber.barber_status === 'available' ? 'bg-success' : barber.barber_status === 'busy' ? 'bg-warning' : 'bg-secondary'}`}>
-                                  {barber.barber_status}
-                                </span>
+                                {(() => {
+                                  const availability = barberAvailabilityStatus[barber.id];
+                                  if (availability && !availability.isAvailable) {
+                                    // Show availability status instead of barber_status
+                                    return (
+                                      <span className={`badge ${
+                                        availability.type === 'day_off' ? 'bg-warning' :
+                                        availability.type === 'offline' ? 'bg-danger' :
+                                        availability.type === 'busy' ? 'bg-warning' :
+                                        'bg-secondary'
+                                      }`} title={availability.reason}>
+                                        <i className={`bi ${
+                                          availability.type === 'day_off' ? 'bi-calendar-x' :
+                                          availability.type === 'offline' ? 'bi-person-x' :
+                                          availability.type === 'busy' ? 'bi-clock' :
+                                          'bi-exclamation-triangle'
+                                        } me-1`}></i>
+                                        {availability.type === 'day_off' ? 'Day Off' :
+                                         availability.type === 'offline' ? 'Offline' :
+                                         availability.type === 'busy' ? 'Busy' :
+                                         'Unavailable'}
+                                      </span>
+                                    );
+                                  } else {
+                                    // Show regular barber status
+                                    return (
+                                      <span className={`badge ${barber.barber_status === 'available' ? 'bg-success' : barber.barber_status === 'busy' ? 'bg-warning' : 'bg-secondary'}`}>
+                                        {barber.barber_status}
+                                      </span>
+                                    );
+                                  }
+                                })()}
                                 {isFullSlot && (
                                   <span className="badge bg-secondary" title={
                                     isFullyScheduled ? 'No available time slots' : 
@@ -6189,23 +6424,53 @@ const Step1DateTypeAndBarber = ({
                             <div className="mb-2">
                               <div className="d-flex align-items-center">
                                 <i className="bi bi-star-fill text-warning me-1"></i>
-                                <span className="fw-bold">{barber.total_ratings > 0 ? (barber.average_rating?.toFixed(1) || '0.0') : '0.0'}/5</span>
+                                <span className="fw-bold">{barber.total_ratings > 0 ? (barber.average_rating || '0') : '0'}/5</span>
                                 <span className="text-muted ms-1">({barber.total_ratings || 0} reviews)</span>
                               </div>
                             </div>
                             
+                            {/* Skills Display */}
+                            {barber.skills && (
+                              <div className="mb-2">
+                                <div className="d-flex flex-wrap gap-1">
+                                  {barber.skills.split(',').slice(0, 3).map((skill, skillIndex) => (
+                                    <span key={skillIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                                      {skill.trim()}
+                                    </span>
+                                  ))}
+                                  {barber.skills.split(',').length > 3 && (
+                                    <span className="badge bg-secondary bg-opacity-10 text-secondary">
+                                      +{barber.skills.split(',').length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
                             <div className="d-flex gap-2">
-                              <button
-                                className={`btn btn-sm ${isSelected ? 'btn-primary' : isFullSlot ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                                onClick={() => handleBarberSelect(barber.id)}
-                                disabled={isFullSlot}
-                                title={isFullSlot ? 'This barber has no available slots' : ''}
-                              >
-                                {isSelected ? 'Selected' : 
-                                 isFullyScheduled ? 'Fully Scheduled' : 
-                                 isQueueFull ? 'Queue Full' : 
-                                 isFullSlot ? 'Full Slot' : 'Select'}
-                              </button>
+                              {(() => {
+                                const availability = barberAvailabilityStatus[barber.id];
+                                const isUnavailable = availability && !availability.isAvailable;
+                                const isDisabled = isFullSlot || isUnavailable;
+                                
+                                return (
+                                  <button
+                                    className={`btn btn-sm ${isSelected ? 'btn-primary' : isDisabled ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
+                                    onClick={() => handleBarberSelect(barber.id)}
+                                    disabled={isDisabled}
+                                    title={isFullSlot ? 'This barber has no available slots' : 
+                                           isUnavailable ? availability.reason : ''}
+                                  >
+                                    {isSelected ? 'Selected' : 
+                                     isUnavailable ? (availability.type === 'day_off' ? 'Day Off' :
+                                                     availability.type === 'offline' ? 'Offline' :
+                                                     availability.type === 'busy' ? 'Busy' : 'Unavailable') :
+                                     isFullyScheduled ? 'Fully Scheduled' : 
+                                     isQueueFull ? 'Queue Full' : 
+                                     isFullSlot ? 'Full Slot' : 'Select'}
+                                  </button>
+                                );
+                              })()}
                               <button
                                 className="btn btn-sm btn-outline-info"
                                 onClick={() => toggleQueueDetails(barber.id)}
@@ -6466,8 +6731,10 @@ const Step1DateTypeAndBarber = ({
                                 )}
                               </div>
                             )}
-                          </div>
-                        </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                           );
                         })}
@@ -6483,15 +6750,58 @@ const Step1DateTypeAndBarber = ({
         </>
       )}
 
+      {/* Barber Availability Warning */}
+      {selectedBarber && selectedDate && (
+        <div className="row mt-3">
+          <div className="col-12">
+            {checkingAvailability ? (
+              <div className="alert alert-info d-flex align-items-center">
+                <div className="spinner-border spinner-border-sm me-2" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+                Checking barber availability...
+              </div>
+            ) : barberAvailability && !barberAvailability.isAvailable ? (
+              <div className={`alert ${barberAvailability.type === 'day_off' ? 'alert-warning' : 
+                barberAvailability.type === 'offline' ? 'alert-danger' : 
+                barberAvailability.type === 'busy' ? 'alert-warning' : 'alert-secondary'} d-flex align-items-center`}>
+                <i className={`bi ${barberAvailability.type === 'day_off' ? 'bi-calendar-x' : 
+                  barberAvailability.type === 'offline' ? 'bi-person-x' : 
+                  barberAvailability.type === 'busy' ? 'bi-clock' : 'bi-exclamation-triangle'} me-2`}></i>
+                <div>
+                  <strong>⚠️ Barber Unavailable</strong>
+                  <div className="small">{barberAvailability.reason}</div>
+                  {barberAvailability.endDate && barberAvailability.endDate !== selectedDate && (
+                    <div className="small text-muted">
+                      Available again: {new Date(barberAvailability.endDate).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : barberAvailability && barberAvailability.isAvailable ? (
+              <div className="alert alert-success d-flex align-items-center">
+                <i className="bi bi-check-circle me-2"></i>
+                <div>
+                  <strong>✅ Barber Available</strong>
+                  <div className="small">This barber is available for the selected date</div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
       <div className="row mt-4">
         <div className="col-12 d-flex justify-content-end">
           <button
             className="btn btn-primary btn-lg"
             onClick={handleNext}
-            disabled={!selectedDate || !selectedBarber || (appointmentType === 'scheduled' && !selectedTimeSlot) || (bookForFriend && (!friendName || !friendPhone)) || isBarberFullyScheduled}
+            disabled={!selectedDate || !selectedBarber || (appointmentType === 'scheduled' && !selectedTimeSlot) || (bookForFriend && (!friendName || !friendPhone)) || isBarberFullyScheduled || (barberAvailability && !barberAvailability.isAvailable)}
           >
-            {isBarberFullyScheduled ? 'Barber Fully Scheduled' : 'Next: Select Services'}
+            {isBarberFullyScheduled ? 'Barber Fully Scheduled' : 
+             (barberAvailability && !barberAvailability.isAvailable) ? 'Barber Unavailable' : 
+             'Next: Select Services'}
             <i className="bi bi-arrow-right ms-2"></i>
           </button>
                     </div>
@@ -6783,28 +7093,6 @@ const Step3QueueSummary = ({
         try {
           setStatusLoading(true);
           
-          // Load data based on appointment type
-          if (bookingData.appointmentType === 'scheduled') {
-            // Load scheduled appointment data
-            const startTimeResult = await getEstimatedStartTime(bookingData.selectedBarber, bookingData.selectedDate);
-            setEstimatedStartTime(startTimeResult);
-            
-            const endTimeResult = await getEstimatedEndTime(
-              bookingData.selectedBarber,
-              bookingData.selectedServices,
-              bookingData.selectedAddOns,
-              services,
-              addOns,
-              bookingData.selectedDate
-            );
-            setEstimatedEndTime(endTimeResult);
-          } else {
-            // For queue appointments, set appropriate values
-            setEstimatedStartTime('Queue Position');
-            setEstimatedEndTime('TBD');
-          }
-
-          // Calculate real-time status
           const serviceDuration = calculateTotalDuration(
             bookingData.selectedServices, 
             bookingData.selectedAddOns, 
@@ -6812,16 +7100,58 @@ const Step3QueueSummary = ({
             addOns
           );
 
-          const [queueStatus, availability] = await Promise.all([
-            calculateCurrentQueueStatus(bookingData.selectedBarber, bookingData.selectedDate),
-            calculateRealTimeAvailability(bookingData.selectedBarber, bookingData.selectedDate, serviceDuration)
-          ]);
+          // Use enhanced queue calculator for accurate estimates
+          if (bookingData.appointmentType === 'queue') {
+            const queueInfo = await EnhancedQueueTimeCalculator.calculateQueueInfo(
+              bookingData.selectedBarber,
+              bookingData.selectedDate,
+              serviceDuration,
+              bookingData.isUrgent || false
+            );
+            
+            setEstimatedStartTime(queueInfo.estimatedStartTime);
+            setEstimatedEndTime(queueInfo.estimatedEndTime);
 
           setRealTimeStatus({
-            queueStatus,
-            availability,
+              queueStatus: {
+                nextQueuePosition: queueInfo.queuePosition,
+                queueLength: queueInfo.totalInQueue - 1,
+                estimatedWaitTime: queueInfo.estimatedWaitTime
+              },
+              availability: {
+                nextAvailableTime: queueInfo.estimatedStartTime
+              },
+              lastUpdated: new Date().toLocaleTimeString(),
+              recommendations: queueInfo.recommendations
+            });
+          } else if (bookingData.appointmentType === 'scheduled') {
+            // For scheduled appointments, check for conflicts and calculate times
+            const scheduledInfo = await EnhancedQueueTimeCalculator.calculateScheduledAppointmentTimes(
+              bookingData.selectedBarber,
+              bookingData.selectedDate,
+              bookingData.selectedTimeSlot,
+              serviceDuration
+            );
+            
+            if (scheduledInfo.hasConflict) {
+              setEstimatedStartTime('Conflict Detected');
+              setEstimatedEndTime('Please Reschedule');
+            } else {
+              setEstimatedStartTime(bookingData.selectedTimeSlot);
+              setEstimatedEndTime(scheduledInfo.endTime);
+            }
+            
+            setRealTimeStatus({
+              queueStatus: null,
+              availability: {
+                nextAvailableTime: bookingData.selectedTimeSlot,
+                hasConflict: scheduledInfo.hasConflict,
+                conflictMessage: scheduledInfo.conflictMessage,
+                recommendedSlots: scheduledInfo.recommendedSlots || []
+              },
             lastUpdated: new Date().toLocaleTimeString()
           });
+          }
 
         } catch (error) {
           console.error('Error loading async data:', error);
@@ -6834,7 +7164,7 @@ const Step3QueueSummary = ({
     };
 
     loadAsyncData();
-  }, [bookingData.selectedBarber, bookingData.selectedDate, bookingData.selectedServices, bookingData.selectedAddOns, services, addOns]);
+  }, [bookingData.selectedBarber, bookingData.selectedDate, bookingData.selectedServices, bookingData.selectedAddOns, services, addOns, bookingData.appointmentType, bookingData.selectedTimeSlot, bookingData.isUrgent]);
 
   const calculateTotal = () => {
     const servicesTotal = bookingData.selectedServices.reduce((total, serviceId) => {
@@ -6926,6 +7256,21 @@ const Step3QueueSummary = ({
                               'No wait'
                             }
                           </p>
+                          
+                          {/* Show recommendations if available */}
+                          {realTimeStatus.recommendations && realTimeStatus.recommendations.length > 0 && (
+                            <div className="mt-2">
+                              {realTimeStatus.recommendations.map((rec, index) => (
+                                <div key={index} className="alert alert-info alert-sm py-2 mb-1">
+                                  <small>
+                                    <i className="bi bi-info-circle me-1"></i>
+                                    <strong>{rec.message}</strong>
+                                    {rec.suggestion && <><br />{rec.suggestion}</>}
+                                  </small>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -6936,10 +7281,42 @@ const Step3QueueSummary = ({
                             <strong>Appointment Time:</strong>{' '}
                             {bookingData.selectedTimeSlot ? convertTo12Hour(bookingData.selectedTimeSlot) : 'Not Set'}
                           </p>
-                          <p className="mb-0">
+                          <p className="mb-1">
                             <strong>Service Duration:</strong>{' '}
                             {calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} minutes
                           </p>
+                          <p className="mb-0">
+                            <strong>Estimated End Time:</strong>{' '}
+                            {estimatedEndTime ? convertTo12Hour(estimatedEndTime) : 'Calculating...'}
+                          </p>
+                          
+                          {/* Show conflict information if available */}
+                          {realTimeStatus.availability?.hasConflict && (
+                            <div className="mt-2">
+                              <div className="alert alert-warning alert-sm py-2 mb-1">
+                                <small>
+                                  <i className="bi bi-exclamation-triangle me-1"></i>
+                                  <strong>Conflict Detected:</strong> {realTimeStatus.availability.conflictMessage}
+                                </small>
+                              </div>
+                              
+                              {/* Show recommended alternative slots */}
+                              {realTimeStatus.availability.recommendedSlots && realTimeStatus.availability.recommendedSlots.length > 0 && (
+                                <div className="mt-2">
+                                  <small className="text-muted">
+                                    <strong>Recommended Alternative Times:</strong>
+                                  </small>
+                                  <div className="mt-1">
+                                    {realTimeStatus.availability.recommendedSlots.slice(0, 3).map((slot, index) => (
+                                      <span key={index} className="badge bg-light text-dark me-1 mb-1">
+                                        {slot.display}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
@@ -7196,7 +7573,7 @@ const Step3QueueSummary = ({
                                                   <i className="bi bi-people text-dark mb-2"></i>
                                                   <h6 className="mb-1 text-dark">Queue Position</h6>
                                                   <span className="badge bg-dark">
-                                                    #{queue?.queueCount ? queue.queueCount + 1 : 1}
+                                                    #{realTimeStatus.queueStatus?.nextQueuePosition || 'Calculating...'}
                                                   </span>
                                                 </div>
                                               </div>
@@ -7205,7 +7582,10 @@ const Step3QueueSummary = ({
                                                   <i className="bi bi-hourglass text-dark mb-2"></i>
                                                   <h6 className="mb-1 text-dark">Est. Wait Time</h6>
                                                   <span className="badge bg-dark">
-                                                    {queue?.estimatedWait || 'Calculating...'} min
+                                                    {realTimeStatus.queueStatus?.estimatedWaitTime ? 
+                                                      `${Math.round(realTimeStatus.queueStatus.estimatedWaitTime / 60)}h ${realTimeStatus.queueStatus.estimatedWaitTime % 60}m` :
+                                                      'Calculating...'
+                                                    }
                                                   </span>
                                                 </div>
                                               </div>
@@ -7241,6 +7621,8 @@ const Step3QueueSummary = ({
                                       barberId={bookingData.selectedBarber}
                                       date={bookingData.selectedDate}
                                       serviceDuration={calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)}
+                                      recommendations={realTimeStatus.recommendations || []}
+                                      conflictInfo={realTimeStatus.availability}
                                       onSlotSelect={(slot) => {
                                         console.log('🎯 Selected intelligent queue slot:', slot);
                                         if (slot.type === 'intelligent_gap') {

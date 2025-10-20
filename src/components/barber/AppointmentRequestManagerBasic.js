@@ -1,6 +1,7 @@
 // components/barber/AppointmentRequestManagerBasic.js - Basic version without complex joins
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import BarberAvailabilityService from '../../services/BarberAvailabilityService';
 
 const AppointmentRequestManagerBasic = ({ user, userRole }) => {
   const [requests, setRequests] = useState([]);
@@ -8,6 +9,7 @@ const AppointmentRequestManagerBasic = ({ user, userRole }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all'); // all, pending_approval, approved, rejected
+  const [availabilityStatus, setAvailabilityStatus] = useState({});
 
   useEffect(() => {
     fetchRequests();
@@ -143,6 +145,9 @@ const AppointmentRequestManagerBasic = ({ user, userRole }) => {
 
       console.log('Requests with appointments:', requestsWithAppointments);
       setRequests(requestsWithAppointments);
+      
+      // Check availability for all requests
+      await checkAvailabilityForAllRequests(requestsWithAppointments);
     } catch (err) {
       console.error('Error fetching requests:', err);
       setError(`Failed to load requests: ${err.message}`);
@@ -151,10 +156,38 @@ const AppointmentRequestManagerBasic = ({ user, userRole }) => {
     }
   };
 
+  // Check availability for all requests
+  const checkAvailabilityForAllRequests = async (requestsList) => {
+    const availabilityMap = {};
+    
+    for (const request of requestsList) {
+      if (request.appointment && request.status === 'pending_approval') {
+        const availability = await checkBarberAvailabilityForRequest(request);
+        availabilityMap[request.id] = availability;
+      }
+    }
+    
+    setAvailabilityStatus(availabilityMap);
+  };
+
   const handleApproval = async (requestId, action, decision) => {
     try {
       const request = requests.find(r => r.id === requestId);
       if (!request) return;
+
+      // Check barber availability before approving
+      if (decision === 'approved' && request.appointment) {
+        const availabilityCheck = await BarberAvailabilityService.checkBarberAvailability(
+          request.barber_id,
+          request.appointment.appointment_date,
+          request.appointment.appointment_time
+        );
+
+        if (!availabilityCheck.isAvailable) {
+          setError(`Cannot approve request: ${availabilityCheck.reason}`);
+          return;
+        }
+      }
 
       const updateData = {
         status: decision,
@@ -250,6 +283,23 @@ const AppointmentRequestManagerBasic = ({ user, userRole }) => {
 
   const getActionIcon = (actionType) => {
     return actionType === 'reschedule' ? 'arrow-repeat' : 'x-circle';
+  };
+
+  // Check if barber is available for a specific appointment
+  const checkBarberAvailabilityForRequest = async (request) => {
+    if (!request.appointment) return { isAvailable: true, reason: 'No appointment data' };
+    
+    try {
+      const availabilityCheck = await BarberAvailabilityService.checkBarberAvailability(
+        request.barber_id,
+        request.appointment.appointment_date,
+        request.appointment.appointment_time
+      );
+      return availabilityCheck;
+    } catch (error) {
+      console.error('Error checking barber availability:', error);
+      return { isAvailable: true, reason: 'Unable to check availability' };
+    }
   };
 
   // Function to format time
@@ -410,12 +460,34 @@ const AppointmentRequestManagerBasic = ({ user, userRole }) => {
                     <small className="text-muted">ID: {request.customer_id}</small>
                   </div>
 
+                  {/* Availability Warning */}
+                  {request.status === 'pending_approval' && availabilityStatus[request.id] && !availabilityStatus[request.id].isAvailable && (
+                    <div className="mb-3">
+                      <div className="alert alert-warning py-2 mb-0">
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-exclamation-triangle me-2"></i>
+                          <div>
+                            <strong>Availability Issue:</strong>
+                            <br/>
+                            <small>{availabilityStatus[request.id].reason}</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Appointment Details */}
                   {request.appointment ? (
                     <div className="mb-3">
                       <div className="d-flex align-items-center mb-2">
                         <i className="bi bi-calendar-event text-primary me-2"></i>
                         <h6 className="mb-0">Appointment Details</h6>
+                        {request.status === 'pending_approval' && availabilityStatus[request.id] && availabilityStatus[request.id].isAvailable && (
+                          <span className="badge bg-success ms-2">
+                            <i className="bi bi-check-circle me-1"></i>
+                            Available
+                          </span>
+                        )}
                       </div>
                       <div className="bg-light p-2 rounded">
                         <div className="row g-2 small">
@@ -479,8 +551,17 @@ const AppointmentRequestManagerBasic = ({ user, userRole }) => {
                   {request.status === 'pending_approval' ? (
                     <div className="d-flex gap-2">
                       <button
-                        className="btn btn-success btn-sm flex-fill"
+                        className={`btn btn-sm flex-fill ${
+                          availabilityStatus[request.id] && !availabilityStatus[request.id].isAvailable
+                            ? 'btn-outline-secondary'
+                            : 'btn-success'
+                        }`}
                         onClick={() => handleApproval(request.id, 'approve', 'approved')}
+                        disabled={availabilityStatus[request.id] && !availabilityStatus[request.id].isAvailable}
+                        title={availabilityStatus[request.id] && !availabilityStatus[request.id].isAvailable 
+                          ? 'Cannot approve - barber unavailable' 
+                          : 'Approve request'
+                        }
                       >
                         <i className="bi bi-check-circle me-1"></i>
                         Approve

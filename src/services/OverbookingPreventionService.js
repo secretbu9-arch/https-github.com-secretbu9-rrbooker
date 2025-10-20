@@ -144,7 +144,7 @@ class OverbookingPreventionService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+        .in('status', ['scheduled', 'confirmed', 'ongoing']);
 
       if (error) throw error;
 
@@ -184,7 +184,7 @@ class OverbookingPreventionService {
         .select('total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+        .in('status', ['scheduled', 'confirmed', 'ongoing']);
 
       if (error) throw error;
 
@@ -245,7 +245,7 @@ class OverbookingPreventionService {
 
       if (error) throw error;
 
-      const maxQueueSize = 10; // Maximum queue size
+      const maxQueueSize = 15; // Maximum queue size
       const currentSize = queueAppointments.length;
       const isOverflow = currentSize >= maxQueueSize;
 
@@ -284,7 +284,7 @@ class OverbookingPreventionService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .gte('appointment_time', timeSlot)
         .order('appointment_time', { ascending: true });
 
@@ -333,7 +333,7 @@ class OverbookingPreventionService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending'])
+        .in('status', ['scheduled', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -395,7 +395,7 @@ class OverbookingPreventionService {
   static generateTimeSlots() {
     const slots = [];
     for (let hour = 9; hour < 17; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
+      for (let minute = 0; minute < 60; minute += 30) { // Reverted to 30-minute intervals
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         slots.push(timeString);
       }

@@ -291,7 +291,7 @@ const CustomerOrders = () => {
                         </p>
                         <p className="text-muted">
                           <i className="bi bi-cash me-2"></i>
-                          ₱{order.total_amount || 0}
+                          <span className="currency-amount">₱{Number(order.total_amount || 0).toFixed(2)}</span>
                         </p>
                       </div>
 

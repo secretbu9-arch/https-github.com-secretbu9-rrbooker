@@ -58,3 +58,4 @@ Once the column is added, the following features will work:
 - ✅ Managers can add skills when creating/editing barbers
 - ✅ Skills display as badges in barber cards
 - ✅ Skills are searchable and filterable
+

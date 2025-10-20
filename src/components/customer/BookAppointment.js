@@ -407,15 +407,21 @@ const getEstimatedArrivalTime = async (barberId, barberQueues, timeSlots, select
       }
     };
     
+    const lunchStartMinutes = timeToMinutes('12:00:00');
+    const lunchEndMinutes = timeToMinutes('13:00:00');
+    
     // Start from working hours or current time (whichever is later)
     let currentTimeMinutes = timeToMinutes(workingHours.start);
     if (isTargetToday) {
       const currentTimeMinutesToday = timeToMinutes(currentTime);
       currentTimeMinutes = Math.max(currentTimeMinutes, currentTimeMinutesToday);
+      
+      // If current time is during lunch break, start after lunch
+      if (currentTimeMinutes >= lunchStartMinutes && currentTimeMinutes < lunchEndMinutes) {
+        console.log('🍽️ Current time is during lunch break, starting after lunch at 1:00 PM');
+        currentTimeMinutes = lunchEndMinutes;
+      }
     }
-    
-    const lunchStartMinutes = timeToMinutes('12:00:00');
-    const lunchEndMinutes = timeToMinutes('13:00:00');
     
     console.log('📅 Processing appointments...');
     console.log('  - Total appointments:', allAppointments?.length || 0);
@@ -5426,6 +5432,16 @@ const Step1DateTypeAndBarber = ({
     }
     
     return false;
+  };
+
+  // Helper function to check if a specific time is in the past
+  const isTimeInPast = (date, time) => {
+    if (!date || !time) return false;
+    
+    const selectedDateTime = new Date(`${date} ${time}`);
+    const now = new Date();
+    
+    return selectedDateTime < now;
   };
 
   const handleNext = () => {

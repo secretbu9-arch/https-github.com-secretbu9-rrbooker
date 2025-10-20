@@ -121,10 +121,36 @@ class AdvancedHybridQueueService {
    */
   async buildUnifiedTimeline(scheduled, queue, date) {
     const timeline = [];
+    
+    // Get current time for real-time calculations
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const isToday = date === today;
+    
     let currentTime = this.timeToMinutes(this.WORK_START);
+    
+    // If this is today, start from current time or work start, whichever is later
+    if (isToday) {
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentMinutes = currentHour * 60 + currentMinute;
+      const workStartMinutes = this.timeToMinutes(this.WORK_START);
+      
+      // Start from work start or current time, whichever is later
+      currentTime = Math.max(workStartMinutes, currentMinutes);
+      
+      console.log('🕐 Building timeline for today - current time:', this.minutesToTime(currentMinutes), 'starting from:', this.minutesToTime(currentTime));
+    }
+    
     const workEnd = this.timeToMinutes(this.WORK_END);
     const lunchStart = this.timeToMinutes(this.LUNCH_START);
     const lunchEnd = this.timeToMinutes(this.LUNCH_END);
+    
+    // If current time is during lunch break, start after lunch
+    if (isToday && currentTime >= lunchStart && currentTime < lunchEnd) {
+      console.log('🍽️ Current time is during lunch break, starting after lunch at 1:00 PM');
+      currentTime = lunchEnd;
+    }
 
     // Sort scheduled by time
     const sortedScheduled = [...scheduled].sort((a, b) => {
@@ -318,7 +344,7 @@ class AdvancedHybridQueueService {
       } else {
         // Queue: Find best position based on priority
         insertionPoint = this.findQueuePosition(queueState.timeline, priority_level);
-        estimatedTime = this.calculateEstimatedTime(queueState.timeline, insertionPoint, total_duration);
+        estimatedTime = this.calculateEstimatedTime(queueState.timeline, insertionPoint, total_duration, appointment_date);
       }
 
       // Check for conflicts only for scheduled appointments
@@ -393,7 +419,7 @@ class AdvancedHybridQueueService {
         success: true,
         appointment_id: newAppointment.id,
         position: appointment_type === BOOKING_TYPES.SCHEDULED ? insertionPoint : null, // Only return position for scheduled appointments
-        estimated_time: appointment_type === BOOKING_TYPES.SCHEDULED ? estimatedTime : null, // Only return estimated time for scheduled appointments
+        estimated_time: estimatedTime, // Return estimated time for both scheduled and queue appointments
         message: appointment_type === BOOKING_TYPES.SCHEDULED ? 
           `Appointment scheduled for ${estimatedTime}` : 
           `Appointment request submitted and pending barber approval`
@@ -683,16 +709,43 @@ class AdvancedHybridQueueService {
     return position;
   }
 
-  calculateEstimatedTime(timeline, position, duration) {
+  calculateEstimatedTime(timeline, position, duration, appointmentDate = null) {
+    // Get current time for real-time calculations
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const isToday = appointmentDate === today;
+    
+    let workStart = this.WORK_START;
+    
+    // If this is today, start from current time or work start, whichever is later
+    if (isToday) {
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentMinutes = currentHour * 60 + currentMinute;
+      const workStartMinutes = this.timeToMinutes(this.WORK_START);
+      const lunchStart = this.timeToMinutes(this.LUNCH_START);
+      const lunchEnd = this.timeToMinutes(this.LUNCH_END);
+      
+      // Start from work start or current time, whichever is later
+      let startTime = Math.max(workStartMinutes, currentMinutes);
+      
+      // If current time is during lunch break, start after lunch
+      if (startTime >= lunchStart && startTime < lunchEnd) {
+        startTime = lunchEnd;
+      }
+      
+      workStart = this.minutesToTime(startTime);
+    }
+    
     if (timeline.length === 0) {
-      return this.WORK_START;
+      return workStart;
     }
 
     // Find appointments before this position
     const before = timeline.slice(0, position - 1);
     
     if (before.length === 0) {
-      return this.WORK_START;
+      return workStart;
     }
 
     // Get last appointment's end time
@@ -702,7 +755,7 @@ class AdvancedHybridQueueService {
       return this.minutesToTime(endMinutes + this.BUFFER_TIME);
     }
 
-    return this.WORK_START;
+    return workStart;
   }
 
   async checkForConflicts(barberId, date, time, duration) {

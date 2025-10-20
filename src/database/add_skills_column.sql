@@ -20,3 +20,4 @@ CREATE INDEX IF NOT EXISTS idx_users_skills ON users USING gin(to_tsvector('engl
 
 -- Grant necessary permissions (adjust based on your RLS policies)
 -- The column will inherit the same permissions as the users table
+

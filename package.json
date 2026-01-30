@@ -26,19 +26,20 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "cross-env CI=false npm run build",
-    "prebuild": "node scripts/sync-firebase-config.js",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "build-mobile": "npm run build && npx cap sync",
-    "android": "npx cap open android",
-    "ios": "npx cap open ios",
-    "sync": "npx cap sync",
-    "sync-firebase-config": "node scripts/sync-firebase-config.js",
-    "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
-    "lint:fix": "eslint src/**/*.{js,jsx,ts,tsx} --fix"
-  },
+  "start": "react-scripts start",
+  "prebuild": "node scripts/sync-firebase-config.js",
+  "build": "cross-env CI=false react-scripts build",
+  "test": "react-scripts test",
+  "eject": "react-scripts eject",
+
+  "build-mobile": "npm run build && npx cap sync",
+  "android": "npx cap open android",
+  "ios": "npx cap open ios",
+  "sync": "npx cap sync",
+
+  "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
+  "lint:fix": "eslint src/**/*.{js,jsx,ts,tsx} --fix"
+},
   "eslintConfig": {
     "extends": [
       "react-app",

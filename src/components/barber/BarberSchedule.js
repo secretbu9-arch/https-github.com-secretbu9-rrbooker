@@ -5,18 +5,29 @@ import LoadingSpinner from '../common/LoadingSpinner';
 import addOnsService from '../../services/AddOnsService';
 import { PushService } from '../../services/PushService';
 import BulkCancellationModal from './BulkCancellationModal';
+import RescheduleModal from './RescheduleModal';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import ComprehensiveQueueManager from '../../services/ComprehensiveQueueManager';
-import TimelineView from './TimelineView';
-import { toISODateString } from '../utils/helpers';
-import EnhancedScheduledQueueIntegration from '../../services/EnhancedScheduledQueueIntegration';
+import { toISODateString, getStatusColor, getStatusIcon } from '../utils/helpers';
 import '../../styles/barber-appointments.css';
+
+const LEGACY_ADDON_NAMES = {
+  addon1: 'Beard Trim',
+  addon2: 'Hot Towel Treatment',
+  addon3: 'Scalp Massage',
+  addon4: 'Hair Wash',
+  addon5: 'Styling',
+  addon6: 'Hair Wax Application',
+  addon7: 'Eyebrow Trim',
+  addon8: 'Mustache Trim',
+  addon9: 'Face Mask',
+  addon10: 'Hair Treatment'
+};
 
 const BarberSchedule = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'timeline'
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
   const [weekDays, setWeekDays] = useState([]);
@@ -24,12 +35,87 @@ const BarberSchedule = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelAppointmentId, setCancelAppointmentId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
-  const [enhancedTimeline, setEnhancedTimeline] = useState(null);
   const [isFixingDataConsistency, setIsFixingDataConsistency] = useState(false);
+  const [addOnsLookup, setAddOnsLookup] = useState({});
+  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null });
+
+  const normalizeStatus = (status) => {
+    const value = status?.toLowerCase();
+    switch (value) {
+      case 'done':
+        return 'completed';
+      case 'cancel':
+        return 'cancelled';
+      case 'scheduled':
+        return 'confirmed';
+      default:
+        return value || '';
+    }
+  };
+
+  const normalizeAppointmentRecord = (appointment = {}) => ({
+    ...appointment,
+    status: normalizeStatus(appointment.status)
+  });
+
+  const getDatabaseStatusOptions = (canonicalStatus) => {
+    switch (canonicalStatus) {
+      case 'completed':
+        return ['done', canonicalStatus];
+      case 'confirmed':
+        return ['confirmed', 'scheduled'];
+      case 'cancelled':
+        return ['cancelled', 'cancel'];
+      case 'ongoing':
+      case 'pending':
+        return [canonicalStatus];
+      default:
+        return [canonicalStatus].filter(Boolean);
+    }
+  };
+
+  const buildStatusUpdatePayload = (dbStatus, canonicalStatus, reason) => {
+    const payload = {
+      status: dbStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    if (canonicalStatus === 'completed' || canonicalStatus === 'cancelled') {
+      payload.queue_position = null;
+    } else if (canonicalStatus === 'ongoing') {
+      payload.queue_position = 0;
+    }
+
+    if (canonicalStatus === 'cancelled' && reason) {
+      payload.cancellation_reason = reason;
+    }
+
+    return payload;
+  };
 
 
   useEffect(() => {
     getCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    const loadAddOnNames = async () => {
+      try {
+        const addOns = await addOnsService.getAddOns();
+        const mapping = { ...LEGACY_ADDON_NAMES };
+        (addOns || []).forEach(addOn => {
+          if (addOn?.id) {
+            mapping[addOn.id] = addOn.name || mapping[addOn.id] || addOn.id;
+          }
+        });
+        setAddOnsLookup(mapping);
+      } catch (err) {
+        console.error('Error loading add-on names:', err);
+        setAddOnsLookup(LEGACY_ADDON_NAMES);
+      }
+    };
+
+    loadAddOnNames();
   }, []);
 
   useEffect(() => {
@@ -319,29 +405,14 @@ const BarberSchedule = () => {
         console.log('🚨 Urgent appointments:', urgentAppointments.length);
       }
       
-      setAppointments(data || []);
+      const normalizedData = (data || []).map(normalizeAppointmentRecord);
+      setAppointments(normalizedData);
       
-      // Fetch enhanced timeline for the selected date
-      await fetchEnhancedTimeline();
     } catch (err) {
       console.error('Error fetching appointments:', err);
       setError('Failed to load schedule. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchEnhancedTimeline = async () => {
-    try {
-      if (!user) return;
-      
-      const selectedDateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
-      const timeline = await EnhancedScheduledQueueIntegration.getIntegratedTimeline(user.id, selectedDateString);
-      setEnhancedTimeline(timeline);
-      
-      console.log('📊 Enhanced timeline fetched:', timeline);
-    } catch (error) {
-      console.error('❌ Error fetching enhanced timeline:', error);
     }
   };
 
@@ -387,51 +458,79 @@ const BarberSchedule = () => {
     return services.join(', ');
   };
 
-  const getAddOnsDisplay = async (appointment) => {
-    return await addOnsService.getAddOnsDisplay(appointment.add_ons_data);
-  };
+  const parseAddOnsData = (addOnsData) => {
+    if (!addOnsData) return [];
 
-  // Component to display add-ons with async loading
-  const AddOnsDisplay = ({ appointment }) => {
-    const [addOnsText, setAddOnsText] = useState('');
-    const [loading, setLoading] = useState(true);
+    if (Array.isArray(addOnsData)) {
+      return addOnsData;
+    }
 
-    useEffect(() => {
-      const loadAddOns = async () => {
-        if (!appointment.add_ons_data) {
-          setAddOnsText('');
-          setLoading(false);
-          return;
+    if (typeof addOnsData === 'string') {
+      const trimmed = addOnsData.trim();
+      if (!trimmed || trimmed === '[]' || trimmed === 'null' || trimmed === 'undefined') {
+        return [];
         }
 
         try {
-          const text = await getAddOnsDisplay(appointment);
-          setAddOnsText(text);
-        } catch (error) {
-          console.error('Error loading add-ons display:', error);
-          setAddOnsText('');
-        } finally {
-          setLoading(false);
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && Array.isArray(parsed.items)) return parsed.items;
+        if (parsed && Array.isArray(parsed.data)) return parsed.data;
+        if (parsed && Array.isArray(parsed.ids)) return parsed.ids;
+      } catch (err) {
+        // Not JSON, maybe comma-separated or single ID
+        if (trimmed.includes(',')) {
+          return trimmed.split(',').map(item => item.trim()).filter(Boolean);
         }
-      };
-
-      loadAddOns();
-    }, [appointment.add_ons_data]);
-
-    if (loading) {
-      return <div className="small text-muted">Loading add-ons...</div>;
+        return [trimmed];
+      }
+      return [];
     }
 
-    if (!addOnsText) {
-      return null;
+    if (typeof addOnsData === 'object') {
+      if (Array.isArray(addOnsData.items)) return addOnsData.items;
+      if (Array.isArray(addOnsData.data)) return addOnsData.data;
+      if (Array.isArray(addOnsData.ids)) return addOnsData.ids;
+      if (Array.isArray(addOnsData)) return addOnsData;
+      return Object.values(addOnsData);
     }
 
-    return (
-      <div className="small text-info">
-        <i className="bi bi-plus-circle me-1"></i>
-        {addOnsText}
-      </div>
-    );
+    return [];
+  };
+
+  const getAddOnsDisplayString = (addOnsData) => {
+    const items = parseAddOnsData(addOnsData);
+    if (!items.length) return '';
+
+    const names = items.map(item => {
+      if (!item) return '';
+
+      if (typeof item === 'string') {
+        if (addOnsLookup[item]) return addOnsLookup[item];
+        const trimmed = item.trim();
+        if (addOnsLookup[trimmed]) return addOnsLookup[trimmed];
+        if (trimmed.includes('-')) {
+          return '';
+        }
+        return trimmed;
+      }
+
+      if (typeof item === 'object') {
+        if (item.name) return item.name;
+        if (item.label) return item.label;
+        const id = item.id || item.addon_id || item.uuid;
+        if (id && addOnsLookup[id]) return addOnsLookup[id];
+        if (typeof id === 'string' && id.includes('-')) return '';
+      }
+
+      return '';
+    }).filter(Boolean);
+
+    const uniqueNames = names.filter((name, index) => names.indexOf(name) === index);
+
+    if (!uniqueNames.length) return '';
+
+    return uniqueNames.join(' + ');
   };
 
   const getTotalPrice = (appointment) => {
@@ -451,7 +550,7 @@ const BarberSchedule = () => {
 
       if (action === 'accept') {
         const updates = {
-          status: 'scheduled',
+          status: 'confirmed',
           updated_at: new Date().toISOString()
         };
 
@@ -462,20 +561,38 @@ const BarberSchedule = () => {
           
           // Get current queue appointments for this barber and date
           const dateAppointments = getAppointmentsForDate(selectedDate).filter(apt => 
-            apt.status === 'scheduled' && apt.appointment_type === 'queue'
+            apt.status === 'confirmed' && apt.appointment_type === 'queue'
           );
           
           if (appointment.is_urgent) {
             updates.queue_position = 1;
             
             // Increment all existing queue positions
-            await supabase
+            // Fetch appointments that need their queue positions incremented
+            const { data: existingAppointments, error: fetchError } = await supabase
               .from('appointments')
-              .update({ queue_position: supabase.raw('queue_position + 1') })
+              .select('id, queue_position')
               .eq('barber_id', user.id)
               .eq('appointment_date', appointment.appointment_date)
-              .eq('status', 'scheduled')
-              .eq('appointment_type', 'queue');
+              .eq('status', 'confirmed')
+              .eq('appointment_type', 'queue')
+              .not('queue_position', 'is', null)
+              .neq('id', appointmentId);
+            
+            if (fetchError) {
+              console.warn('Warning: Could not fetch appointments for queue position increment:', fetchError);
+            } else if (existingAppointments && existingAppointments.length > 0) {
+              // Update each appointment's queue position
+              for (const apt of existingAppointments) {
+                await supabase
+                  .from('appointments')
+                  .update({ 
+                    queue_position: (apt.queue_position || 0) + 1,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', apt.id);
+              }
+            }
           } else {
             const maxQueueNumber = Math.max(0, ...dateAppointments.map(apt => apt.queue_position || 0));
             updates.queue_position = maxQueueNumber + 1;
@@ -531,24 +648,52 @@ const BarberSchedule = () => {
         }
 
       } else {
-        const { error } = await supabase
-          .from('appointments')
-          .update({ 
-            status: 'cancelled',
-            updated_at: new Date().toISOString(),
-            cancellation_reason: reason || 'Declined by barber'
-          })
-          .eq('id', appointmentId);
+        const declineReason = reason || 'Declined by barber';
+        let declineError = null;
 
-        if (error) throw error;
+        for (const dbStatus of getDatabaseStatusOptions('cancelled')) {
+          const payload = buildStatusUpdatePayload(dbStatus, 'cancelled', declineReason);
+          const { error } = await supabase
+            .from('appointments')
+            .update(payload)
+            .eq('id', appointmentId);
 
-        await supabase.from('notifications').insert({
-          user_id: appointment.customer_id,
-          title: 'Booking Request Declined',
-          message: `Your appointment request has been declined. ${reason ? `Reason: ${reason}` : 'Please try booking with another barber or a different time.'}`,
-          type: 'appointment_declined',
-          data: { appointment_id: appointmentId, reason }
-        });
+          if (!error) {
+            declineError = null;
+            break;
+          }
+
+          declineError = error;
+          if (error.code !== '23514') {
+            throw error;
+          }
+          console.warn('Decline status violated constraint, retrying with fallback value', { appointmentId, attemptedStatus: dbStatus });
+        }
+
+        if (declineError) {
+          throw declineError;
+        }
+
+        // Create notification using centralized service (prevents duplicates)
+        try {
+          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          await centralizedNotificationService.createNotification({
+            userId: appointment.customer_id,
+            title: 'Booking Request Declined',
+            message: `Your appointment request has been declined. ${reason ? `Reason: ${reason}` : 'Please try booking with another barber or a different time.'}`,
+            type: 'appointment',
+            category: 'cancellation',
+            priority: 'high',
+            channels: ['app', 'push'],
+            appointmentId: appointmentId,
+            data: { 
+              status: 'declined',
+              reason: reason || null
+            }
+          });
+        } catch (notifError) {
+          console.warn('Failed to send decline notification:', notifError);
+        }
       }
 
       // Log the action
@@ -566,7 +711,7 @@ const BarberSchedule = () => {
       window.dispatchEvent(new CustomEvent('appointmentStatusChanged', {
         detail: {
           appointmentId,
-          newStatus: action === 'accept' ? 'scheduled' : 'cancelled',
+          newStatus: action === 'accept' ? 'confirmed' : 'cancelled',
           barberId: user.id,
           appointmentDate: appointment.appointment_date,
           timestamp: Date.now()
@@ -579,88 +724,108 @@ const BarberSchedule = () => {
       setTimeout(() => fetchAppointments(), 1000);
     } catch (err) {
       console.error('Error responding to booking request:', err);
-      setError('Failed to process booking request. Please try again.');
+      const errorMessage = err?.message || 'Unknown error occurred';
+      console.error('Error details:', {
+        message: errorMessage,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint
+      });
+      setError(`Failed to process booking request: ${errorMessage}. Please try again.`);
     }
   };
 
   const handleAppointmentStatus = async (appointmentId, status, reason = '') => {
     try {
+      const canonicalStatus = normalizeStatus(status) || status?.toLowerCase();
+      if (!canonicalStatus) {
+        throw new Error('Invalid appointment status');
+      }
+
       const appointment = appointments.find(apt => apt.id === appointmentId);
       if (!appointment) {
         throw new Error('Appointment not found');
       }
 
       // Check if appointment can be started
-      if (status === 'ongoing' && appointment.status !== 'scheduled') {
-        throw new Error('Only scheduled appointments can be started');
+      if (canonicalStatus === 'ongoing' && appointment.status !== 'confirmed') {
+        throw new Error('Only confirmed appointments can be started');
       }
 
-      console.log(`🔄 Schedule starting status change: ${appointment.status} → ${status} for appointment ${appointmentId}`);
+      console.log(`🔄 Schedule starting status change: ${appointment.status} → ${canonicalStatus} for appointment ${appointmentId}`);
 
       // Optimistic update - update UI immediately
       setAppointments(prev => prev.map(apt => 
         apt.id === appointmentId 
-          ? { 
+          ? normalizeAppointmentRecord({ 
               ...apt, 
-              status, 
-              queue_position: status === 'ongoing' ? 0 : 
-                           status === 'done' || status === 'cancelled' ? null : 
+              status: canonicalStatus, 
+              queue_position: canonicalStatus === 'ongoing' ? 0 : 
+                           canonicalStatus === 'completed' || canonicalStatus === 'cancelled' ? null : 
                            apt.queue_position,
+              cancellation_reason: canonicalStatus === 'cancelled' ? (reason || apt.cancellation_reason) : apt.cancellation_reason,
               updated_at: new Date().toISOString()
-            }
+            })
           : apt
       ));
 
-      const updateData = { 
-        status, 
-        updated_at: new Date().toISOString(),
-        queue_position: status === 'done' || status === 'cancelled' ? null : 
-                     status === 'ongoing' ? 0 : undefined
-      };
+      let lastError = null;
+      for (const dbStatus of getDatabaseStatusOptions(canonicalStatus)) {
+        console.log('Attempting barber status update', { appointmentId, dbStatus, canonicalStatus });
+        const payload = buildStatusUpdatePayload(dbStatus, canonicalStatus, reason);
+        const { error } = await supabase
+          .from('appointments')
+          .update(payload)
+          .eq('id', appointmentId);
 
-      // Add cancellation reason if provided
-      if (status === 'cancelled' && reason) {
-        updateData.cancellation_reason = reason;
+        if (!error) {
+          lastError = null;
+          break;
+        }
+
+        lastError = error;
+        if (error.code !== '23514') {
+          throw error;
+        }
+        console.warn('Status update violated constraint, trying fallback value', {
+          appointmentId,
+          attemptedStatus: dbStatus,
+          canonicalStatus,
+          error
+        });
       }
 
-      const { error } = await supabase
-        .from('appointments')
-        .update(updateData)
-        .eq('id', appointmentId);
-
-      if (error) throw error;
+      if (lastError) {
+        throw lastError;
+      }
 
       // If cancelled, collapse queue positions for same barber/date
-      if (status === 'cancelled' && appointment.queue_position != null) {
+      if (canonicalStatus === 'cancelled' && appointment.queue_position != null) {
         try {
           console.log(`🔄 Collapsing queue positions after barber cancelling position ${appointment.queue_position}`);
           
           const { data: affected, error: fetchErr } = await supabase
             .from('appointments')
             .select('id, queue_position')
-            .eq('barber_id', user.id)
+            .eq('barber_id', appointment.barber_id)
             .eq('appointment_date', appointment.appointment_date)
-            .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
             .gt('queue_position', appointment.queue_position)
-            .order('queue_position', { ascending: true });
+            .in('status', ['confirmed', 'pending', 'ongoing']);
 
-          if (!fetchErr && Array.isArray(affected) && affected.length) {
-            console.log(`📝 Found ${affected.length} appointments to update positions`);
-            
-            for (const apt of affected) {
-              const newPosition = apt.queue_position - 1;
-              console.log(`📝 Updating appointment ${apt.id} from position ${apt.queue_position} to ${newPosition}`);
-              
+          if (fetchErr) {
+            console.error('Error fetching appointments to collapse queue:', fetchErr);
+          } else if (affected && affected.length > 0) {
+            // Update each appointment's queue position individually
+            for (const item of affected) {
               await supabase
                 .from('appointments')
                 .update({ 
-                  queue_position: newPosition,
+                  queue_position: Math.max(1, (item.queue_position || 1) - 1),
                   updated_at: new Date().toISOString()
                 })
-                .eq('id', apt.id);
+                .eq('id', item.id);
             }
-            
-            console.log('✅ Queue positions collapsed successfully');
+            console.log(`📝 Found ${affected.length} appointments to update positions`);
           } else {
             console.log('ℹ️ No appointments found to collapse positions');
           }
@@ -675,7 +840,7 @@ const BarberSchedule = () => {
         action: 'appointment_status_change',
         details: {
           appointment_id: appointmentId,
-          new_status: status,
+          new_status: canonicalStatus,
           previous_status: appointment.status
         }
       });
@@ -684,15 +849,16 @@ const BarberSchedule = () => {
       const notificationData = {
         user_id: appointment.customer_id,
         type: 'appointment',
-        data: { appointment_id: appointmentId, status }
+        data: { appointment_id: appointmentId, status: canonicalStatus }
       };
 
-      switch (status) {
+      let successMessage = '';
+      switch (canonicalStatus) {
         case 'ongoing':
           notificationData.title = 'Your appointment has started! ✂️';
           notificationData.message = 'Your barber is ready for you now.';
           break;
-        case 'done':
+        case 'completed':
           notificationData.title = 'Appointment Completed ✅';
           notificationData.message = 'Thank you for visiting us! Please rate your experience.';
           break;
@@ -703,8 +869,8 @@ const BarberSchedule = () => {
             'Your appointment has been cancelled by the barber.';
           break;
         default:
-          notificationData.title = `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`;
-          notificationData.message = `Your appointment status has been updated to ${status}`;
+          notificationData.title = `Appointment ${canonicalStatus.charAt(0).toUpperCase() + canonicalStatus.slice(1)}`;
+          notificationData.message = `Your appointment status has been updated to ${canonicalStatus}`;
       }
 
       // Create notification using centralized service (ONLY way to create notifications)
@@ -712,14 +878,14 @@ const BarberSchedule = () => {
       await centralizedNotificationService.createAppointmentStatusNotification({
         userId: appointment.customer_id,
         appointmentId: appointmentId,
-        status: status,
+        status: canonicalStatus,
         changedBy: 'barber'
       });
 
       // If starting an appointment, notify other customers in queue about updated wait times
-      if (status === 'ongoing') {
+      if (canonicalStatus === 'ongoing') {
         const queuedAppointments = appointments.filter(apt => 
-          apt.status === 'scheduled' && 
+          apt.status === 'confirmed' && 
           apt.appointment_date === appointment.appointment_date &&
           apt.queue_position > 0
         ).sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
@@ -740,7 +906,7 @@ const BarberSchedule = () => {
       const changeEvent = new CustomEvent('appointmentStatusChanged', {
         detail: {
           appointmentId,
-          newStatus: status,
+          newStatus: canonicalStatus,
           previousStatus: appointment.status,
           barberId: user.id,
           appointmentDate: appointment.appointment_date,
@@ -749,7 +915,7 @@ const BarberSchedule = () => {
       });
       window.dispatchEvent(changeEvent);
 
-      console.log(`✅ Schedule status change completed: ${appointment.status} → ${status}`);
+      console.log(`✅ Schedule status change completed: ${appointment.status} → ${canonicalStatus}`);
 
       // Refresh local data after a delay to ensure consistency
       setTimeout(() => {
@@ -878,38 +1044,96 @@ const BarberSchedule = () => {
     return `${hour12}:${minutes} ${period}`;
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'done':
-        return 'success';
-      case 'ongoing':
-        return 'primary';
-      case 'cancelled':
-        return 'danger';
-      case 'pending':
-        return 'warning';
-      case 'scheduled':
-        return 'info';
-      default:
-        return 'secondary';
-    }
+  const formatStatus = (status) => {
+    if (!status) return '';
+    const lower = status.toLowerCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'done':
-        return 'bi-check-circle-fill';
-      case 'ongoing':
-        return 'bi-scissors';
-      case 'cancelled':
-        return 'bi-x-circle-fill';
-      case 'pending':
-        return 'bi-clock-fill';
-      case 'scheduled':
-        return 'bi-calendar-check';
-      default:
-        return 'bi-circle';
+  const renderAppointmentActions = (appointment) => {
+    const buttons = [];
+    const status = appointment.status?.toLowerCase();
+
+    if (status === 'pending') {
+      buttons.push(
+        <button
+          key="accept"
+          className="btn btn-success btn-sm"
+          onClick={() => handleBookingResponse(appointment.id, 'accept')}
+        >
+          <i className="bi bi-check-circle me-1"></i>
+          Accept
+        </button>
+      );
     }
+
+    // Reschedule button - show for confirmed, scheduled, or any reschedulable status
+    // Exclude: pending (needs acceptance first), ongoing, completed, cancelled
+    if (status !== 'pending' && status !== 'ongoing' && status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done') {
+      buttons.push(
+        <button
+          key="reschedule"
+          className="btn btn-warning btn-sm"
+          onClick={() => {
+            console.log('Reschedule button clicked for appointment:', appointment);
+            setRescheduleModal({ isOpen: true, appointment: appointment });
+          }}
+          title="Reschedule Appointment"
+        >
+          <i className="bi bi-arrow-repeat me-1"></i>
+          Reschedule
+        </button>
+      );
+    }
+
+    if (status === 'confirmed' || status === 'scheduled') {
+      buttons.push(
+        <button
+          key="start"
+          className="btn btn-primary btn-sm"
+          onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
+        >
+          <i className="bi bi-play-fill me-1"></i>
+          Start
+        </button>
+      );
+    }
+
+    if (status === 'ongoing') {
+      buttons.push(
+        <button
+          key="complete"
+          className="btn btn-success btn-sm"
+          onClick={() => handleAppointmentStatus(appointment.id, 'completed')}
+        >
+          <i className="bi bi-check-lg me-1"></i>
+          Complete
+        </button>
+      );
+    }
+
+    if (status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done') {
+      buttons.push(
+        <button
+          key="cancel"
+          className="btn btn-outline-danger btn-sm"
+          onClick={() => handleCancelAppointment(appointment.id)}
+        >
+          <i className="bi bi-x-circle me-1"></i>
+          Cancel
+        </button>
+      );
+    }
+
+    if (buttons.length === 0) {
+      return <span className="text-muted small">No actions</span>;
+    }
+
+    return (
+      <div className="d-flex gap-2 flex-wrap">
+        {buttons}
+      </div>
+    );
   };
 
   if (loading && !weekDays.length) {
@@ -921,59 +1145,47 @@ const BarberSchedule = () => {
       {/* Mobile-Optimized Header Card */}
       <div className="card mb-4 shadow-sm">
         <div className="card-body p-3">
-          <div className="row align-items-center">
-            <div className="col-12 col-md-8">
-              <h2 className="mb-1">
+          <div className="d-flex flex-row flex-wrap align-items-center justify-content-between gap-2 gap-md-3">
+            <div className="flex-grow-1">
+              <h2
+                className="mb-1"
+                style={{ fontSize: 'clamp(1.1rem, 3.2vw, 1.5rem)' }}
+              >
                 <i className="bi bi-calendar-week me-2 text-primary"></i>
                 My Schedule
               </h2>
-              <p className="text-muted mb-0">
+              <p
+                className="text-muted mb-0"
+                style={{ fontSize: 'clamp(0.75rem, 2.4vw, 0.9rem)' }}
+              >
                 <i className="bi bi-clock me-1"></i>
-                {selectedDate.toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
+                {selectedDate.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
                 })}
               </p>
             </div>
-            <div className="col-12 col-md-4 mt-3 mt-md-0">
-              <div className="d-flex flex-column flex-sm-row gap-2 justify-content-md-end">
-                {/* View Mode Toggle */}
-                <div className="btn-group btn-group-sm" role="group">
-                  <button
-                    type="button"
-                    className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={() => setViewMode('list')}
-                    title="List View"
-                  >
-                    <i className="bi bi-list-ul"></i>
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${viewMode === 'timeline' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={() => setViewMode('timeline')}
-                    title="Timeline View"
-                  >
-                    <i className="bi bi-clock-history"></i>
-                  </button>
-                </div>
-                
-                {getAppointmentsForDate(selectedDate).length > 0 && (
-                  <button 
-                    className="btn btn-outline-danger btn-sm" 
-                    onClick={() => setShowBulkCancelModal(true)}
-                    title="Cancel all appointments for this date"
-                  >
-                    <i className="bi bi-x-circle me-1"></i>
-                    Bulk Cancel
-                  </button>
-                )}
-                <button className="btn btn-outline-primary btn-sm" onClick={fetchAppointments}>
-                  <i className="bi bi-arrow-clockwise me-1"></i>
-                  Refresh
+            <div className="d-flex flex-row flex-md-column gap-2 align-items-stretch align-items-md-end justify-content-end ms-auto flex-shrink-0">
+              {getAppointmentsForDate(selectedDate).length > 0 && (
+                <button
+                  className="btn btn-outline-danger btn-sm d-flex align-items-center justify-content-center w-auto"
+                  onClick={() => setShowBulkCancelModal(true)}
+                  title="Cancel all appointments for this date"
+                >
+                  <i className="bi bi-x-circle me-1"></i>
+                  <span className="d-none d-sm-inline">Bulk Cancel</span>
+                  <span className="d-sm-none">Cancel All</span>
                 </button>
-              </div>
+              )}
+              <button
+                className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-center w-auto"
+                onClick={fetchAppointments}
+              >
+                <i className="bi bi-arrow-clockwise me-1"></i>
+                <span>Refresh</span>
+              </button>
             </div>
           </div>
         </div>
@@ -991,20 +1203,6 @@ const BarberSchedule = () => {
         </div>
       )}
 
-      {/* Timeline View */}
-      {viewMode === 'timeline' && user && (
-        <TimelineView 
-          barberId={user.id}
-          selectedDate={selectedDate}
-          onAppointmentClick={(appointment) => {
-            // Handle appointment click - could open details modal
-            console.log('Appointment clicked:', appointment);
-          }}
-        />
-      )}
-
-      {/* List View */}
-      {viewMode === 'list' && (
         <>
       {/* Enhanced Week Navigation with Labels */}
       <div className="row mb-4">
@@ -1077,9 +1275,9 @@ const BarberSchedule = () => {
                   }
                   
                   const pendingCount = dateAppointments.filter(apt => apt.status === 'pending').length;
-                  const scheduledCount = dateAppointments.filter(apt => apt.status === 'scheduled').length;
+                  const confirmedCount = dateAppointments.filter(apt => apt.status === 'confirmed').length;
                   const ongoingCount = dateAppointments.filter(apt => apt.status === 'ongoing').length;
-                  const completedCount = dateAppointments.filter(apt => apt.status === 'done').length;
+                  const completedCount = dateAppointments.filter(apt => apt.status === 'completed').length;
                   
                   return (
                     <div>
@@ -1091,6 +1289,12 @@ const BarberSchedule = () => {
                           <div className="badge bg-warning rounded-pill small">
                             <i className="bi bi-clock me-1"></i>
                             {pendingCount} pending
+                          </div>
+                        )}
+                        {confirmedCount > 0 && (
+                          <div className="badge bg-info rounded-pill small">
+                            <i className="bi bi-calendar-check me-1"></i>
+                            {confirmedCount} confirmed
                           </div>
                         )}
                         {ongoingCount > 0 && (
@@ -1181,35 +1385,6 @@ const BarberSchedule = () => {
                 </div>
               </div>
               
-              {/* Enhanced Timeline Stats */}
-              {enhancedTimeline && (
-                <div className="row g-2 mt-2">
-                  <div className="col-3">
-                    <div className="text-center">
-                      <div className="small text-muted">Scheduled</div>
-                      <div className="fw-bold text-primary">{enhancedTimeline.stats.totalScheduled}</div>
-                    </div>
-                  </div>
-                  <div className="col-3">
-                    <div className="text-center">
-                      <div className="small text-muted">Queue</div>
-                      <div className="fw-bold text-info">{enhancedTimeline.stats.totalQueue}</div>
-                    </div>
-                  </div>
-                  <div className="col-3">
-                    <div className="text-center">
-                      <div className="small text-muted">Pending</div>
-                      <div className="fw-bold text-warning">{enhancedTimeline.stats.totalPending}</div>
-                    </div>
-                  </div>
-                  <div className="col-3">
-                    <div className="text-center">
-                      <div className="small text-muted">Utilization</div>
-                      <div className="fw-bold text-success">{enhancedTimeline.stats.utilization}%</div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })()}
@@ -1243,6 +1418,14 @@ const BarberSchedule = () => {
 
             // Get pending appointments that need barber acceptance
             const pendingAppointments = dateAppointments.filter(apt => apt.status === 'pending');
+            const activeQueueAppointments = dateAppointments
+              .filter(apt => apt.appointment_type === 'queue' && apt.status !== 'completed' && apt.status !== 'cancelled')
+              .sort((a, b) => {
+                const posA = a.queue_position ?? Infinity;
+                const posB = b.queue_position ?? Infinity;
+                if (posA !== posB) return posA - posB;
+                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+              });
             
             return (
               <div className="p-0">
@@ -1260,247 +1443,76 @@ const BarberSchedule = () => {
                   </div>
                 )}
 
-                {dateAppointments.map((appointment, index) => (
-                  <div key={appointment.id} className={`appointment-card mobile-optimized ${appointment.status === 'ongoing' ? 'current-appointment' : ''} ${appointment.is_urgent ? 'urgent-appointment' : ''}`}>
-                    {/* Mobile-Optimized Appointment Card */}
-                    <div className="appointment-card-mobile">
-                      {/* Top Row - Time and Status */}
-                      <div className="appointment-header-mobile">
-                        <div className="d-flex align-items-center justify-content-between">
-                          {/* Time and Queue Position */}
-                          <div className="d-flex align-items-center gap-2">
-                            <div className={`time-badge-mobile ${!appointment.appointment_time && appointment.appointment_type === 'queue' ? 'queue-badge' : ''}`}>
-                              <span className="fw-bold">
-                                {appointment.appointment_time ? 
-                                  appointment.appointment_time.substring(0, 5) : 
-                                  (appointment.appointment_type === 'queue' ? 'QUEUE' : '—')
-                                }
-                              </span>
-                            </div>
-                            
-                            {/* Appointment Type Badge */}
-                            {appointment.status === 'pending' ? (
-                              <div className="queue-position-badge-mobile pending">
-                                <span className="fw-bold">PENDING</span>
-                              </div>
-                            ) : appointment.queue_position ? (
-                              <div className="queue-position-badge-mobile">
-                                <span className="fw-bold">#{appointment.queue_position}</span>
-                              </div>
-                            ) : (
-                              <div className="queue-position-badge-mobile scheduled">
-                                <span className="fw-bold">SCHED</span>
-                              </div>
-                         )}
-                       </div>
-                          
-                          {/* Status Badge */}
-                          <div className={`status-badge-mobile status-${appointment.status}`}>
-                            <i className={`bi ${getStatusIcon(appointment.status)} me-1`}></i>
-                            <span className="d-none d-sm-inline">{appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</span>
-                         </div>
-                       </div>
-                     </div>
+                <div className="appointment-card-list">
+                  {dateAppointments.map((appointment) => {
+                    const statusColor = getStatusColor(appointment.status);
+                    const totalPrice = getTotalPrice(appointment);
+                    let queueNumber = appointment.queue_position;
+                    if (queueNumber == null && appointment.appointment_type === 'queue') {
+                      const computedIndex = activeQueueAppointments.findIndex(apt => apt.id === appointment.id);
+                      if (computedIndex !== -1) {
+                        queueNumber = computedIndex + 1;
+                      }
+                    }
+ 
+                    const serviceLabel = [
+                      appointment.service?.name,
+                      getAddOnsDisplayString(appointment.add_ons_data)
+                    ].filter(Boolean).join(' + ');
 
-                      {/* Middle Row - Customer and Service */}
-                      <div className="appointment-content-mobile">
-                        <div className="row g-2">
-                          <div className="col-8">
-                            <h6 className="customer-name-mobile mb-1 fw-bold text-dark">
+                    return (
+                      <div
+                        key={`card-${appointment.id}`}
+                        className={`appointment-card-simple mb-3 border rounded-3 shadow-sm ${appointment.status === 'ongoing' ? 'border-primary bg-light' : 'bg-white'}`}
+                      >
+                        <div className="p-3 position-relative">
+                          <div className="d-flex justify-content-between align-items-start mb-3">
+                            <div className="d-flex align-items-center gap-3">
+                              <div className="rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px' }}>
+                                {queueNumber != null ? queueNumber : '-'}
+                         </div>
+                              <div>
+                                <h6 className="fw-bold mb-1 text-dark">
                               {appointment.customer?.full_name || 'Unknown Customer'}
                             </h6>
-                            <p className="service-name-mobile mb-1 text-muted">
-                              {getServicesDisplay(appointment)}
-                            </p>
-                            <div className="d-flex align-items-center gap-2 flex-wrap">
-                              <span className="duration-badge">
-                                <i className="bi bi-clock me-1"></i>
-                                {appointment.total_duration || appointment.service?.duration || '—'} min
-                     </span>
-                              {appointment.is_urgent && (
-                                <span className="urgent-badge">
-                                  <i className="bi bi-lightning-fill me-1"></i>
-                                  URGENT
-                                </span>
-                              )}
-                   </div>
-                 </div>
-                          <div className="col-4 text-end">
-                            {appointment.customer?.phone && (
-                              <a href={`tel:${appointment.customer.phone}`} className="btn btn-primary btn-mobile-call">
-                                <i className="bi bi-telephone"></i>
-                                <span className="d-none d-sm-inline ms-1">Call</span>
-                              </a>
-                            )}
-                        </div>
-                        </div>
-                       </div>
-                     </div>
-
-                    {/* Add-ons (if any) - Compact Display */}
-                    <div className="addons-section px-3 pb-2">
-                      <AddOnsDisplay appointment={appointment} />
-                    </div>
-
-                   {/* Customer Rating Display */}
-                   {appointment.status === 'done' && appointment.is_reviewed && appointment.customer_rating && (
-                      <div className="rating-section px-3 pb-2">
-                        <div className="rating-card">
-                         <div className="d-flex align-items-center justify-content-between">
-                           <div className="d-flex align-items-center">
-                             <i className="bi bi-star-fill text-warning me-2"></i>
-                              <strong>Customer Rating</strong>
-                           </div>
-                           <div className="d-flex align-items-center">
-                             {[...Array(5)].map((_, i) => (
-                               <i
-                                 key={i}
-                                 className={`bi bi-star-fill ${
-                                   i < appointment.customer_rating ? 'text-warning' : 'text-muted'
-                                 }`}
-                               ></i>
-                             ))}
-                              <span className="ms-2 fw-bold text-warning">
-                               {appointment.customer_rating}/5
-                             </span>
-                           </div>
-                         </div>
-                         {appointment.review_text && (
-                           <div className="mt-2">
-                              <p className="text-muted fst-italic mb-0">
-                               "{appointment.review_text}"
-                              </p>
-                           </div>
-                         )}
-                       </div>
-                     </div>
-                   )}
-                   
-                   {/* Friend/Child Booking Information */}
-                    <div className="friend-booking-section px-3 pb-2">
-                   <FriendBookingDisplay appointment={appointment} variant="compact" />
+                                {appointment.appointment_time && (
+                                  <div className="text-muted small">Time: {appointment.appointment_time.substring(0, 5)}</div>
+                                )}
+                                {serviceLabel && (
+                                  <div className="text-muted small mt-1">{serviceLabel}</div>
+                                )}
+                                {appointment.status === 'pending' && (
+                                  <span className="badge bg-warning-subtle text-warning-emphasis mt-2 me-1">Pending</span>
+                                )}
+                                {appointment.is_urgent && (
+                                  <span className="badge bg-danger-subtle text-danger-emphasis mt-2">Urgent</span>
+                                )}
                       </div>
-                      
-                    {/* Mobile-Optimized Action Buttons */}
-                    <div className="appointment-actions-mobile">
-                      <div className="row g-2">
-                            {appointment.status === 'pending' && (
-                              <>
-                            <div className="col-6">
-                                <button
-                                className="btn btn-success btn-mobile-action w-100"
-                                  onClick={() => handleBookingResponse(appointment.id, 'accept')}
-                                >
-                                  <i className="bi bi-check-circle me-1"></i>
-                                  <span className="d-none d-sm-inline">
-                                    {appointment.appointment_type === 'queue' ? 'Accept to Queue' : 'Accept'}
-                                  </span>
-                                <span className="d-sm-none">Accept</span>
-                                </button>
                             </div>
-                            <div className="col-6">
-                                <button
-                                className="btn btn-outline-danger btn-mobile-action w-100"
-                                  onClick={() => {
-                                    const reason = prompt('Reason for declining (optional):');
-                                    if (reason !== null) {
-                                      handleBookingResponse(appointment.id, 'decline', reason);
-                                    }
-                                  }}
-                                >
-                                  <i className="bi bi-x-circle me-1"></i>
-                                  <span className="d-none d-sm-inline">Decline</span>
-                                <span className="d-sm-none">Decline</span>
-                                </button>
-                            </div>
-                              </>
-                            )}
-                            
-                            {appointment.status === 'scheduled' && (
-                          <div className="col-12">
-                              <button
-                              className="btn btn-primary btn-mobile-action w-100"
-                                onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
-                              >
-                                <i className="bi bi-play-fill me-1"></i>
-                              <span className="d-none d-sm-inline">Start Appointment</span>
-                              <span className="d-sm-none">Start</span>
-                              </button>
-                          </div>
-                            )}
-                            
-                            {appointment.status === 'ongoing' && (
-                          <div className="col-12">
-                              <button
-                              className="btn btn-success btn-mobile-action w-100"
-                                onClick={() => handleAppointmentStatus(appointment.id, 'done')}
-                              >
-                                <i className="bi bi-check-lg me-1"></i>
-                              <span className="d-none d-sm-inline">Complete Service</span>
-                              <span className="d-sm-none">Complete</span>
-                              </button>
-                          </div>
-                        )}
-
-                        {/* Queue Management for Scheduled Appointments */}
-                        {appointment.status === 'scheduled' && appointment.appointment_type === 'scheduled' && (
-                          <div className="col-12">
-                            <div className="btn-group w-100 mb-2">
-                              <button
-                                className="btn btn-warning btn-sm"
-                                onClick={() => handleAddToQueue(appointment.id, true)}
-                                title="Add to queue as urgent (front of line)"
-                              >
-                                <i className="bi bi-lightning-fill me-1"></i>
-                                <span className="d-none d-sm-inline">Urgent Queue</span>
-                                <span className="d-sm-none">Urgent</span>
-                              </button>
-                              <button
-                                className="btn btn-info btn-sm"
-                                onClick={() => handleAddToQueue(appointment.id, false)}
-                                title="Add to queue (normal priority)"
-                              >
-                                <i className="bi bi-arrow-right-circle me-1"></i>
-                                <span className="d-none d-sm-inline">Join Queue</span>
-                                <span className="d-sm-none">Queue</span>
-                              </button>
+                            <div className="text-end">
+                              <span className={`badge bg-${statusColor}`}>{formatStatus(appointment.status)}</span>
                             </div>
                           </div>
-                        )}
 
-                        {/* Priority Control for Queue Appointments */}
-                        {appointment.appointment_type === 'queue' && appointment.queue_position && (
-                          <div className="col-12 mb-2">
-                            <label className="form-label small mb-1">Priority Level:</label>
-                            <select
-                              className="form-select form-select-sm"
-                              value={appointment.priority_level || 'normal'}
-                              onChange={(e) => handleChangePriority(appointment.id, e.target.value)}
-                            >
-                              <option value="urgent">🔴 Urgent</option>
-                              <option value="high">🟠 High</option>
-                              <option value="normal">🟢 Normal</option>
-                              <option value="low">🔵 Low</option>
-                            </select>
+                          <div className="d-flex justify-content-between align-items-center mb-3">
+                            <div className="text-muted small">
+                              {appointment.total_duration || appointment.service?.duration || '—'} min
                           </div>
-                            )}
+                            <div className="fw-bold text-success">
+                              ₱{totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
 
-                            {(appointment.status === 'scheduled' || appointment.status === 'pending') && (
-                          <div className="col-12">
-                              <button
-                              className="btn btn-outline-danger btn-mobile-action w-100"
-                                onClick={() => handleCancelAppointment(appointment.id)}
-                              >
-                                <i className="bi bi-x-circle me-1"></i>
-                              <span className="d-none d-sm-inline">Cancel Appointment</span>
-                              <span className="d-sm-none">Cancel</span>
-                              </button>
+                          <FriendBookingDisplay appointment={appointment} variant="compact" />
+
+                          <div className="mt-3 d-flex justify-content-end">
+                            {renderAppointmentActions(appointment)}
                           </div>
-                            )}
                       </div>
                     </div>
+                    );
+                  })}
                   </div>
-                ))}
               </div>
             );
           })()}
@@ -1516,6 +1528,18 @@ const BarberSchedule = () => {
         onSuccess={(cancelledCount) => {
           console.log(`✅ Bulk cancelled ${cancelledCount} appointments`);
           fetchAppointments(); // Refresh the schedule
+        }}
+      />
+
+      {/* Reschedule Modal */}
+      <RescheduleModal
+        isOpen={rescheduleModal.isOpen}
+        onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
+        appointment={rescheduleModal.appointment}
+        onSuccess={(request) => {
+          console.log('✅ Reschedule request created:', request);
+          setRescheduleModal({ isOpen: false, appointment: null });
+          fetchAppointments(); // Refresh the schedule after reschedule request
         }}
       />
 
@@ -1579,7 +1603,6 @@ const BarberSchedule = () => {
         </div>
       )}
         </>
-      )}
     </div>
   );
 };

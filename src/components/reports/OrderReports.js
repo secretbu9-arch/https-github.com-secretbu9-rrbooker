@@ -244,66 +244,85 @@ const OrderReports = ({ dateRange }) => {
 
   return (
     <div className="order-report">
-      {/* Summary Cards */}
+      <style>
+        {`
+          .order-report table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13px;
+            border: 1px solid #d0d0d0;
+          }
+          .order-report table thead {
+            background-color: #f2f2f2;
+            border-bottom: 2px solid #d0d0d0;
+          }
+          .order-report table thead th {
+            background-color: #f2f2f2;
+            border: 1px solid #d0d0d0;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #000;
+            white-space: nowrap;
+          }
+          .order-report table tbody td {
+            border: 1px solid #d0d0d0;
+            padding: 6px 10px;
+            background-color: #fff;
+          }
+          .order-report table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+          .order-report table tbody tr:nth-child(even) td {
+            background-color: #f9f9f9;
+          }
+          .order-report table tbody tr:hover {
+            background-color: #e8f4f8;
+          }
+          .order-report table tbody tr:hover td {
+            background-color: #e8f4f8;
+          }
+          .order-report .table-responsive {
+            border: 1px solid #d0d0d0;
+            overflow-x: auto;
+          }
+        `}
+      </style>
+      {/* Summary Table */}
       <div className="row mb-4">
-        <div className="col-md-3">
-          <div className="card bg-primary text-white">
-            <div className="card-body">
-              <div className="d-flex justify-content-between">
-                <div>
-                  <h4 className="card-title">{orderData.summary.totalOrders}</h4>
-                  <p className="card-text">Total Orders</p>
-                </div>
-                <div className="align-self-center">
-                  <i className="bi bi-bag-check display-4"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-success text-white">
-            <div className="card-body">
-              <div className="d-flex justify-content-between">
-                <div>
-                  <h4 className="card-title">₱{orderData.summary.totalRevenue.toFixed(2)}</h4>
-                  <p className="card-text">Total Revenue</p>
-                </div>
-                <div className="align-self-center">
-                  <i className="bi bi-currency-dollar display-4"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-info text-white">
-            <div className="card-body">
-              <div className="d-flex justify-content-between">
-                <div>
-                  <h4 className="card-title">₱{orderData.summary.averageOrderValue.toFixed(2)}</h4>
-                  <p className="card-text">Average Order Value</p>
-                </div>
-                <div className="align-self-center">
-                  <i className="bi bi-graph-up display-4"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-warning text-white">
-            <div className="card-body">
-              <div className="d-flex justify-content-between">
-                <div>
-                  <h4 className="card-title">{orderData.orderTypes.walkIn.count}</h4>
-                  <p className="card-text">Walk-in Orders</p>
-                </div>
-                <div className="align-self-center">
-                  <i className="bi bi-person-walking display-4"></i>
-                </div>
-              </div>
-            </div>
+        <div className="col-12">
+          <h5>Order Summary</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Total Orders</strong></td>
+                  <td><strong>{orderData.summary.totalOrders}</strong></td>
+                </tr>
+                <tr>
+                  <td>Total Revenue</td>
+                  <td className="currency-table-cell">₱{orderData.summary.totalRevenue.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Average Order Value</td>
+                  <td className="currency-table-cell">₱{orderData.summary.averageOrderValue.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Walk-in Orders</td>
+                  <td>{orderData.orderTypes.walkIn.count}</td>
+                </tr>
+                <tr>
+                  <td>Online Orders</td>
+                  <td>{orderData.orderTypes.online.count}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -311,69 +330,54 @@ const OrderReports = ({ dateRange }) => {
       <div className="row">
         {/* Orders by Status */}
         <div className="col-md-6 mb-4">
-          <div className="card">
-            <div className="card-header">
-              <h5 className="card-title mb-0">
-                <i className="bi bi-pie-chart me-2"></i>
-                Orders by Status
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="table-responsive">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Status</th>
-                      <th>Count</th>
-                      <th>Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderData.summary.ordersByStatus.map((status, index) => (
-                      <tr key={index}>
-                        <td>
-                          <span className={`badge bg-${getStatusColor(status.status)}`}>
-                            {getStatusText(status.status)}
-                          </span>
-                        </td>
-                        <td>{status.count}</td>
-                        <td>₱{status.revenue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <h5>Orders by Status</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Count</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderData.summary.ordersByStatus.map((status, index) => (
+                  <tr key={index}>
+                    <td>{getStatusText(status.status)}</td>
+                    <td>{status.count}</td>
+                    <td className="currency-table-cell">₱{status.revenue.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
         {/* Order Types */}
         <div className="col-md-6 mb-4">
-          <div className="card">
-            <div className="card-header">
-              <h5 className="card-title mb-0">
-                <i className="bi bi-diagram-3 me-2"></i>
-                Order Types
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="row">
-                <div className="col-6">
-                  <div className="text-center">
-                    <h3 className="text-primary">{orderData.orderTypes.walkIn.count}</h3>
-                    <p className="text-muted">Walk-in Orders</p>
-                    <small className="text-success">₱{orderData.orderTypes.walkIn.revenue.toFixed(2)}</small>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center">
-                    <h3 className="text-info">{orderData.orderTypes.online.count}</h3>
-                    <p className="text-muted">Online Orders</p>
-                    <small className="text-success">₱{orderData.orderTypes.online.revenue.toFixed(2)}</small>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <h5>Order Types</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Count</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Walk-in Orders</td>
+                  <td>{orderData.orderTypes.walkIn.count}</td>
+                  <td className="currency-table-cell">₱{orderData.orderTypes.walkIn.revenue.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Online Orders</td>
+                  <td>{orderData.orderTypes.online.count}</td>
+                  <td className="currency-table-cell">₱{orderData.orderTypes.online.revenue.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -381,81 +385,61 @@ const OrderReports = ({ dateRange }) => {
       <div className="row">
         {/* Top Customers */}
         <div className="col-md-6 mb-4">
-          <div className="card">
-            <div className="card-header">
-              <h5 className="card-title mb-0">
-                <i className="bi bi-people me-2"></i>
-                Top Customers by Revenue
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="table-responsive">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Customer</th>
-                      <th>Orders</th>
-                      <th>Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderData.topCustomers.map((customer, index) => (
-                      <tr key={index}>
-                        <td>
-                          <div>
-                            <strong>{customer.name}</strong>
-                            <br />
-                            <small className="text-muted">{customer.email}</small>
-                          </div>
-                        </td>
-                        <td>{customer.orders}</td>
-                        <td>₱{customer.revenue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <h5>Top Customers by Revenue</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Orders</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderData.topCustomers.map((customer, index) => (
+                  <tr key={index}>
+                    <td>
+                      <div>
+                        <strong>{customer.name}</strong>
+                        <br />
+                        <small className="text-muted">{customer.email}</small>
+                      </div>
+                    </td>
+                    <td>{customer.orders}</td>
+                    <td className="currency-table-cell">₱{customer.revenue.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
         {/* Top Products */}
         <div className="col-md-6 mb-4">
-          <div className="card">
-            <div className="card-header">
-              <h5 className="card-title mb-0">
-                <i className="bi bi-box-seam me-2"></i>
-                Top Products by Revenue
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="table-responsive">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Category</th>
-                      <th>Sold</th>
-                      <th>Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderData.topProducts.map((product, index) => (
-                      <tr key={index}>
-                        <td>
-                          <strong>{product.name}</strong>
-                        </td>
-                        <td>
-                          <span className="badge bg-secondary">{product.category}</span>
-                        </td>
-                        <td>{product.quantitySold}</td>
-                        <td>₱{product.revenue.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <h5>Top Products by Revenue</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Sold</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderData.topProducts.map((product, index) => (
+                  <tr key={index}>
+                    <td>
+                      <strong>{product.name}</strong>
+                    </td>
+                    <td>{product.category}</td>
+                    <td>{product.quantitySold}</td>
+                    <td className="currency-table-cell">₱{product.revenue.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -463,37 +447,28 @@ const OrderReports = ({ dateRange }) => {
       {/* Daily Revenue Chart */}
       <div className="row mb-4">
         <div className="col-12">
-          <div className="card">
-            <div className="card-header">
-              <h5 className="card-title mb-0">
-                <i className="bi bi-graph-up me-2"></i>
-                Daily Revenue Breakdown
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="table-responsive">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Orders</th>
-                      <th>Revenue</th>
-                      <th>Average per Order</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderData.dailyRevenue.map((day, index) => (
-                      <tr key={index}>
-                        <td>{new Date(day.date).toLocaleDateString()}</td>
-                        <td>{day.orders}</td>
-                        <td>₱{day.revenue.toFixed(2)}</td>
-                        <td>₱{day.orders > 0 ? (day.revenue / day.orders).toFixed(2) : '0.00'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <h5>Daily Revenue Breakdown</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Orders</th>
+                  <th>Revenue</th>
+                  <th>Average per Order</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderData.dailyRevenue.map((day, index) => (
+                  <tr key={index}>
+                    <td>{new Date(day.date).toLocaleDateString()}</td>
+                    <td>{day.orders}</td>
+                    <td className="currency-table-cell">₱{day.revenue.toFixed(2)}</td>
+                    <td className="currency-table-cell">₱{day.orders > 0 ? (day.revenue / day.orders).toFixed(2) : '0.00'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -501,51 +476,38 @@ const OrderReports = ({ dateRange }) => {
       {/* Recent Orders */}
       <div className="row">
         <div className="col-12">
-          <div className="card">
-            <div className="card-header">
-              <h5 className="card-title mb-0">
-                <i className="bi bi-clock-history me-2"></i>
-                Recent Orders
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="table-responsive">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Order ID</th>
-                      <th>Customer</th>
-                      <th>Status</th>
-                      <th>Total</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderData.recentOrders.map((order, index) => (
-                      <tr key={index}>
-                        <td>
-                          <code>#{order.id.slice(-8)}</code>
-                        </td>
-                        <td>
-                          <div>
-                            <strong>{order.customer?.full_name || 'Unknown'}</strong>
-                            <br />
-                            <small className="text-muted">{order.customer?.email || ''}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`badge bg-${getStatusColor(order.status)}`}>
-                            {getStatusText(order.status)}
-                          </span>
-                        </td>
-                        <td>₱{order.total_amount?.toFixed(2) || '0.00'}</td>
-                        <td>{new Date(order.created_at).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <h5>Recent Orders</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderData.recentOrders.map((order, index) => (
+                  <tr key={index}>
+                    <td>
+                      <code>#{order.id.slice(-8)}</code>
+                    </td>
+                    <td>
+                      <div>
+                        <strong>{order.customer?.full_name || 'Unknown'}</strong>
+                        <br />
+                        <small className="text-muted">{order.customer?.email || ''}</small>
+                      </div>
+                    </td>
+                    <td>{getStatusText(order.status)}</td>
+                    <td className="currency-table-cell">₱{order.total_amount?.toFixed(2) || '0.00'}</td>
+                    <td>{new Date(order.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

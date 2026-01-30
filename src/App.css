@@ -132,6 +132,217 @@
   color: var(--warning-color);
 }
 
+/* New Quick Actions Grid Layout */
+.quick-actions-container {
+  width: 100%;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  padding: 0.5rem;
+  width: 100%;
+}
+
+.quick-action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.3s ease;
+  padding: 1rem 0.5rem;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.quick-action-item:hover {
+  transform: translateY(-3px);
+  text-decoration: none;
+  color: inherit;
+}
+
+.quick-action-icon-wrapper {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.quick-action-item:hover .quick-action-icon-wrapper {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.quick-action-name {
+  font-size: clamp(0.7rem, 2.5vw, 1rem);
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  margin-top: 0.25rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  padding: 0 0.25rem;
+  width: 100%;
+}
+
+.quick-action-description {
+  font-size: clamp(0.65rem, 2vw, 0.85rem);
+  color: #666;
+  text-align: center;
+  margin-top: 0.25rem;
+  line-height: 1.3;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Desktop: Card-style layout */
+@media (min-width: 768px) {
+  .quick-actions-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1.5rem;
+    padding: 0;
+  }
+
+  .quick-action-item {
+    background: #fff;
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem 1rem;
+    min-height: 180px;
+  }
+
+  .quick-action-item:hover {
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  .quick-action-icon-wrapper {
+    width: 80px;
+    height: 80px;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .quick-action-name {
+    font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+    margin-bottom: 0.5rem;
+    padding: 0;
+  }
+
+  .quick-action-description {
+    font-size: clamp(0.75rem, 1vw, 0.9rem);
+    display: block !important;
+  }
+}
+
+/* Tablet: Medium screens */
+@media (min-width: 576px) and (max-width: 767px) {
+  .quick-actions-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.75rem;
+  }
+
+  .quick-action-name {
+    font-size: clamp(0.7rem, 2vw, 0.8rem);
+    overflow: visible;
+  }
+
+  .quick-action-description {
+    font-size: clamp(0.65rem, 1.6vw, 0.75rem);
+  }
+}
+
+/* Mobile: App icon style */
+@media (max-width: 575px) {
+  .quick-actions-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.5rem;
+    padding: 0.5rem;
+    max-width: 100%;
+  }
+
+  .quick-action-item {
+    padding: 0.75rem 0.15rem;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-height: auto;
+    min-width: 0;
+  }
+
+  .quick-action-icon-wrapper {
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .quick-action-name {
+    font-size: clamp(0.55rem, 2.2vw, 0.65rem);
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    max-width: 100%;
+    padding: 0 0.05rem;
+    overflow: visible;
+  }
+
+  .quick-action-item:active {
+    transform: scale(0.95);
+  }
+
+  .quick-action-item:active .quick-action-icon-wrapper {
+    transform: scale(0.95);
+  }
+}
+
+/* Small mobile screens */
+@media (max-width: 480px) {
+  .quick-actions-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.4rem;
+  }
+
+  .quick-action-icon-wrapper {
+    width: 45px;
+    height: 45px;
+    font-size: 1.4rem;
+  }
+
+  .quick-action-name {
+    font-size: clamp(0.5rem, 2.5vw, 0.6rem);
+    overflow: visible;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .quick-actions-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.3rem;
+  }
+
+  .quick-action-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+
+  .quick-action-name {
+    font-size: clamp(0.45rem, 2.8vw, 0.55rem);
+    overflow: visible;
+  }
+}
+
 /* Card animations */
 .card-animated {
   animation: slideInUp 0.5s ease forwards;
@@ -1387,12 +1598,26 @@ select.form-select-fix {
 /* Barber Recommendation Cards */
 .recommendation-card {
   transition: all 0.3s ease;
-  border-width: 2px;
+  border: 2px solid #e9ecef;
+  border-radius: 15px;
 }
 
 .recommendation-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  border-color: #007bff;
+}
+
+@media (max-width: 768px) {
+  .recommendation-card:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+}
+
+.recommendation-card.border-primary {
+  border-color: #007bff !important;
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1) 0%, rgba(0, 123, 255, 0.05) 100%);
 }
 
 .recommendation-card.border-success {
@@ -3430,4 +3655,102 @@ select.form-select-fix {
   font-family: 'Segoe UI', monospace;
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* Mobile Responsive Appointments View */
+@media (max-width: 767px) {
+  /* Simplify filter dropdowns on mobile */
+  .form-select-sm {
+    font-size: 0.875rem;
+    padding: 0.375rem 0.5rem;
+  }
+  
+  /* Make appointment cards stack better on mobile */
+  .appointment-card {
+    margin-bottom: 1rem;
+  }
+  
+  /* Reduce padding on mobile */
+  .card-body {
+    padding: 1rem;
+  }
+  
+  .card-header {
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Make buttons more touch-friendly */
+  .btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+  
+  /* Better spacing for filter badges */
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 991px) {
+  .card-body {
+    padding: 1.25rem;
+  }
+}
+
+/* Shop Products Filter Styles */
+.shop-filter-section {
+  transition: all 0.3s ease;
+}
+
+.shop-filter-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Product Card Improvements */
+.product-card {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color, #3498db);
+}
+
+/* Filter Badge Styles */
+.filter-badge {
+  font-size: 0.75rem;
+  padding: 0.4em 0.7em;
+  border-radius: 12px;
+}
+
+/* Mobile Shop Filter Adjustments */
+@media (max-width: 767px) {
+  .shop-filter-card {
+    margin-bottom: 1rem;
+  }
+  
+  .input-group-lg .form-control {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .input-group-lg .input-group-text {
+    padding: 0.5rem 0.75rem;
+  }
+  
+  /* Make filter labels more compact on mobile */
+  .form-label.small {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+  
+  /* Better spacing for filter badges on mobile */
+  .d-flex.flex-wrap.gap-2 {
+    gap: 0.5rem !important;
+  }
 }

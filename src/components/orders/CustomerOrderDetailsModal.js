@@ -8,9 +8,9 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
     switch (status) {
       case 'pending': return 'warning';
       case 'confirmed': return 'info';
-      case 'preparing': return 'primary';
-      case 'ready_for_pickup': return 'success';
+      case 'ready_for_pickup': return 'info';
       case 'picked_up': return 'success';
+      case 'completed': return 'success';
       case 'cancelled': return 'danger';
       default: return 'secondary';
     }
@@ -20,7 +20,6 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
     switch (status) {
       case 'pending': return 'bi-clock';
       case 'confirmed': return 'bi-check-circle';
-      case 'preparing': return 'bi-gear';
       case 'ready_for_pickup': return 'bi-box-seam';
       case 'picked_up': return 'bi-check2-all';
       case 'cancelled': return 'bi-x-circle';
@@ -32,7 +31,6 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
     switch (status) {
       case 'pending': return 'Pending Confirmation';
       case 'confirmed': return 'Confirmed';
-      case 'preparing': return 'Preparing';
       case 'ready_for_pickup': return 'Ready for Pickup';
       case 'picked_up': return 'Picked Up';
       case 'cancelled': return 'Cancelled';
@@ -63,15 +61,24 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
                 <div className="card">
                   <div className="card-body text-center">
                     <div className="mb-3">
-                      <i className={`bi ${getStatusIcon(order.status)} display-4 text-${getStatusColor(order.status)}`}></i>
+                      <i 
+                        className={`bi ${getStatusIcon(order.status)} display-4 text-${getStatusColor(order.status)}`}
+                        style={{
+                          color: (order.status === 'picked_up' || order.status === 'completed') ? '#ff6b35' : undefined
+                        }}
+                      ></i>
                     </div>
-                    <h4 className={`text-${getStatusColor(order.status)}`}>
+                    <h4 
+                      className={`text-${getStatusColor(order.status)}`}
+                      style={{
+                        color: (order.status === 'picked_up' || order.status === 'completed') ? '#ff6b35' : undefined
+                      }}
+                    >
                       {getStatusText(order.status)}
                     </h4>
                     <p className="text-muted mb-0">
                       {order.status === 'pending' && 'Your order is waiting for confirmation'}
                       {order.status === 'confirmed' && 'Your order has been confirmed and will be prepared'}
-                      {order.status === 'preparing' && 'Your order is being prepared'}
                       {order.status === 'ready_for_pickup' && 'Your order is ready for pickup!'}
                       {order.status === 'picked_up' && 'Thank you for your order!'}
                       {order.status === 'cancelled' && 'This order has been cancelled'}
@@ -146,21 +153,10 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
                     </div>
                     
                     <div className="mb-3">
-                      <strong>Total Amount:</strong>
-                      <br />
-                      <span className="h5 text-primary">{formatPrice(order.total_amount)}</span>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <strong>Order Date:</strong>
-                      <br />
-                      {new Date(order.created_at).toLocaleDateString()}
-                    </div>
-                    
-                    <div className="mb-3">
-                      <strong>Order Time:</strong>
-                      <br />
-                      {new Date(order.created_at).toLocaleTimeString()}
+                      <div className="d-flex justify-content-between align-items-center">
+                        <strong>Total Amount:</strong>
+                        <span className="h5 text-primary mb-0">{formatPrice(order.total_amount)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -194,15 +190,23 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
                       {order.pickup_location || 'R&R Barber Shop'}
                     </div>
                     
-                    {order.notes && (
-                      <div className="mb-3">
-                        <strong>Special Instructions:</strong>
-                        <br />
-                        <div className="bg-light p-2 rounded mt-1">
-                          {order.notes}
-                        </div>
+                    <div className="mb-3">
+                      <strong>Special Instructions:</strong>
+                      <br />
+                      <div className="bg-light p-2 rounded mt-1">
+                        {order.notes && order.notes.trim() !== '' ? (
+                          order.notes
+                        ) : (
+                          <span style={{ 
+                            color: '#ff8c00', 
+                            fontStyle: 'italic',
+                            fontWeight: '500'
+                          }}>
+                            No additional order request
+                          </span>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -221,13 +225,13 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
                   <div className="card-body">
                     {orderDetails && orderDetails.items ? (
                       <div className="table-responsive">
-                        <table className="table table-sm">
+                        <table className="table table-sm table-hover">
                           <thead>
                             <tr>
                               <th>Item</th>
-                              <th>Qty</th>
-                              <th>Price</th>
-                              <th>Total</th>
+                              <th className="text-center">Qty</th>
+                              <th className="text-end">Price</th>
+                              <th className="text-end">Total</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -239,34 +243,28 @@ const CustomerOrderDetailsModal = ({ order, orderDetails, onClose }) => {
                                       <img
                                         src={item.product?.image_url || item.image_url || item.product_image_url}
                                         alt={item.product?.name || item.name || item.product_name || 'Product'}
-                                        className="me-2"
+                                        className="me-2 flex-shrink-0"
                                         style={{ width: '40px', height: '40px', objectFit: 'cover' }}
                                         onError={(e) => {
                                           e.target.src = 'https://via.placeholder.com/40x40?text=No+Image';
                                         }}
                                       />
                                     )}
-                                    <div>
-                                      <strong>{item.product?.name || item.name || item.product_name || 'N/A'}</strong>
-                                      {(item.product?.description || item.description || item.product_description) && (
-                                        <>
-                                          <br />
-                                          <small className="text-muted">{item.product?.description || item.description || item.product_description}</small>
-                                        </>
-                                      )}
+                                    <div className="flex-grow-1">
+                                      <strong className="d-block">{item.product?.name || item.name || item.product_name || 'N/A'}</strong>
                                     </div>
                                   </div>
                                 </td>
-                                <td>{item.quantity}</td>
-                                <td>{formatPrice(item.unit_price || item.price)}</td>
-                                <td>{formatPrice(item.total_price || item.total)}</td>
+                                <td className="text-center">{item.quantity}</td>
+                                <td className="text-end">{formatPrice(item.unit_price || item.price)}</td>
+                                <td className="text-end fw-semibold">{formatPrice(item.total_price || item.total)}</td>
                               </tr>
                             ))}
                           </tbody>
                           <tfoot>
                             <tr className="table-primary">
-                              <th colSpan="3">Total</th>
-                              <th>{formatPrice(order.total_amount)}</th>
+                              <th colSpan="3" className="text-end">Total Amount:</th>
+                              <th className="text-end">{formatPrice(order.total_amount)}</th>
                             </tr>
                           </tfoot>
                         </table>

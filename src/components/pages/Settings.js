@@ -1,7 +1,7 @@
 // components/pages/Settings.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
+import { passwordResetOTPService } from '../../services/PasswordResetOTPService';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 
 const Settings = () => {
@@ -11,56 +11,27 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [activeTab, setActiveTab] = useState('notifications');
-  const [notificationSupport, setNotificationSupport] = useState(null);
-  const [testingNotification, setTestingNotification] = useState(false);
   
   // Settings state
   const [settings, setSettings] = useState({
     emailNotifications: true,
-    appointmentReminders: true,
-    promotionalEmails: false,
     language: 'en',
     timezone: 'Asia/Manila'
   });
 
-  // Password change state
+  // Password change state (OTP-based, like ResetPassword)
+  const [passwordStep, setPasswordStep] = useState(1); // 1: set new password, 2: verify OTP
   const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
+  const [otpCode, setOtpCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     fetchUserData();
-    checkNotificationSupport();
   }, []);
-
-  const checkNotificationSupport = async () => {
-    try {
-      const support = await PushService.checkNotificationSupport();
-      setNotificationSupport(support);
-    } catch (error) {
-      console.error('Error checking notification support:', error);
-    }
-  };
-
-  const testNotification = async () => {
-    setTestingNotification(true);
-    try {
-      const success = await PushService.testNotification();
-      if (success) {
-        setMessage({ type: 'success', text: 'Test notification sent successfully!' });
-      } else {
-        setMessage({ type: 'warning', text: 'Failed to send test notification. Check your browser settings.' });
-      }
-    } catch (error) {
-      console.error('Error testing notification:', error);
-      setMessage({ type: 'danger', text: 'Error testing notification: ' + error.message });
-    } finally {
-      setTestingNotification(false);
-      setTimeout(() => setMessage({ type: '', text: '' }), 5000);
-    }
-  };
 
   const fetchUserData = async () => {
     try {
@@ -87,8 +58,6 @@ const Settings = () => {
         // For now, we'll use default settings
         setSettings({
           emailNotifications: true,
-          appointmentReminders: true,
-          promotionalEmails: false,
           language: 'en',
           timezone: 'Asia/Manila'
         });
@@ -135,7 +104,7 @@ const Settings = () => {
     }
   };
 
-  const changePassword = async (e) => {
+  const handleSendPasswordOTP = async (e) => {
     e.preventDefault();
     setSaving(true);
     setMessage({ type: '', text: '' });
@@ -146,26 +115,61 @@ const Settings = () => {
         throw new Error('New passwords do not match');
       }
 
-      if (passwordData.newPassword.length < 6) {
-        throw new Error('Password must be at least 6 characters long');
+      if (passwordData.newPassword.length < 8) {
+        throw new Error('Password must be at least 8 characters long');
       }
 
-      // Update password
-      const { error } = await supabase.auth.updateUser({
-        password: passwordData.newPassword
+      if (!user?.email) {
+        throw new Error('Unable to determine your email. Please re-login and try again.');
+      }
+
+      // Send OTP code (same approach as ResetPassword)
+      await passwordResetOTPService.sendOTPCode(user.email);
+      setMessage({ type: 'success', text: 'OTP code has been sent to your email. Please check your inbox.' });
+      setPasswordStep(2);
+    } catch (error) {
+      console.error('Error sending password OTP:', error);
+      setMessage({ type: 'error', text: error.message || 'Failed to change password' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVerifyPasswordOTP = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      if (!otpCode || otpCode.length < 6) {
+        throw new Error('Please enter a valid OTP code');
+      }
+
+      if (!user?.email) {
+        throw new Error('Unable to determine your email. Please re-login and try again.');
+      }
+
+      const { data, error: functionError } = await supabase.functions.invoke('reset-password-with-otp', {
+        body: {
+          email: user.email,
+          code: otpCode,
+          newPassword: passwordData.newPassword
+        }
       });
 
-      if (error) throw error;
+      if (functionError) throw functionError;
+      if (data?.error) throw new Error(data.error);
+
+      if (!data?.success) {
+        throw new Error('Failed to change password. Please try again.');
+      }
 
       setMessage({ type: 'success', text: 'Password updated successfully!' });
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      setPasswordData({ newPassword: '', confirmPassword: '' });
+      setOtpCode('');
+      setPasswordStep(1);
     } catch (error) {
-      console.error('Error changing password:', error);
+      console.error('Error verifying password OTP:', error);
       setMessage({ type: 'error', text: error.message || 'Failed to change password' });
     } finally {
       setSaving(false);
@@ -309,110 +313,10 @@ const Settings = () => {
                               Receive email notifications
                             </label>
                           </div>
-                          <div className="form-check form-switch mb-3">
-                            <input 
-                              className="form-check-input" 
-                              type="checkbox" 
-                              id="appointmentReminders"
-                              checked={settings.appointmentReminders}
-                              onChange={(e) => handleSettingChange('appointmentReminders', e.target.checked)}
-                            />
-                            <label className="form-check-label" htmlFor="appointmentReminders">
-                              Appointment reminders
-                            </label>
-                          </div>
-                          <div className="form-check form-switch">
-                            <input 
-                              className="form-check-input" 
-                              type="checkbox" 
-                              id="promotionalEmails"
-                              checked={settings.promotionalEmails}
-                              onChange={(e) => handleSettingChange('promotionalEmails', e.target.checked)}
-                            />
-                            <label className="form-check-label" htmlFor="promotionalEmails">
-                              Promotional emails
-                            </label>
-                          </div>
                         </div>
                       </div>
                     </div>
                     
-                  </div>
-
-                  {/* Notification Test Section */}
-                  <div className="row mt-4">
-                    <div className="col-12">
-                      <div className="card border-light">
-                        <div className="card-body">
-                          <h6 className="card-title">
-                            <i className="bi bi-bell-slash me-2"></i>
-                            Test Notifications
-                          </h6>
-                          <p className="text-muted mb-3">
-                            Test your notification settings to ensure they're working properly.
-                          </p>
-                          
-                          {notificationSupport && (
-                            <div className="mb-3">
-                              <h6 className="small text-muted mb-2">Notification Support Status:</h6>
-                              <div className="row">
-                                <div className="col-md-4">
-                                  <div className="d-flex align-items-center">
-                                    <i className={`bi bi-${notificationSupport.push ? 'check-circle text-success' : 'x-circle text-danger'} me-2`}></i>
-                                    <span className="small">Push Notifications: {notificationSupport.permissions.push}</span>
-                                  </div>
-                                </div>
-                                <div className="col-md-4">
-                                  <div className="d-flex align-items-center">
-                                    <i className={`bi bi-${notificationSupport.local ? 'check-circle text-success' : 'x-circle text-danger'} me-2`}></i>
-                                    <span className="small">Local Notifications: {notificationSupport.permissions.local}</span>
-                                  </div>
-                                </div>
-                                <div className="col-md-4">
-                                  <div className="d-flex align-items-center">
-                                    <i className={`bi bi-${notificationSupport.web ? 'check-circle text-success' : 'x-circle text-danger'} me-2`}></i>
-                                    <span className="small">Web Notifications: {notificationSupport.permissions.web}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="d-flex gap-2">
-                            <button 
-                              className="btn btn-primary"
-                              onClick={testNotification}
-                              disabled={testingNotification}
-                            >
-                              {testingNotification ? (
-                                <>
-                                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                  Testing...
-                                </>
-                              ) : (
-                                <>
-                                  <i className="bi bi-bell me-2"></i>
-                                  Send Test Notification
-                                </>
-                              )}
-                            </button>
-                            <button 
-                              className="btn btn-outline-secondary"
-                              onClick={checkNotificationSupport}
-                            >
-                              <i className="bi bi-arrow-clockwise me-2"></i>
-                              Refresh Status
-                            </button>
-                          </div>
-
-                          {message.text && (
-                            <div className={`alert alert-${message.type} mt-3 mb-0`} role="alert">
-                              {message.text}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}
@@ -477,49 +381,117 @@ const Settings = () => {
                   <div className="card border-light mb-4">
                     <div className="card-body">
                       <h6 className="card-title">Change Password</h6>
-                      <form onSubmit={changePassword}>
-                        <div className="row">
-                          <div className="col-md-6 mb-3">
-                            <label htmlFor="newPassword" className="form-label">New Password</label>
-                            <input
-                              type="password"
-                              className="form-control"
-                              id="newPassword"
-                              name="newPassword"
-                              value={passwordData.newPassword}
-                              onChange={handlePasswordChange}
-                              required
-                              minLength="6"
-                            />
+
+                      {passwordStep === 1 ? (
+                        <form onSubmit={handleSendPasswordOTP}>
+                          <div className="row">
+                            <div className="col-md-6 mb-3">
+                              <label htmlFor="newPassword" className="form-label">New Password</label>
+                              <div className="input-group">
+                                <input
+                                  type={showPassword ? 'text' : 'password'}
+                                  className="form-control"
+                                  id="newPassword"
+                                  name="newPassword"
+                                  value={passwordData.newPassword}
+                                  onChange={handlePasswordChange}
+                                  required
+                                  minLength="8"
+                                />
+                                <button
+                                  className="btn btn-outline-secondary"
+                                  type="button"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                >
+                                  <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="col-md-6 mb-3">
+                              <label htmlFor="confirmPassword" className="form-label">Confirm New Password</label>
+                              <div className="input-group">
+                                <input
+                                  type={showConfirmPassword ? 'text' : 'password'}
+                                  className="form-control"
+                                  id="confirmPassword"
+                                  name="confirmPassword"
+                                  value={passwordData.confirmPassword}
+                                  onChange={handlePasswordChange}
+                                  required
+                                  minLength="8"
+                                />
+                                <button
+                                  className="btn btn-outline-secondary"
+                                  type="button"
+                                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                >
+                                  <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="col-md-6 mb-3">
-                            <label htmlFor="confirmPassword" className="form-label">Confirm New Password</label>
+
+                          <button type="submit" className="btn btn-primary" disabled={saving}>
+                            {saving ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-2"></span>
+                                Sending OTP...
+                              </>
+                            ) : (
+                              <>
+                                <i className="bi bi-envelope me-2"></i>
+                                Send OTP Code
+                              </>
+                            )}
+                          </button>
+                        </form>
+                      ) : (
+                        <form onSubmit={handleVerifyPasswordOTP}>
+                          <div className="mb-3">
+                            <label htmlFor="otpCode" className="form-label">OTP Code</label>
                             <input
-                              type="password"
+                              type="text"
                               className="form-control"
-                              id="confirmPassword"
-                              name="confirmPassword"
-                              value={passwordData.confirmPassword}
-                              onChange={handlePasswordChange}
+                              id="otpCode"
+                              value={otpCode}
+                              onChange={(e) => setOtpCode(e.target.value)}
                               required
-                              minLength="6"
+                              placeholder="Enter the OTP sent to your email"
                             />
+                            <div className="form-text">
+                              Sent to: <strong>{user?.email || 'your email'}</strong>
+                            </div>
                           </div>
-                        </div>
-                        <button type="submit" className="btn btn-primary" disabled={saving}>
-                          {saving ? (
-                            <>
-                              <span className="spinner-border spinner-border-sm me-2"></span>
-                              Changing...
-                            </>
-                          ) : (
-                            <>
-                              <i className="bi bi-key me-2"></i>
-                              Change Password
-                            </>
-                          )}
-                        </button>
-                      </form>
+
+                          <div className="d-flex gap-2">
+                            <button type="submit" className="btn btn-primary" disabled={saving}>
+                              {saving ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm me-2"></span>
+                                  Verifying...
+                                </>
+                              ) : (
+                                <>
+                                  <i className="bi bi-key me-2"></i>
+                                  Change Password
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary"
+                              onClick={() => {
+                                setPasswordStep(1);
+                                setOtpCode('');
+                              }}
+                              disabled={saving}
+                            >
+                              Back
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </div>
                   </div>
                   

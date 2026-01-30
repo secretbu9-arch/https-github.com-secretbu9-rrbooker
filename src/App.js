@@ -8,6 +8,7 @@ import { sessionManager } from './services/SessionManager';
 // Auth components
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import ResetPassword from './components/auth/ResetPassword';
 // Note: We don't need to import OnboardingSlides here anymore - it's inside Login.js
 
 // Dashboard components
@@ -35,6 +36,7 @@ import BarberSchedule from './components/barber/BarberSchedule';
 import BarberQueue from './components/barber/BarberQueue';
 import AppointmentRequestManagerBasic from './components/barber/AppointmentRequestManagerBasic';
 import BarberDayOffManager from './components/barber/BarberDayOffManager';
+import BarberRevenue from './components/barber/BarberRevenue';
 
 // Manager components
 import ManageBarbers from './components/manager/ManageBarbers';
@@ -43,7 +45,6 @@ import ManageProducts from './components/manager/ManageProducts';
 import ManageAppointments from './components/manager/ManageAppointments';
 import NotificationManager from './components/manager/NotificationManager';
 import QueuePriorityManager from './components/manager/QueuePriorityManager';
-import AdvancedSecurityDashboard from './components/manager/AdvancedSecurityDashboard';
 import Reports from './components/reports/Reports';
 
 // Product components
@@ -59,6 +60,7 @@ import ManageOrders from './components/manager/ManageOrders';
 import Profile from './components/pages/Profile';
 import Settings from './components/pages/Settings';
 import { PushService } from './services/PushService';
+import AutoCancelNoShowService from './services/AutoCancelNoShowService';
 
 // Styles
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -78,6 +80,40 @@ function App() {
       initializeApp();
     }
   }, [isInitialized]);
+
+  // Set up auto-cancellation check for no-show appointments
+  useEffect(() => {
+    // Run every 5 minutes to check for appointments that should be cancelled
+    const noShowCheckInterval = setInterval(async () => {
+      try {
+        // Only run if user is logged in
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession?.user) {
+          await AutoCancelNoShowService.cancelAllNoShowAppointments();
+        }
+      } catch (error) {
+        console.error('Error in auto-cancel no-show check:', error);
+      }
+    }, 5 * 60 * 1000); // Every 5 minutes
+
+    // Run initial check after 1 minute (to avoid blocking initial load)
+    const initialCheckTimeout = setTimeout(async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession?.user) {
+          await AutoCancelNoShowService.cancelAllNoShowAppointments();
+        }
+      } catch (error) {
+        console.error('Error in initial auto-cancel no-show check:', error);
+      }
+    }, 60000); // After 1 minute
+
+    // Cleanup
+    return () => {
+      clearInterval(noShowCheckInterval);
+      clearTimeout(initialCheckTimeout);
+    };
+  }, []);
 
   const initializeApp = async () => {
     try {
@@ -293,6 +329,10 @@ function App() {
             path="/register" 
             element={!session ? <Register /> : <Navigate to="/dashboard" replace />} 
           />
+          <Route 
+            path="/reset-password" 
+            element={!session ? <ResetPassword /> : <Navigate to="/dashboard" replace />} 
+          />
           
           {/* Dashboard Route */}
           <Route 
@@ -355,6 +395,14 @@ function App() {
               <Navigate to="/dashboard" replace />
             } 
           />
+          <Route 
+            path="/barber/revenue" 
+            element={
+              session && userRole === 'barber' ? 
+              <BarberRevenue /> : 
+              <Navigate to="/dashboard" replace />
+            } 
+          />
           
           {/* Manager Routes */}
           <Route 
@@ -410,14 +458,6 @@ function App() {
             element={
               session && userRole === 'manager' ? 
               <Reports /> : 
-              <Navigate to="/dashboard" replace />
-            }
-          />
-          <Route 
-            path="/manage/advanced-security" 
-            element={
-              session && userRole === 'manager' ? 
-              <AdvancedSecurityDashboard /> : 
               <Navigate to="/dashboard" replace />
             }
           />

@@ -387,16 +387,19 @@ export const getBarberStatusColor = (status) => {
  * @returns {string} - CSS class for status color
  */
 export const getStatusColor = (status) => {
+  const normalizedStatus = status?.toLowerCase();
+  const statusKey = normalizedStatus === 'scheduled' ? 'confirmed' : normalizedStatus;
+
   const statusMap = {
     'pending': 'warning',
-    'scheduled': 'info',
     'confirmed': 'success',
     'ongoing': 'primary',
-    'done': 'success',
+    'completed': 'success',
+    'cancel': 'danger',
     'cancelled': 'danger'
   };
   
-  return statusMap[status?.toLowerCase()] || 'secondary';
+  return statusMap[statusKey] || 'secondary';
 };
 
 /**
@@ -405,16 +408,19 @@ export const getStatusColor = (status) => {
  * @returns {string} - Bootstrap icon class
  */
 export const getStatusIcon = (status) => {
+  const normalizedStatus = status?.toLowerCase();
+  const statusKey = normalizedStatus === 'scheduled' ? 'confirmed' : normalizedStatus;
+
   const iconMap = {
     'pending': 'bi-clock-fill',
-    'scheduled': 'bi-calendar-check',
     'confirmed': 'bi-check-circle',
     'ongoing': 'bi-scissors',
-    'done': 'bi-check-circle-fill',
+    'completed': 'bi-check-circle-fill',
+    'cancel': 'bi-x-circle-fill',
     'cancelled': 'bi-x-circle-fill'
   };
   
-  return iconMap[status?.toLowerCase()] || 'bi-question-circle';
+  return iconMap[statusKey] || 'bi-question-circle';
 };
 
 /**
@@ -581,7 +587,7 @@ export const calculateAppointmentAnalytics = (appointments) => {
   
   appointments.forEach(appointment => {
     switch (appointment.status) {
-      case 'done':
+      case 'completed':
         analytics.completed++;
         analytics.revenue += calculateTotalPrice(appointment);
         break;
@@ -769,10 +775,20 @@ export const parseAddOnsData = (addOnsData) => {
     return [];
   }
 
+  // If it's already an array, return it directly
+  if (Array.isArray(addOnsData)) {
+    return addOnsData;
+  }
+
+  // If it's not a string, try to convert it
+  if (typeof addOnsData !== 'string') {
+    return [];
+  }
+
   try {
     // Handle double-encoded JSON
     let cleaned = addOnsData;
-    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    if (typeof cleaned === 'string' && cleaned.startsWith('"') && cleaned.endsWith('"')) {
       cleaned = cleaned.slice(1, -1).replace(/\\"/g, '"');
     }
     

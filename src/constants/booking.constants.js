@@ -19,12 +19,11 @@ export const BOOKING_TYPES = {
 // ============================================================================
 
 export const BOOKING_STATUS = {
-  PENDING: 'pending',      // Waiting for barber confirmation
-  SCHEDULED: 'scheduled',  // Confirmed scheduled appointment
-  CONFIRMED: 'confirmed',  // Barber confirmed the appointment
-  ONGOING: 'ongoing',      // Currently in progress
-  DONE: 'done',           // Completed
-  CANCELLED: 'cancelled'   // Cancelled by user or barber
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  ONGOING: 'ongoing',
+  COMPLETED: 'completed',
+  CANCEL: 'cancel'
 };
 
 // ============================================================================

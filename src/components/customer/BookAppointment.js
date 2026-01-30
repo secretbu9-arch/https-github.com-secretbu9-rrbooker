@@ -12,12 +12,28 @@ import UnifiedSlotBookingService from '../../services/UnifiedSlotBookingService'
 import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
 import EnhancedQueueTimeCalculator from '../../services/EnhancedQueueTimeCalculator';
 import BarberAvailabilityService from '../../services/BarberAvailabilityService';
+import { friendBookingOTPService } from '../../services/FriendBookingOTPService';
 import { 
   BOOKING_STATUS, 
   APPOINTMENT_FIELDS, 
   PRIORITY_LEVELS 
 } from '../../constants/booking.constants';
+import { formatPrice } from '../utils/helpers';
 import logoImage from '../../assets/images/raf-rok-logo.png';
+
+// Helper constants for friend email validation and initial verification state
+const FRIEND_EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
+const createInitialFriendVerificationState = () => ({
+  email: '',
+  sent: false,
+  verified: false,
+  sending: false,
+  verifying: false,
+  error: '',
+  success: '',
+  expiresAt: null
+});
 
 // Helper function to convert 24-hour format to 12-hour format (accessible by all components)
 const convertTo12Hour = (time24) => {
@@ -540,14 +556,13 @@ const getEstimatedArrivalTime = async (barberId, barberQueues, timeSlots, select
     return 'N/A';
   }
 };
-
 const BookAppointment = () => {
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
   const [bookingData, setBookingData] = useState({
     selectedDate: '',
-    appointmentType: 'queue',
-    selectedTimeSlot: '',
+    appointmentType: 'queue', // Always queue - no scheduled appointments
+    selectedTimeSlot: '', // No time slots for queue appointments
     selectedBarber: '',
     selectedServices: [],
     selectedAddOns: [],
@@ -588,6 +603,97 @@ const BookAppointment = () => {
   const [alternativeTimes, setAlternativeTimes] = useState([]);
   const [showAlternativeTimesModal, setShowAlternativeTimesModal] = useState(false);
   
+  const [friendVerification, setFriendVerification] = useState(() => createInitialFriendVerificationState());
+
+  const resetFriendVerification = useCallback(() => {
+    setFriendVerification(createInitialFriendVerificationState());
+  }, []);
+
+  const sendFriendVerificationCode = useCallback(async (email, childName) => {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+
+    setFriendVerification(prev => ({
+      ...createInitialFriendVerificationState(),
+      email: normalizedEmail,
+      sending: true
+    }));
+
+    try {
+      const result = await friendBookingOTPService.sendVerificationCode(normalizedEmail, {
+        friendName: childName || null,
+        requestedBy: user?.email || user?.user_metadata?.email || user?.user_metadata?.full_name || null
+      });
+
+      setFriendVerification(prev => ({
+        ...prev,
+        email: normalizedEmail,
+        sending: false,
+        sent: true,
+        verified: false,
+        error: '',
+        success: `Verification code sent to ${normalizedEmail}.`,
+        expiresAt: result?.expiresAt || null
+      }));
+
+      return { success: true };
+    } catch (err) {
+      setFriendVerification(prev => ({
+        ...prev,
+        email: normalizedEmail,
+        sending: false,
+        error: err.message || 'Failed to send verification code. Please try again.',
+        success: ''
+      }));
+      return { success: false, error: err };
+    }
+  }, [user]);
+
+  const verifyFriendVerificationCode = useCallback(async (email, code) => {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    const trimmedCode = (code || '').trim();
+
+    if (!trimmedCode) {
+      setFriendVerification(prev => ({
+        ...prev,
+        email: normalizedEmail || prev.email,
+        error: 'Please enter the verification code before verifying.'
+      }));
+      return false;
+    }
+
+    setFriendVerification(prev => ({
+      ...prev,
+      email: normalizedEmail || prev.email,
+      verifying: true,
+      error: '',
+      success: ''
+    }));
+
+    try {
+      await friendBookingOTPService.verifyCode(normalizedEmail, trimmedCode);
+
+      setFriendVerification(prev => ({
+        ...prev,
+        email: normalizedEmail,
+        verifying: false,
+        verified: true,
+        sent: true,
+        error: '',
+        success: 'Email verified successfully.'
+      }));
+
+      return true;
+    } catch (err) {
+      setFriendVerification(prev => ({
+        ...prev,
+        email: normalizedEmail || prev.email,
+        verifying: false,
+        error: err.message || 'Failed to verify code. Please try again.'
+      }));
+      return false;
+    }
+  }, []);
+
   const navigate = useNavigate();
 
   // Function to show alternative times modal
@@ -612,9 +718,7 @@ const BookAppointment = () => {
     if (!user) validationErrors.push('No user logged in');
     if (!bookingData.selectedBarber) validationErrors.push('No barber selected');
     if (!bookingData.selectedDate) validationErrors.push('No date selected');
-    if (bookingData.appointmentType === 'scheduled' && !bookingData.selectedTimeSlot) {
-      validationErrors.push('No time slot selected for scheduled appointment');
-    }
+    // No time slot validation needed - queue appointments don't require time slots
     if (bookingData.selectedServices.length === 0) validationErrors.push('No services selected');
     
     console.log('Validation Errors:', validationErrors);
@@ -700,8 +804,8 @@ const BookAppointment = () => {
       
       updateBookingData({
         selectedDate: tomorrow, // Default to tomorrow for rebooking
-        appointmentType: appointment.appointment_type || 'queue',
-        selectedTimeSlot: appointment.appointment_time || '',
+        appointmentType: 'queue', // Always queue - no scheduled appointments
+        selectedTimeSlot: '', // No time slots for queue appointments
         selectedBarber: appointment.barber_id,
         selectedServices: appointment.services || [],
         selectedAddOns: appointment.add_ons || [],
@@ -772,8 +876,8 @@ const BookAppointment = () => {
       
       updateBookingData({
         selectedDate: tomorrow, // Default to tomorrow for new appointment
-        appointmentType: 'queue', // Default to queue
-        selectedTimeSlot: '',
+        appointmentType: 'queue', // Always queue - no scheduled appointments
+        selectedTimeSlot: '', // No time slots for queue appointments
         selectedBarber: appointmentData.barber_id || '',
         selectedServices: selectedServices,
         selectedAddOns: selectedAddOns,
@@ -1236,7 +1340,6 @@ const BookAppointment = () => {
       default: return '';
     }
   };
-
   // Calculate service duration in minutes
   const calculateServiceDuration = async (selectedServices, selectedAddOns = [], servicesList = [], addOnsList = []) => {
     if (!selectedServices || selectedServices.length === 0) return 30; // Default 30 minutes
@@ -1287,8 +1390,6 @@ const BookAppointment = () => {
     console.log('🕐 11:30 AM included:', slots.some(s => s.value === '11:30'));
     return slots;
   };
-
-
   // Queue management logic - handle how queue appointments interact with scheduled slots
   const manageQueueAndScheduledSlots = async (barberId, date) => {
     try {
@@ -1764,11 +1865,12 @@ const BookAppointment = () => {
   // Fetch barbers and services
   const fetchBarbersAndServices = async () => {
     try {
-      // Fetch barbers
+      // Fetch barbers (only active barbers - not archived)
       const { data: barbersData, error: barbersError } = await supabase
         .from('users')
         .select('id, full_name, email, phone, barber_status, average_rating, total_ratings, skills')
         .eq('role', 'barber')
+        .neq('archived', true)
         .order('full_name');
 
       if (barbersError) throw barbersError;
@@ -2018,7 +2120,6 @@ const BookAppointment = () => {
       return queueAppointments.length * 30; // Fallback to 30 minutes per person
     }
   };
-
   // Calculate add-ons duration
   const calculateAddOnsDuration = async (addOnsData) => {
     try {
@@ -2061,7 +2162,6 @@ const BookAppointment = () => {
       return 0;
     }
   };
-
   // Calculate estimated wait time for a specific appointment
   const calculateEstimatedWaitTimeForAppointment = async (appointmentId, barberId, appointmentDate) => {
     try {
@@ -2502,26 +2602,7 @@ const BookAppointment = () => {
       const isTargetTomorrow = targetDate === tomorrow;
       const isTargetFuture = targetDate > tomorrow;
       
-      // Check if this is a scheduled appointment
-      if (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot) {
-        // For scheduled appointments, use the selected time slot
-        const selectedSlot = timeSlots.find(slot => slot.value === bookingData.selectedTimeSlot);
-        if (selectedSlot) {
-          // Add appropriate date indicator
-          if (isTargetTomorrow) {
-            return `${selectedSlot.display} (Tomorrow)`;
-          } else if (isTargetFuture) {
-            const targetDateObj = new Date(targetDate);
-            const dayName = targetDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-            const monthDay = targetDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            return `${selectedSlot.display} (${dayName}, ${monthDay})`;
-          }
-          return selectedSlot.display;
-        }
-        return 'N/A';
-      }
-      
-      // For queue appointments, calculate based on queue position
+      // For queue appointments, calculate based on queue position (no time slot selection)
       const queueCount = queue.queueCount || 0;
       
       // Get scheduled appointments for the target date
@@ -2603,19 +2684,13 @@ const BookAppointment = () => {
       }
     }
     
-    // For scheduled appointments, use the selected time slot directly
-    let startTime24;
-    if (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot) {
-      startTime24 = bookingData.selectedTimeSlot;
-    } else {
-      // For queue appointments, find the time slot object
-      const startTimeObj = timeSlots.find(slot => slot.display === cleanStartTime);
-      if (!startTimeObj) {
-        console.warn('Start time slot not found:', cleanStartTime);
-        return 'N/A';
-      }
-      startTime24 = startTimeObj.value;
+    // For queue appointments, find the time slot object (no scheduled appointments)
+    const startTimeObj = timeSlots.find(slot => slot.display === cleanStartTime);
+    if (!startTimeObj) {
+      console.warn('Start time slot not found:', cleanStartTime);
+      return 'N/A';
     }
+    const startTime24 = startTimeObj.value;
     
     const [hours, minutes] = startTime24.split(':').map(Number);
     const startDate = new Date();
@@ -2742,42 +2817,8 @@ const BookAppointment = () => {
     }
   }, [bookingData.selectedDate, barbers]);
 
-  // Load time slots when appointment type changes to scheduled
-  useEffect(() => {
-      if (bookingData.appointmentType === 'scheduled' && bookingData.selectedDate && bookingData.selectedBarber) {
-        console.log('🕐 Auto-loading time slots for scheduled appointment...');
-      getBookedTimeSlots(bookingData.selectedDate, bookingData.selectedBarber);
-    }
-  }, [bookingData.appointmentType, bookingData.selectedDate, bookingData.selectedBarber]);
-
-  // Real-time refresh for time slots when appointments are booked
-  useEffect(() => {
-    const handleAppointmentChange = (event) => {
-      const { barberId, appointmentDate } = event.detail;
-      
-      // Refresh time slots if it's for the same barber and date
-      if (barberId === bookingData.selectedBarber && appointmentDate === bookingData.selectedDate) {
-        console.log('🔄 Refreshing time slots due to appointment change');
-        getBookedTimeSlots(bookingData.selectedDate, bookingData.selectedBarber);
-      }
-    };
-
-    // Listen for appointment changes
-    window.addEventListener('appointmentStatusChanged', handleAppointmentChange);
-    
-    // Also refresh every 30 seconds to ensure accuracy
-    const refreshInterval = setInterval(() => {
-      if (bookingData.appointmentType === 'scheduled' && bookingData.selectedDate && bookingData.selectedBarber) {
-        console.log('🔄 Periodic time slot refresh');
-        getBookedTimeSlots(bookingData.selectedDate, bookingData.selectedBarber);
-      }
-    }, 30000);
-
-    return () => {
-      window.removeEventListener('appointmentStatusChanged', handleAppointmentChange);
-      clearInterval(refreshInterval);
-    };
-  }, [bookingData.selectedBarber, bookingData.selectedDate, bookingData.appointmentType]);
+  // No time slot loading needed - queue appointments don't use time slots
+  // Removed scheduled appointment time slot loading logic
 
   // Test function to verify queue blocking (can be called from browser console)
   window.testQueueBlocking = async () => {
@@ -2851,7 +2892,6 @@ const BookAppointment = () => {
       return null;
     }
   };
-
   // Test function for 90-minute duration blocking
   window.test90MinuteBlocking = async (date, barberId) => {
     console.log('🧪 Testing 90-minute duration blocking...', { date, barberId });
@@ -2889,7 +2929,6 @@ const BookAppointment = () => {
     console.log('📋 Expected blocked slots for 90-minute service:', blockedSlots);
     return blockedSlots;
   };
-
   // Debug function to check all appointments for a specific date/barber
   window.debugAllAppointments = async (date, barberId) => {
     console.log('🔍 Debugging all appointments...', { date, barberId });
@@ -3590,10 +3629,8 @@ const BookAppointment = () => {
       return null;
     }
   };
-
   // Make updateQueueStatus available globally
   window.updateQueueStatus = updateQueueStatus;
-
   // Hybrid Appointment System - Convert between queue and scheduled
   const convertToHybrid = async (appointmentId, targetType) => {
     try {
@@ -3942,7 +3979,7 @@ const BookAppointment = () => {
         if (oldStatus === 'pending' && newStatus === 'ongoing') {
           notificationTitle = 'Queue Moving';
           notificationMessage = `A customer is now being served. Your estimated wait time has been updated.`;
-        } else if (oldStatus === 'ongoing' && newStatus === 'done') {
+        } else if (oldStatus === 'ongoing' && newStatus === 'completed') {
           notificationTitle = 'Queue Progress';
           notificationMessage = `A customer has finished. You're one step closer to your turn!`;
         } else if (payload.new?.queue_position !== payload.old?.queue_position) {
@@ -4319,7 +4356,6 @@ const BookAppointment = () => {
     // This would be enhanced with actual queue data
     return Math.floor(Math.random() * 60) + 15; // Mock wait time
   };
-
   // CRITICAL: Validate barber capacity and working hours boundaries
   const validateBarberCapacityAndBoundaries = async (barberId, appointmentDate, appointmentType, selectedTimeSlot) => {
     console.log('🔍 Validating barber capacity and boundaries...', {
@@ -4496,6 +4532,30 @@ const BookAppointment = () => {
         user: user?.id
       });
 
+      if (bookingData.bookForFriend) {
+        const normalizedFriendEmail = (bookingData.friendEmail || '').trim().toLowerCase();
+        if (!normalizedFriendEmail) {
+          setError('Child email address is required for double booking.');
+          setLoading(false);
+          setCurrentStep(1);
+          return;
+        }
+
+        if (!FRIEND_EMAIL_REGEX.test(normalizedFriendEmail)) {
+          setError('Please enter a valid child email address.');
+          setLoading(false);
+          setCurrentStep(1);
+          return;
+        }
+
+        if (!friendVerification.verified || friendVerification.email !== normalizedFriendEmail) {
+          setError('Please verify the child email address before completing the booking.');
+          setLoading(false);
+          setCurrentStep(1);
+          return;
+        }
+      }
+
       // Validation checks
       if (!user) {
         throw new Error('User not logged in');
@@ -4532,38 +4592,21 @@ const BookAppointment = () => {
         }
       }
 
-      if (bookingData.appointmentType === 'scheduled' && !bookingData.selectedTimeSlot) {
-        throw new Error('No time slot selected for scheduled appointment');
-      }
+      // No time slot validation needed - queue appointments don't require time slots
 
       if (bookingData.selectedServices.length === 0) {
         throw new Error('No services selected');
       }
 
-      // Check for lunch break conflict for scheduled appointments
-      if (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot) {
-        const totalDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
-        if (wouldCrossLunchBreak(bookingData.selectedTimeSlot, totalDuration)) {
-          throw new Error('Selected time slot would cross the lunch break period (12:00 PM - 1:00 PM). Please choose a different time or reduce service duration.');
-        }
-      }
+      // No lunch break conflict check needed - queue appointments are automatically scheduled around lunch break
 
       console.log('✅ Validation passed, proceeding with Advanced Hybrid Queue booking...');
 
-      // Determine appointment type based on time slot selection
-      const appointmentType = bookingData.selectedTimeSlot ? 'scheduled' : 'queue';
-      
-      // Validate appointment type consistency
-      if (appointmentType === 'scheduled' && !bookingData.selectedTimeSlot) {
-        throw new Error('Scheduled appointments must have a time slot');
-      }
-      
-      if (appointmentType === 'queue' && bookingData.selectedTimeSlot) {
-        throw new Error('Queue appointments should not have a time slot');
-      }
+      // Always use queue appointments - no scheduled appointments
+      const appointmentType = 'queue';
 
-      // Check for time slot conflicts for scheduled appointments
-      if (appointmentType === 'scheduled') {
+      // No time slot conflict check needed - queue appointments are automatically scheduled
+      if (false) {
         const { data: existingAppointments } = await supabase
           .from('appointments')
           .select('id')
@@ -4580,13 +4623,8 @@ const BookAppointment = () => {
       // CRITICAL: Check barber capacity and working hours boundaries
       await validateBarberCapacityAndBoundaries(bookingData.selectedBarber, bookingData.selectedDate, appointmentType, bookingData.selectedTimeSlot);
 
-      // CRITICAL: Check if barber is fully scheduled (no available time slots)
-      if (appointmentType === 'scheduled') {
-        await validateBarberScheduledAvailability(bookingData.selectedBarber, bookingData.selectedDate, bookingData.selectedTimeSlot);
-      } else if (appointmentType === 'queue') {
-        // For queue appointments, also check if barber has any availability at all
-        await validateBarberQueueAvailability(bookingData.selectedBarber, bookingData.selectedDate);
-      }
+      // For queue appointments, check if barber has any availability at all
+      await validateBarberQueueAvailability(bookingData.selectedBarber, bookingData.selectedDate);
 
       console.log('🎯 Final appointment type:', appointmentType, 'Time slot:', bookingData.selectedTimeSlot);
 
@@ -4637,7 +4675,7 @@ const BookAppointment = () => {
           return addonId;
         }).filter(Boolean),
         [APPOINTMENT_FIELDS.APPOINTMENT_DATE]: bookingData.selectedDate,
-        [APPOINTMENT_FIELDS.APPOINTMENT_TIME]: appointmentType === 'scheduled' ? bookingData.selectedTimeSlot : null,
+        [APPOINTMENT_FIELDS.APPOINTMENT_TIME]: null, // Queue appointments don't have time slots
         [APPOINTMENT_FIELDS.APPOINTMENT_TYPE]: appointmentType,
         [APPOINTMENT_FIELDS.PRIORITY_LEVEL]: bookingData.isUrgent ? PRIORITY_LEVELS.URGENT : PRIORITY_LEVELS.NORMAL,
         [APPOINTMENT_FIELDS.STATUS]: BOOKING_STATUS.PENDING, // ALL appointments start as pending and require manager/barber confirmation
@@ -4670,9 +4708,9 @@ const BookAppointment = () => {
         if (!bookingData.bookForFriend) {
           let successMessage;
           
-          if (bookingData.appointmentType === 'scheduled') {
-            successMessage = `✅ Appointment scheduled successfully!\n` +
-              `Time: ${result.estimated_time || 'TBD'}\n` +
+          if (bookingData.appointmentType === 'queue') {
+            successMessage = `✅ Appointment queued successfully!\n` +
+              `Queue Position: ${result.queue_position || 'TBD'}\n` +
           `⏳ Status: Pending confirmation by barber/manager`;
           } else {
             successMessage = `✅ Queue appointment request submitted successfully!\n` +
@@ -4682,6 +4720,8 @@ const BookAppointment = () => {
         
         setSuccess(successMessage);
         }
+
+        resetFriendVerification();
 
         // Email confirmation removed - using push notifications only
 
@@ -4761,7 +4801,7 @@ const BookAppointment = () => {
   return (
     <div className="container-fluid px-2 px-md-4 py-3 py-md-5">
       <div className="container-fluid">
-      {/* Enhanced Gray Header - Mobile Responsive */}
+      {/* Book for a Child */}
       <div className="row mb-4 mb-lg-5">
         <div className="col">
           <div className="card border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
@@ -4919,6 +4959,11 @@ const BookAppointment = () => {
                 calculateCurrentQueueStatus={calculateCurrentQueueStatus}
                 calculateRealTimeAvailability={calculateRealTimeAvailability}
                 canBarberAccommodateService={canBarberAccommodateService}
+                // Child email OTP helpers
+                friendVerification={friendVerification}
+                onSendFriendVerification={sendFriendVerificationCode}
+                onVerifyFriendVerification={verifyFriendVerificationCode}
+                onResetFriendVerification={resetFriendVerification}
               />}
               
               {currentStep === 2 && <Step2ServicesAndAddons 
@@ -4967,6 +5012,7 @@ const BookAppointment = () => {
         canBarberAccommodateService={canBarberAccommodateService}
         unifiedSlots={unifiedSlots}
         alternativeBarbers={alternativeBarbers}
+        friendVerification={friendVerification}
       />}
 
       {/* Alternative Times Modal */}
@@ -5079,7 +5125,6 @@ const BookAppointment = () => {
     </div>
   );
 };
-
 // Step 1: Date, Type and Barber Selection (Merged)
 const Step1DateTypeAndBarber = ({ 
   bookingData, 
@@ -5125,17 +5170,151 @@ const Step1DateTypeAndBarber = ({
   // Real-time status calculation functions
   calculateCurrentQueueStatus,
   calculateRealTimeAvailability,
-  canBarberAccommodateService
+  canBarberAccommodateService,
+  friendVerification,
+  onSendFriendVerification,
+  onVerifyFriendVerification,
+  onResetFriendVerification
 }) => {
   const [selectedDate, setSelectedDate] = useState(bookingData.selectedDate || '');
-  const [appointmentType, setAppointmentType] = useState(bookingData.appointmentType || 'queue');
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState(bookingData.selectedTimeSlot || '');
+  const [appointmentType] = useState('queue'); // Always queue - no scheduled appointments
+  const [selectedTimeSlot] = useState(''); // No time slot for queue appointments
   const [selectedBarber, setSelectedBarber] = useState(bookingData.selectedBarber || '');
   const [bookForFriend, setBookForFriend] = useState(bookingData.bookForFriend || false);
   const [friendName, setFriendName] = useState(bookingData.friendName || '');
   const [friendPhone, setFriendPhone] = useState(bookingData.friendPhone || '');
   const [friendEmail, setFriendEmail] = useState(bookingData.friendEmail || '');
   const [checkingAppointment, setCheckingAppointment] = useState(false);
+  const [friendEmailError, setFriendEmailError] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState('');
+  
+  const normalizedFriendEmail = friendEmail.trim().toLowerCase();
+  const isFriendEmailValid = FRIEND_EMAIL_REGEX.test(normalizedFriendEmail);
+  const isOtpSectionVisible = bookForFriend && friendVerification?.sent && friendVerification.email === normalizedFriendEmail && !friendVerification?.verified;
+  const isFriendEmailVerified = bookForFriend && friendVerification?.verified && friendVerification.email === normalizedFriendEmail;
+  
+  useEffect(() => {
+    if (!bookForFriend) {
+      setOtpCode('');
+      setFriendEmailError('');
+      setOtpError('');
+    }
+  }, [bookForFriend]);
+
+  useEffect(() => {
+    setFriendEmailError('');
+    setOtpError('');
+  }, [friendEmail]);
+
+  useEffect(() => {
+    if (!bookForFriend) return;
+
+    const normalized = friendEmail.trim().toLowerCase();
+
+    if (!normalized) {
+      if (friendVerification?.email) {
+        onResetFriendVerification?.();
+      }
+      return;
+    }
+
+    if (friendVerification?.email && friendVerification.email !== normalized) {
+      onResetFriendVerification?.();
+    }
+  }, [bookForFriend, friendEmail, friendVerification?.email, onResetFriendVerification]);
+
+  const handleBookForFriendChange = (checked) => {
+    setBookForFriend(checked);
+    updateBookingData({ bookForFriend: checked });
+
+    if (!checked) {
+      setFriendName('');
+      setFriendPhone('');
+      setFriendEmail('');
+      setOtpCode('');
+      setFriendEmailError('');
+      setOtpError('');
+      onResetFriendVerification?.();
+    }
+  };
+
+  const handleFriendNameChange = (value) => {
+    setFriendName(value);
+    updateBookingData({ friendName: value });
+  };
+
+  const handleFriendPhoneChange = (value) => {
+    setFriendPhone(value);
+    updateBookingData({ friendPhone: value });
+  };
+
+  const handleFriendEmailChange = (value) => {
+    setFriendEmail(value);
+    updateBookingData({ friendEmail: value });
+  };
+
+  const handleSendVerificationClick = async () => {
+    const trimmedEmail = friendEmail.trim();
+
+    if (!trimmedEmail) {
+      setFriendEmailError('Child email address is required.');
+      return;
+    }
+
+    if (!FRIEND_EMAIL_REGEX.test(trimmedEmail)) {
+      setFriendEmailError('Please enter a valid child email address.');
+      return;
+    }
+
+    setOtpError('');
+
+    if (!onSendFriendVerification) {
+      setOtpError('Unable to send verification code at this time.');
+      return;
+    }
+
+    const result = await onSendFriendVerification(trimmedEmail, friendName);
+
+    if (!result?.success) {
+      setOtpError(friendVerification?.error || 'Failed to send verification code. Please try again.');
+    } else {
+      setOtpCode('');
+    }
+  };
+
+  const handleVerifyOTPClick = async () => {
+    const trimmedEmail = friendEmail.trim();
+    const trimmedCode = otpCode.trim();
+
+    if (!trimmedEmail) {
+      setFriendEmailError('Child email address is required.');
+      return;
+    }
+
+    if (!FRIEND_EMAIL_REGEX.test(trimmedEmail)) {
+      setFriendEmailError('Please enter a valid child email address.');
+      return;
+    }
+
+    if (!trimmedCode) {
+      setOtpError('Please enter the verification code.');
+      return;
+    }
+
+    if (!onVerifyFriendVerification) {
+      setOtpError('Unable to verify code at this time.');
+      return;
+    }
+
+    const success = await onVerifyFriendVerification(trimmedEmail, trimmedCode);
+
+    if (!success) {
+      setOtpError(friendVerification?.error || 'Failed to verify the code. Please try again.');
+    } else {
+      setOtpError('');
+    }
+  };
   
   // Barber availability warning state
   const [barberAvailability, setBarberAvailability] = useState(null);
@@ -5402,10 +5581,7 @@ const Step1DateTypeAndBarber = ({
     const hasExisting = await checkExistingAppointment(date);
     setCheckingAppointment(false);
     
-    if (hasExisting) {
-      // Reset time slot if there's an existing appointment
-      setSelectedTimeSlot('');
-    }
+    // No time slot reset needed - queue appointments don't use time slots
   };
 
   // Helper function to check if date is disabled
@@ -5474,7 +5650,7 @@ const Step1DateTypeAndBarber = ({
 
     // Check for existing appointment before proceeding
     if (existingAppointment && !bookForFriend) {
-      setError('You already have an appointment on this date. Please choose a different date or book for a friend.');
+      setError('You already have an appointment on this date. Please choose a different date or book for a child.');
       return;
     }
 
@@ -5484,20 +5660,7 @@ const Step1DateTypeAndBarber = ({
       return;
     }
 
-    // Check if time slot is selected for scheduled appointments
-    if (appointmentType === 'scheduled' && !selectedTimeSlot) {
-      setError('Please select a time slot for scheduled appointments.');
-      return;
-    }
-
-    // Check for lunch break conflict for scheduled appointments
-    if (appointmentType === 'scheduled' && selectedTimeSlot) {
-      const totalDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
-      if (wouldCrossLunchBreak(selectedTimeSlot, totalDuration)) {
-        setError('Selected time slot would cross the lunch break period (12:00 PM - 1:00 PM). Please choose a different time or reduce service duration.');
-        return;
-      }
-    }
+    // No time slot validation needed - queue appointments don't require time slots
 
     updateBookingData({
       selectedDate,
@@ -5620,15 +5783,7 @@ const Step1DateTypeAndBarber = ({
       }
     }
     
-    // Load booked time slots for scheduled appointments
-    if (appointmentType === 'scheduled' && selectedDate) {
-      console.log('🕐 Loading time slots for scheduled appointment...');
-      try {
-        await getBookedTimeSlots(selectedDate, barberId);
-      } catch (error) {
-        console.error('❌ Error loading time slots:', error);
-      }
-    }
+    // No time slot loading needed - queue appointments don't use time slots
   };
 
   const toggleQueueDetails = (barberId) => {
@@ -5653,7 +5808,6 @@ const Step1DateTypeAndBarber = ({
         return { text: 'Unknown', class: 'text-muted', icon: 'bi-question-circle' };
     }
   };
-
   return (
     <div className="card-body p-4">
       <h4 className="mb-4">
@@ -5710,45 +5864,11 @@ const Step1DateTypeAndBarber = ({
                       )}
                     </div>
 
-        <div className="col-md-6 mb-4">
-                      <label className="form-label fw-bold">
-                        <i className="bi bi-clock me-2 text-primary"></i>
-                        Appointment Type
-                      </label>
-          <div className="row g-2">
-            <div className="col-6">
-              <div className={`card ${appointmentType === 'queue' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`} 
-                   style={{ cursor: 'pointer' }}
-                   onClick={() => setAppointmentType('queue')}>
-                <div className="card-body p-3 text-center">
-                  <i className="bi bi-people fs-4 text-primary mb-2"></i>
-                  <h6 className="mb-1">Queue</h6>
-                  <small className="text-muted">Join the line</small>
-                                  </div>
-                                  </div>
-                              </div>
-            <div className="col-6">
-              <div className={`card ${appointmentType === 'scheduled' ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`} 
-                   style={{ cursor: 'pointer' }}
-                   onClick={() => setAppointmentType('scheduled')}>
-                <div className="card-body p-3 text-center">
-                  <i className="bi bi-calendar-check fs-4 text-primary mb-2"></i>
-                  <h6 className="mb-1">Scheduled</h6>
-                  <small className="text-muted">Book time slot</small>
-                            </div>
-                          </div>
-                        </div>
-                                  </div>
-          <div className="form-text">
-            <i className="bi bi-info-circle me-1"></i>
-            Queue: Join the line. Scheduled: Book a specific time slot.
-                        </div>
-                      </div>
-                    </div>
+        {/* Appointment Type removed - Only Queue appointments are supported */}
 
 
 
-      {/* Book for Friend/Child */}
+      {/* Book for a Child */}
       <div className="row mb-4">
         <div className="col-12">
                               <div className="form-check">
@@ -5757,30 +5877,30 @@ const Step1DateTypeAndBarber = ({
                           type="checkbox"
               id="bookForFriend"
               checked={bookForFriend}
-              onChange={(e) => setBookForFriend(e.target.checked)}
+              onChange={(e) => handleBookForFriendChange(e.target.checked)}
             />
             <label className="form-check-label fw-bold" htmlFor="bookForFriend">
               <i className="bi bi-person-plus me-2 text-primary"></i>
-              Book for a Friend or Child
+              Book for a Child
                         </label>
                               </div>
                       </div>
                     </div>
 
-      {/* Friend/Child Details */}
+      {/* Child Details */}
       {bookForFriend && (
         <div className="row mb-4">
           <div className="col-md-6">
             <label htmlFor="friendName" className="form-label fw-bold">
               <i className="bi bi-person me-2 text-primary"></i>
-              Friend/Child Name
+              Child's Name
             </label>
             <input
               type="text"
               className="form-control"
               id="friendName"
               value={friendName}
-              onChange={(e) => setFriendName(e.target.value)}
+              onChange={(e) => handleFriendNameChange(e.target.value)}
               placeholder="Enter name"
               required={bookForFriend}
             />
@@ -5788,14 +5908,14 @@ const Step1DateTypeAndBarber = ({
           <div className="col-md-6">
             <label htmlFor="friendPhone" className="form-label fw-bold">
               <i className="bi bi-telephone me-2 text-primary"></i>
-              Contact Number
+              Guardian Contact Number
             </label>
             <input
               type="tel"
               className="form-control"
               id="friendPhone"
               value={friendPhone}
-              onChange={(e) => setFriendPhone(e.target.value)}
+              onChange={(e) => handleFriendPhoneChange(e.target.value)}
               placeholder="Enter phone number"
               required={bookForFriend}
             />
@@ -5803,22 +5923,100 @@ const Step1DateTypeAndBarber = ({
         </div>
       )}
       
-      {/* Friend Email */}
+      {/* Child Email */}
       {bookForFriend && (
         <div className="row mb-4">
           <div className="col-md-12">
             <label htmlFor="friendEmail" className="form-label fw-bold">
               <i className="bi bi-envelope me-2 text-primary"></i>
-              Email Address (Optional)
+              Child's Email Address <span className="text-danger">*</span>
             </label>
-            <input
-              type="email"
-              className="form-control"
-              id="friendEmail"
-              value={friendEmail}
-              onChange={(e) => setFriendEmail(e.target.value)}
-              placeholder="Enter email address (optional)"
-            />
+            <div className="row g-2 align-items-start">
+              <div className="col-lg-6">
+                <input
+                  type="email"
+                  className={`form-control ${friendEmailError ? 'is-invalid' : ''}`}
+                  id="friendEmail"
+                  value={friendEmail}
+                  onChange={(e) => handleFriendEmailChange(e.target.value)}
+                  placeholder="Enter email address"
+                  required={bookForFriend}
+                />
+                {friendEmailError && (
+                  <div className="invalid-feedback d-block">{friendEmailError}</div>
+                )}
+              </div>
+              <div className="col-lg-6">
+                <div className="d-flex flex-column flex-md-row gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary w-100 w-md-auto"
+                    onClick={handleSendVerificationClick}
+                    disabled={!isFriendEmailValid || friendVerification?.sending || isFriendEmailVerified}
+                  >
+                    {friendVerification?.sending ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-envelope-check me-1"></i>
+                        {friendVerification?.sent ? 'Resend Code' : 'Send Verification Code'}
+                      </>
+                    )}
+                  </button>
+                  {isOtpSectionVisible && (
+                    <div className="input-group input-group-sm">
+                      <input
+                        type="text"
+                        className={`form-control ${otpError ? 'is-invalid' : ''}`}
+                        placeholder="Enter code"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                        maxLength={6}
+                        aria-label="Verification code"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleVerifyOTPClick}
+                        disabled={friendVerification?.verifying || !otpCode.trim()}
+                      >
+                        {friendVerification?.verifying ? (
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        ) : (
+                          <>
+                            <i className="bi bi-shield-check me-1"></i>
+                            Verify Code
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            {otpError && (
+              <div className="text-danger small mt-2">{otpError}</div>
+            )}
+            {!otpError && friendVerification?.error && (
+              <div className="text-danger small mt-2">{friendVerification.error}</div>
+            )}
+            {friendVerification?.success && (
+              <div className={`small mt-2 ${isFriendEmailVerified ? 'text-success' : 'text-info'}`}>
+                {friendVerification.success}
+                {friendVerification.expiresAt && !isFriendEmailVerified && (
+                  <> Code expires at {new Date(friendVerification.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.</>
+                )}
+              </div>
+            )}
+            {isFriendEmailVerified && (
+              <div className="small text-success mt-2 d-flex align-items-center">
+                <i className="bi bi-shield-check me-2"></i>
+                Email verified
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -5903,7 +6101,7 @@ const Step1DateTypeAndBarber = ({
                             
                             return (
                           <div key={rec.barber.id} className="col-md-4">
-                            <div className={`card border-${index === 0 ? 'success' : index === 1 ? 'warning' : 'secondary'} h-100`}>
+                            <div className={`card border-${index === 0 ? 'success' : index === 1 ? 'warning' : 'secondary'}`}>
                               <div className="card-body p-3">
                                 <div className="d-flex justify-content-between align-items-start mb-2">
                                   <h6 className="card-title mb-0">{rec.barber.full_name}</h6>
@@ -6018,316 +6216,22 @@ const Step1DateTypeAndBarber = ({
                                 </div>
                               </div>
 
-                    {/* Time Slot Selection for Scheduled Appointments */}
-          {appointmentType === 'scheduled' && selectedDate && selectedBarber && (
-            <div className="row mb-4">
-              <div className="col-12">
-                <label className="form-label fw-bold mb-3">
-                  <i className="bi bi-clock me-2 text-primary"></i>
-                  Select Time Slot
-                </label>
-                
-                <div className="d-flex flex-wrap gap-2">
-                  {timeSlots.map((slot) => {
-                    const isBooked = bookedTimeSlots.includes(slot.value);
-                    const isSelected = selectedTimeSlot === slot.value;
-                    const isPastTime = new Date(`${selectedDate} ${slot.value}`) < new Date();
-                    
-                    // Check if this slot would cause lunch break conflict
-                    const totalDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
-                    const wouldCrossLunch = wouldCrossLunchBreak(slot.value, totalDuration);
-                    
-                    // Determine if this is a queue or scheduled appointment
-                    const appointmentAtSlot = getAppointmentAtTime(slot.value);
-                    const isQueueSlot = appointmentAtSlot?.type === 'queue';
-                    const isScheduledSlot = appointmentAtSlot?.type === 'scheduled';
-                    
-                    // Check if selecting this slot would conflict with existing appointments
-                    // This checks if the slot + duration would overlap with any existing appointment
-                    const wouldConflict = isBooked || wouldSlotConflictWithExistingAppointments(slot.value, totalDuration, bookedTimeSlots);
-                    const alternativeTimes = wouldConflict ? findAlternativeTimes(slot.value, totalDuration) : [];
-                    
-                    // Enhanced gap management for 40-minute services (temporarily disabled)
-                    const hasGapConflict = false; // checkServiceGapConflicts(slot.value, totalDuration);
-                    const suggestedGapTimes = []; // hasGapConflict ? findGapOptimizedTimes(slot.value, totalDuration) : [];
-                    
-                    return (
-                      <div key={slot.value} className="position-relative">
-                        <button
-                          type="button"
-                          className={`btn btn-sm ${
-                            isBooked 
-                              ? (isQueueSlot ? 'btn-outline-warning' : 'btn-outline-danger')
-                              : isPastTime 
-                              ? 'btn-outline-secondary' 
-                              : wouldCrossLunch
-                              ? 'btn-outline-warning'
-                              : wouldConflict
-                              ? 'btn-outline-danger'
-                              : hasGapConflict
-                              ? 'btn-outline-info'
-                              : isSelected 
-                              ? 'btn-primary' 
-                              : 'btn-outline-success'
-                          }`}
-                          disabled={isBooked || isPastTime || wouldCrossLunch || wouldConflict}
-                          onClick={() => {
-                            if ((isBooked || wouldConflict) && alternativeTimes.length > 0) {
-                              // Show alternative times modal
-                              setAlternativeTimes(alternativeTimes);
-                              setShowAlternativeTimesModal(true);
-                            } else if (!isBooked && !isPastTime && !wouldCrossLunch && !wouldConflict) {
-                              setSelectedTimeSlot(slot.value);
-                            }
-                          }}
-                          style={{ minWidth: '80px' }}
-                          title={
-                            wouldCrossLunch 
-                              ? `Service would cross lunch break (12:00 PM - 1:00 PM)` 
-                              : wouldConflict 
-                              ? `Slot conflicts with existing appointment (${totalDuration} min service)` 
-                              : hasGapConflict
-                              ? `Creates scheduling gap - consider alternative times for better efficiency`
-                              : isBooked 
-                              ? (isQueueSlot ? `Queue appointment at this time` : `Already booked`)
-                              : isPastTime 
-                              ? `Time has passed`
-                              : `Available - ${slot.display}`
-                          }
-                        >
-                          <div className="d-flex flex-column align-items-center">
-                            <span className="fw-bold">{slot.display}</span>
-                            <small className={`${
-                              isBooked 
-                                ? (isQueueSlot ? 'text-warning' : 'text-danger')
-                                : isPastTime ? 'text-muted' 
-                                : wouldCrossLunch ? 'text-warning'
-                                : wouldConflict ? 'text-danger'
-                                : hasGapConflict ? 'text-info'
-                                : 'text-muted'
-                            }`}>
-                              {isBooked 
-                                ? (isQueueSlot ? 'QUEUE' : 'BOOKED')
-                                : isPastTime ? 'Past' 
-                                : wouldCrossLunch ? 'Lunch Break'
-                                : wouldConflict ? 'CONFLICT'
-                                : hasGapConflict ? 'GAP'
-                                : 'Available'}
-                            </small>
-                          </div>
-                        </button>
-                        
-                        {/* Show suggestion indicator if there are alternatives */}
-                        {wouldConflict && alternativeTimes.length > 0 && (
-                          <div className="position-absolute top-0 end-0 translate-middle">
-                            <span className="badge bg-info rounded-pill" style={{ fontSize: '0.6rem' }}>
-                              <i className="bi bi-lightbulb"></i>
-                            </span>
-                          </div>
-                        )}
-                        
-                        {/* Show gap optimization indicator */}
-                        {hasGapConflict && suggestedGapTimes.length > 0 && (
-                          <div className="position-absolute top-0 start-0 translate-middle">
-                            <span className="badge bg-warning rounded-pill" style={{ fontSize: '0.6rem' }}>
-                              <i className="bi bi-clock-history"></i>
-                            </span>
-                          </div>
-                        )}
+                    {/* Queue Information - Time slots are not needed for queue appointments */}
+                {appointmentType === 'queue' && (
+                  <div className="row mb-4">
+                    <div className="col-12">
+                      <div className="alert alert-info">
+                        <i className="bi bi-info-circle me-2"></i>
+                        <strong>Queue Information:</strong> Queue appointments are automatically scheduled around the lunch break (12:00 PM - 1:00 PM).
+                        <br />
+                        <small>Your appointment will be scheduled after any existing appointments and will skip the lunch break period.</small>
                       </div>
-                    );
-                  })}
-                </div>
-                
-                {/* Lunch Break Warning */}
-                {(() => {
-                  const totalDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
-                  const hasLunchConflict = timeSlots.some(slot => wouldCrossLunchBreak(slot.value, totalDuration));
-                  
-                  if (hasLunchConflict && totalDuration > 0) {
-                    return (
-                      <div className="alert alert-warning mt-3 mb-3">
-                        <i className="bi bi-exclamation-triangle me-2"></i>
-                        <strong>Lunch Break Notice:</strong> Your selected services ({totalDuration} minutes) would cross the lunch break period (12:00 PM - 1:00 PM). 
-                        Please choose a different time slot or reduce your service duration to avoid conflicts.
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Queue Lunch Break Information */}
-                {bookingData.appointmentType === 'queue' && (
-                  <div className="alert alert-info mt-3 mb-3">
-                    <i className="bi bi-info-circle me-2"></i>
-                    <strong>Queue Information:</strong> Queue appointments are automatically scheduled around the lunch break (12:00 PM - 1:00 PM).
-                    <br />
-                    <small>Your appointment will be scheduled after any existing appointments and will skip the lunch break period.</small>
-                  </div>
-                )}
-
-                <div className="mt-3 d-flex justify-content-between align-items-center">
-                  <button 
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => getBookedTimeSlots(selectedDate, selectedBarber)}
-                  >
-                    <i className="bi bi-arrow-clockwise me-1"></i>
-                    Refresh
-                  </button>
-                  
-                </div>
-
-                {/* Enhanced Unified Slot System */}
-                {unifiedSlots.length > 0 && (
-                  <div className="mt-4">
-                    <div className="alert alert-info">
-                      <h6 className="alert-heading">
-                        <i className="bi bi-magic me-2"></i>
-                        Enhanced Slot System
-                        <span className="badge bg-success ms-2">NEW</span>
-                      </h6>
-                      <p className="mb-3">Smart slot management with real-time availability and alternative recommendations.</p>
-                      
-                      <div className="row g-2">
-                        {unifiedSlots.slice(0, 8).map((slot, index) => (
-                          <div key={index} className="col-6 col-md-3">
-                            <button
-                              type="button"
-                              className={`btn w-100 ${
-                                slot.type === 'available' && slot.canBook
-                                  ? selectedTimeSlot === slot.time
-                                    ? 'btn-primary'
-                                    : 'btn-outline-success'
-                                  : slot.type === 'scheduled'
-                                  ? 'btn-outline-secondary'
-                                  : slot.type === 'queue'
-                                  ? 'btn-outline-warning'
-                                  : slot.type === 'lunch'
-                                  ? 'btn-outline-dark'
-                                  : 'btn-outline-danger'
-                              }`}
-                              onClick={() => slot.canBook && handleUnifiedSlotSelect(slot)}
-                              disabled={!slot.canBook}
-                              title={slot.reason}
-                            >
-                              <div className="small fw-bold">
-                                {convertTo12Hour(slot.time)}
-                              </div>
-                              <div className="small">
-                                {slot.type === 'available' && '✅ Available'}
-                                {slot.type === 'scheduled' && '❌ Booked'}
-                                {slot.type === 'queue' && `⚠️ Queue #${slot.queuePosition}`}
-                                {slot.type === 'lunch' && '🍽️ Lunch'}
-                                {slot.type === 'full' && '🔴 Full'}
-                              </div>
-                              {slot.estimatedWaitTime > 0 && (
-                                <div className="small text-muted">
-                                  ~{slot.estimatedWaitTime}min wait
-                                </div>
-                              )}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {/* Manual trigger for alternative barbers */}
-                      {selectedBarber && selectedDate && bookingData.selectedServices.length > 0 && !showAlternatives && (
-                        <div className="mt-3 text-center">
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => {
-                              const serviceDuration = calculateTotalDuration(
-                                bookingData.selectedServices, 
-                                bookingData.selectedAddOns, 
-                                services, 
-                                addOns
-                              );
-                              loadAlternativeBarbers(selectedDate, serviceDuration, selectedBarber);
-                            }}
-                          >
-                            <i className="bi bi-search me-1"></i>
-                            Find Alternative Barbers
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Alternative Barbers - Show when current barber is full or alternatives are available */}
-                      {(showAlternatives && alternativeBarbers.length > 0) || (selectedBarber && barberQueues[selectedBarber]?.isFullCapacity) ? (
-                        <div className="mt-3">
-                          <h6 className="text-success">
-                            <i className="bi bi-lightbulb me-2"></i>
-                            {barberQueues[selectedBarber]?.isFullCapacity 
-                              ? 'Alternative Barbers (Current Barber Full)' 
-                              : alternativeBarbers.length > 0 && alternativeBarbers[0].reason === 'fully_scheduled'
-                                ? 'Alternative Barbers (Current Barber Fully Scheduled)'
-                                : 'Alternative Barbers Available'
-                            }
-                          </h6>
-                          <div className="row g-2">
-                            {alternativeBarbers.length > 0 ? (
-                              alternativeBarbers.slice(0, 2).map((alt, index) => (
-                              <div key={index} className="col-12">
-                                <div className="card border-success">
-                                  <div className="card-body p-2">
-                                    <div className="d-flex justify-content-between align-items-center">
-                                      <div>
-                                          <strong>{alt.barber.full_name}</strong>
-                                        <br />
-                                        <small className="text-muted">
-                                            Next: {alt.nextAvailableDisplay} • {alt.availableSlots} slots
-                                          </small>
-                                          <br />
-                                          <small className="text-success">
-                                            {alt.recommendation}
-                                        </small>
-                                        {/* Skills Display for Alternative Barbers */}
-                                        {alt.barber.skills && (
-                                          <div className="mt-1">
-                                            <div className="d-flex flex-wrap gap-1">
-                                              {alt.barber.skills.split(',').slice(0, 2).map((skill, skillIndex) => (
-                                                <span key={skillIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25" style={{ fontSize: '0.7rem' }}>
-                                                  {skill.trim()}
-                                                </span>
-                                              ))}
-                                              {alt.barber.skills.split(',').length > 2 && (
-                                                <span className="badge bg-secondary bg-opacity-10 text-secondary" style={{ fontSize: '0.7rem' }}>
-                                                  +{alt.barber.skills.split(',').length - 2}
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                      <button
-                                        type="button"
-                                        className="btn btn-success btn-sm"
-                                          onClick={() => handleAlternativeBarberSelect(alt.barber.id)}
-                                      >
-                                        Switch
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              ))
-                            ) : (
-                              <div className="col-12">
-                                <div className="alert alert-warning">
-                                  <i className="bi bi-exclamation-triangle me-2"></i>
-                                  No alternative barbers available for this date. Please try a different date or contact us for assistance.
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 )}
-              </div>
-                      </div>
-                    )}
+
+                {/* Enhanced Unified Slot System - Removed for queue-only appointments */}
+                {/* Time slot selection removed - queue appointments don't use time slots */}
 
                     {/* Barber Selection */}
           <div className="row mb-4">
@@ -6335,7 +6239,7 @@ const Step1DateTypeAndBarber = ({
               <label className="form-label fw-bold">
                 <i className="bi bi-person me-2 text-primary"></i>
                 Choose Your Barber
-                      </label>
+              </label>
               
               {barbers && barbers.length > 0 ? (
                 <div className="row g-3">
@@ -6747,13 +6651,13 @@ const Step1DateTypeAndBarber = ({
                                 )}
                               </div>
                             )}
-                              </div>
                             </div>
-                          );
-                        })()}
-                      </div>
-                          );
-                        })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                })}
                 </div>
               ) : (
                 <div className="text-center">
@@ -6765,7 +6669,6 @@ const Step1DateTypeAndBarber = ({
                       
         </>
       )}
-
       {/* Barber Availability Warning */}
       {selectedBarber && selectedDate && (
         <div className="row mt-3">
@@ -6813,16 +6716,16 @@ const Step1DateTypeAndBarber = ({
           <button
             className="btn btn-primary btn-lg"
             onClick={handleNext}
-            disabled={!selectedDate || !selectedBarber || (appointmentType === 'scheduled' && !selectedTimeSlot) || (bookForFriend && (!friendName || !friendPhone)) || isBarberFullyScheduled || (barberAvailability && !barberAvailability.isAvailable)}
+            disabled={!selectedDate || !selectedBarber || (barberAvailability && !barberAvailability.isAvailable)}
           >
-            {isBarberFullyScheduled ? 'Barber Fully Scheduled' : 
-             (barberAvailability && !barberAvailability.isAvailable) ? 'Barber Unavailable' : 
+            {(barberAvailability && !barberAvailability.isAvailable) ? 'Barber Unavailable' : 
              'Next: Select Services'}
             <i className="bi bi-arrow-right ms-2"></i>
           </button>
                     </div>
                       </div>
                     </div>
+    </div>
   );
 };
 
@@ -6937,7 +6840,7 @@ const Step2ServicesAndAddons = ({
                               <div className="card-body p-3">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <h6 className="card-title mb-0">{service.name}</h6>
-                                      <span className="badge bg-success">₱{service.price}</span>
+                                      <span className="badge bg-success">{formatPrice(service.price)}</span>
                                     </div>
                                     <p className="text-muted small mb-2">{service.description}</p>
                     <div className="d-flex justify-content-between align-items-center">
@@ -6979,7 +6882,7 @@ const Step2ServicesAndAddons = ({
                   <div className="card-body p-3">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <h6 className="card-title mb-0">{addon.name}</h6>
-                      <span className="badge bg-warning text-dark">₱{addon.price}</span>
+                      <span className="badge bg-warning text-dark">{formatPrice(addon.price)}</span>
                           </div>
                     <p className="text-muted small mb-2">{addon.description}</p>
                                       <div className="d-flex justify-content-between align-items-center">
@@ -7027,7 +6930,7 @@ const Step2ServicesAndAddons = ({
           <div className="alert alert-success">
             <h6 className="mb-0">
               <i className="bi bi-calculator me-2"></i>
-              Total: ₱{calculateTotal().toFixed(2)}
+              Total: {formatPrice(calculateTotal())}
             </h6>
           </div>
         </div>
@@ -7056,7 +6959,6 @@ const Step2ServicesAndAddons = ({
     </div>
   );
 };
-
 // Step 3: Queue Summary
 const Step3QueueSummary = ({ 
   bookingData, 
@@ -7087,7 +6989,8 @@ const Step3QueueSummary = ({
   calculateCurrentQueueStatus,
   calculateRealTimeAvailability,
   unifiedSlots,
-  alternativeBarbers
+  alternativeBarbers,
+  friendVerification
 }) => {
   const selectedBarber = barbers.find(b => b.id === bookingData.selectedBarber);
   const queue = barberQueues[bookingData.selectedBarber];
@@ -7125,7 +7028,13 @@ const Step3QueueSummary = ({
               bookingData.isUrgent || false
             );
             
-            setEstimatedStartTime(queueInfo.estimatedStartTime);
+            // Convert to 12-hour format if needed
+            const startTime = queueInfo.estimatedStartTime;
+            const formattedStartTime = startTime && startTime.includes(':') 
+              ? (startTime.length === 5 ? convertTo12Hour(startTime) : startTime)
+              : startTime;
+            
+            setEstimatedStartTime(formattedStartTime);
             setEstimatedEndTime(queueInfo.estimatedEndTime);
 
           setRealTimeStatus({
@@ -7135,7 +7044,7 @@ const Step3QueueSummary = ({
                 estimatedWaitTime: queueInfo.estimatedWaitTime
               },
               availability: {
-                nextAvailableTime: queueInfo.estimatedStartTime
+                nextAvailableTime: formattedStartTime
               },
               lastUpdated: new Date().toLocaleTimeString(),
               recommendations: queueInfo.recommendations
@@ -7242,105 +7151,42 @@ const Step3QueueSummary = ({
                 <p className="text-muted mb-0">Please review your appointment details before confirming</p>
               </div>
               
-              {/* 🧭 Enhanced Queue Information Section */}
-              {bookingData && (
-                <div className="bg-light rounded p-3 mb-4 shadow-sm">
-                  <h6 className="fw-bold mb-3">
-                    <i className="bi bi-hourglass-split me-2 text-primary"></i>
-                    {bookingData.appointmentType === 'queue'
-                      ? 'Queue Information'
-                      : 'Scheduled Appointment'}
-                  </h6>
-
-                  {realTimeStatus.queueStatus && realTimeStatus.availability ? (
+              {/* Queue Position and Expected Arrival */}
+              {bookingData && bookingData.appointmentType === 'queue' && (
+                <div className="text-center mb-4">
+                  <label className="text-muted mb-3 d-block">Your Queue Position:</label>
+                  {realTimeStatus.queueStatus ? (
                     <>
-                      {/* For Queue-Based Appointments */}
-                      {bookingData.appointmentType === 'queue' && (
-                        <div>
-                          <p className="mb-1">
-                            <strong>Queue Position:</strong>{' '}
-                            {realTimeStatus.queueStatus.nextQueuePosition} of {realTimeStatus.queueStatus.queueLength + realTimeStatus.queueStatus.nextQueuePosition}
-                          </p>
-                          <p className="mb-1">
-                            <strong>Estimated Start Time:</strong>{' '}
-                            {realTimeStatus.availability.nextAvailableTime ? convertTo12Hour(realTimeStatus.availability.nextAvailableTime) : 'Calculating...'}
-                          </p>
-                          <p className="mb-0">
-                            <strong>Estimated Wait Time:</strong>{' '}
-                            {realTimeStatus.queueStatus.estimatedWaitTime > 0 ? 
-                              `${Math.round(realTimeStatus.queueStatus.estimatedWaitTime / 60)}h ${realTimeStatus.queueStatus.estimatedWaitTime % 60}m` :
-                              'No wait'
-                            }
-                          </p>
-                          
-                          {/* Show recommendations if available */}
-                          {realTimeStatus.recommendations && realTimeStatus.recommendations.length > 0 && (
-                            <div className="mt-2">
-                              {realTimeStatus.recommendations.map((rec, index) => (
-                                <div key={index} className="alert alert-info alert-sm py-2 mb-1">
-                                  <small>
-                                    <i className="bi bi-info-circle me-1"></i>
-                                    <strong>{rec.message}</strong>
-                                    {rec.suggestion && <><br />{rec.suggestion}</>}
-                                  </small>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                      <div className="mb-3">
+                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle bg-success text-white" 
+                             style={{ 
+                               width: '120px', 
+                               height: '120px', 
+                               fontSize: '3rem',
+                               fontWeight: 'bold',
+                               boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                             }}>
+                          {realTimeStatus.queueStatus.nextQueuePosition || '?'}
                         </div>
-                      )}
-
-                      {/* For Scheduled Appointments */}
-                      {bookingData.appointmentType === 'scheduled' && (
-                        <div>
-                          <p className="mb-1">
-                            <strong>Appointment Time:</strong>{' '}
-                            {bookingData.selectedTimeSlot ? convertTo12Hour(bookingData.selectedTimeSlot) : 'Not Set'}
-                          </p>
-                          <p className="mb-1">
-                            <strong>Service Duration:</strong>{' '}
-                            {calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} minutes
-                          </p>
-                          <p className="mb-0">
-                            <strong>Estimated End Time:</strong>{' '}
-                            {estimatedEndTime ? convertTo12Hour(estimatedEndTime) : 'Calculating...'}
-                          </p>
-                          
-                          {/* Show conflict information if available */}
-                          {realTimeStatus.availability?.hasConflict && (
-                            <div className="mt-2">
-                              <div className="alert alert-warning alert-sm py-2 mb-1">
-                                <small>
-                                  <i className="bi bi-exclamation-triangle me-1"></i>
-                                  <strong>Conflict Detected:</strong> {realTimeStatus.availability.conflictMessage}
-                                </small>
-                              </div>
-                              
-                              {/* Show recommended alternative slots */}
-                              {realTimeStatus.availability.recommendedSlots && realTimeStatus.availability.recommendedSlots.length > 0 && (
-                                <div className="mt-2">
-                                  <small className="text-muted">
-                                    <strong>Recommended Alternative Times:</strong>
-                                  </small>
-                                  <div className="mt-1">
-                                    {realTimeStatus.availability.recommendedSlots.slice(0, 3).map((slot, index) => (
-                                      <span key={index} className="badge bg-light text-dark me-1 mb-1">
-                                        {slot.display}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                      </div>
+                      {estimatedStartTime && estimatedStartTime !== 'Loading...' && estimatedStartTime !== 'N/A' && (
+                        <p className="text-dark mb-0 fs-5">
+                          <strong>Expected Arrival:</strong> {estimatedStartTime}
+                        </p>
                       )}
                     </>
                   ) : (
-                    <p className="text-muted mb-0 text-center py-2">
-                      <i className="bi bi-info-circle me-1"></i>
-                      Calculating queue information...
-                    </p>
+                    <div className="mb-3">
+                      <div className="d-inline-flex align-items-center justify-content-center rounded-circle bg-secondary text-white" 
+                           style={{ 
+                             width: '120px', 
+                             height: '120px', 
+                             fontSize: '3rem',
+                             fontWeight: 'bold'
+                           }}>
+                        ?
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -7376,24 +7222,16 @@ const Step3QueueSummary = ({
               <div className="row justify-content-center">
                 {/* Unified Booking & Queue Summary */}
                 <div className="col-12 col-lg-12 col-xl-10">
-                  <div className="card border shadow-sm">
-                    <div className="card-header bg-primary text-white border-0 py-3">
-                      <h5 className="mb-0 d-flex align-items-center">
-                        <i className="bi bi-calendar-check me-2"></i>
-                        <span className="d-none d-sm-inline">Appointment Summary</span>
-                        <span className="d-sm-none">Summary</span>
-                      </h5>
-                    </div>
+                  <div className="card border-success shadow-sm" style={{ borderWidth: '2px' }}>
                     <div className="card-body p-3 p-md-4 p-lg-5">
-                      {/* Date & Type - Mobile Responsive */}
+                      {/* Date - Mobile Responsive */}
                       <div className="row g-3 mb-4">
-                        <div className="col-12 col-md-6">
+                        <div className="col-12">
                           <div className="d-flex  flex-md-row align-items-start align-items-md-center justify-content-between">
                             <div className="flex-grow-1 mb-2 mb-md-0">
                               <label className="form-label text-muted small mb-1">
                                 <i className="bi bi-calendar me-1"></i>
-                                <span className="d-none d-sm-inline">Appointment Date</span>
-                                <span className="d-sm-none">Date</span>
+                                Appointment Date:
                               </label>
                               <div className="fw-bold text-dark fs-6">{bookingData.selectedDate}</div>
                             </div>
@@ -7407,31 +7245,7 @@ const Step3QueueSummary = ({
                             </button>
                           </div>
                         </div>
-                        <div className="col-12 col-md-6">
-                          <div>
-                            <label className="form-label text-muted small mb-1">
-                              <i className="bi bi-clock me-1"></i>
-                              <span className="d-none d-sm-inline">Appointment Type</span>
-                              <span className="d-sm-none">Type</span>
-                            </label>
-                            <div className="fw-bold text-dark">
-                              <span className={`badge fs-6 ${bookingData.appointmentType === 'queue' ? 'bg-info' : 'bg-success'}`}>
-                                {bookingData.appointmentType === 'queue' ? 'Queue' : 'Scheduled'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
                       </div>
-
-                      {/* Time Slot for Scheduled */}
-                      {bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot && (
-                        <div className="row g-3 mb-4">
-                          <div className="col-12">
-                            <label className="form-label text-muted small mb-1">Appointment Time</label>
-                            <div className="fw-bold text-dark">{bookingData.selectedTimeSlot}</div>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Barber - Mobile Responsive */}
                       <div className="row g-3 mb-4">
@@ -7464,10 +7278,7 @@ const Step3QueueSummary = ({
       {/* Left: Label */}
       <div className="d-flex align-items-center gap-2 mb-2 mb-md-0">
         <i className="bi bi-scissors text-muted fs-5"></i>
-        <span className="text-muted small">
-          <span className="d-none d-sm-inline">Selected Services</span>
-          <span className="d-sm-none">Services</span>
-        </span>
+        <span className="text-muted small">Selected Services:</span>
       </div>
 
       {/* Right: Button */}
@@ -7496,10 +7307,10 @@ const Step3QueueSummary = ({
                 <span className="fw-medium">{service?.name}</span>
                 <small className="text-muted d-block">
                   <i className="bi bi-clock me-1"></i>
-                  {service?.duration} minutes
+                  {service?.duration} Mins
                 </small>
               </div>
-              <span className="text-success fw-bold">₱{service?.price}</span>
+              <span className="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 fw-bold">{formatPrice(service?.price)}</span>
             </div>
           );
         })
@@ -7518,8 +7329,7 @@ const Step3QueueSummary = ({
                           <div className="col-12">
                             <label className="form-label text-muted small mb-1">
                               <i className="bi bi-plus-circle me-1"></i>
-                              <span className="d-none d-sm-inline">Selected Add-ons</span>
-                              <span className="d-sm-none">Add-ons</span>
+                              Additional Service:
                             </label>
                             <div className="bg-light p-3 rounded">
                               {bookingData.selectedAddOns && addOns ? bookingData.selectedAddOns.map(addonId => {
@@ -7530,10 +7340,10 @@ const Step3QueueSummary = ({
                                       <span className="fw-medium">{addon?.name}</span>
                                       <small className="text-muted d-block">
                                         <i className="bi bi-clock me-1"></i>
-                                        {addon?.duration} minutes
+                                        {addon?.duration} Mins
                                       </small>
                                     </div>
-                                    <span className="text-warning fw-bold">₱{addon?.price}</span>
+                                    <span className="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 fw-bold">{formatPrice(addon?.price)}</span>
                                   </div>
                                 );
                               }) : (
@@ -7559,189 +7369,31 @@ const Step3QueueSummary = ({
                         </div>
                       )}
 
-                      {/* Enhanced Slot System & Intelligent Suggestions */}
-                      {(bookingData.appointmentType === 'queue' || bookingData.appointmentType === 'scheduled') && (
-                        <div className="row g-4 mb-4">
-                          <div className="col-12 mb-4">
-                                    {/* Appointment Summary */}
-                                    <div className="card border mb-3">
-                                      <div className="card-header bg-light border-bottom">
-                                        <h6 className="mb-0 text-dark">
-                                          <i className="bi bi-info-circle me-2"></i>
-                                          Appointment Summary
-                                        </h6>
-                                      </div>
-                                      <div className="card-body">
-                                        <div className="row g-3">
-                                          <div className="col-md-4">
-                                            <div className="text-center p-3 border rounded">
-                                              <i className="bi bi-clock text-dark mb-2"></i>
-                                              <h6 className="mb-1 text-dark">Service Duration</h6>
-                                              <span className="badge bg-dark">
-                                                {calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} min
-                                              </span>
-                                            </div>
-                                          </div>
-                                          {bookingData.appointmentType === 'queue' ? (
-                                            <>
-                                              <div className="col-md-4">
-                                                <div className="text-center p-3 border rounded">
-                                                  <i className="bi bi-people text-dark mb-2"></i>
-                                                  <h6 className="mb-1 text-dark">Queue Position</h6>
-                                                  <span className="badge bg-dark">
-                                                    #{realTimeStatus.queueStatus?.nextQueuePosition || 'Calculating...'}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                              <div className="col-md-4">
-                                                <div className="text-center p-3 border rounded">
-                                                  <i className="bi bi-hourglass text-dark mb-2"></i>
-                                                  <h6 className="mb-1 text-dark">Est. Wait Time</h6>
-                                                  <span className="badge bg-dark">
-                                                    {realTimeStatus.queueStatus?.estimatedWaitTime ? 
-                                                      `${Math.round(realTimeStatus.queueStatus.estimatedWaitTime / 60)}h ${realTimeStatus.queueStatus.estimatedWaitTime % 60}m` :
-                                                      'Calculating...'
-                                                    }
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <div className="col-md-4">
-                                                <div className="text-center p-3 border rounded">
-                                                  <i className="bi bi-calendar-check text-dark mb-2"></i>
-                                                  <h6 className="mb-1 text-dark">Scheduled Time</h6>
-                                                  <span className="badge bg-dark">
-                                                    {bookingData.selectedTimeSlot ? convertTo12Hour(bookingData.selectedTimeSlot) : 'Not Set'}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                              <div className="col-md-4">
-                                                <div className="text-center p-3 border rounded">
-                                                  <i className="bi bi-shield-check text-dark mb-2"></i>
-                                                  <h6 className="mb-1 text-dark">Booking Type</h6>
-                                                  <span className="badge bg-dark">
-                                                    Scheduled
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Intelligent Slot Suggestions */}
-                                    <IntelligentQueueSlotsComponent
-                                      barberId={bookingData.selectedBarber}
-                                      date={bookingData.selectedDate}
-                                      serviceDuration={calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)}
-                                      recommendations={realTimeStatus.recommendations || []}
-                                      conflictInfo={realTimeStatus.availability}
-                                      onSlotSelect={(slot) => {
-                                        console.log('🎯 Selected intelligent queue slot:', slot);
-                                        if (slot.type === 'intelligent_gap') {
-                                          // Convert intelligent gap to scheduled appointment
-                                          updateBookingData({
-                                            appointmentType: 'scheduled',
-                                            selectedTimeSlot: slot.time
-                                          });
-                                        } else if (slot.type === 'queue_position') {
-                                          // Keep as queue appointment
-                                          updateBookingData({
-                                            appointmentType: 'queue',
-                                            selectedTimeSlot: ''
-                                          });
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                
-                                {/* Booking Details */}
-                                <div className="col-12 col-md-6">
-                                  <div className="bg-light p-4 rounded h-100 border">
-                                    <h6 className="text-dark mb-3 fw-bold">
-                                      <i className="bi bi-info-circle me-2"></i>
-                                      <span className="d-none d-sm-inline">Booking Details</span>
-                                      <span className="d-sm-none">Details</span>
-                                    </h6>
-                                    <div className="text-dark small">
-                                      <div className="d-flex justify-content-between mb-3 align-items-center">
-                                        <span className="d-flex align-items-center">
-                                          <i className="bi bi-clock me-2 text-warning"></i>
-                                          <span className="d-none d-sm-inline">Duration:</span>
-                                          <span className="d-sm-none">Time:</span>
-                                        </span>
-                                        <span className="fw-bold text-dark fs-6">{calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} min</span>
-                                      </div>
-                                      {bookingData.selectedDate && (
-                                        <div className="d-flex justify-content-between mb-3 align-items-center">
-                                          <span className="d-flex align-items-center">
-                                            <i className="bi bi-calendar me-2 text-info"></i>
-                                            <span className="d-none d-sm-inline">
-                                              {bookingData.appointmentType === 'queue' ? 'Queue Info:' : 'Estimated:'}
-                                            </span>
-                                            <span className="d-sm-none">
-                                              {bookingData.appointmentType === 'queue' ? 'Queue:' : 'Time:'}
-                                            </span>
-                                          </span>
-                                          <span className="fw-bold text-dark text-end fs-6">
-                                            {bookingData.appointmentType === 'queue' ? (
-                                              <>
-                                                Your Position: #{getQueuePosition(bookingData.selectedBarber, bookingData.selectedDate) || 'TBD'}
-                                                <br />
-                                                <small className="text-dark">
-                                                  <i className="bi bi-clock me-1"></i>
-                                                  Wait time: {realTimeStatus.queueStatus?.estimatedWaitTime > 0 ? `${realTimeStatus.queueStatus.estimatedWaitTime} min` : 'No wait'}
-                                                </small>
-                                              </>
-                                            ) : (
-                                              `${estimatedStartTime} - ${estimatedEndTime}`
-                                            )}
-                                          </span>
-                                        </div>
-                                      )}
-                                      <hr className="my-3 border-secondary" />
-                                      <div className="d-flex justify-content-between align-items-center">
-                                        <span className="fw-bold text-dark">Total Price:</span>
-                                        <span className="fw-bold text-warning fs-4">₱{calculateTotal().toFixed(2)}</span>
-                                      </div>
-                                    </div>
-                                  </div>
+                      {/* Service Duration Info */}
+                      <div className="row mb-4">
+                        <div className="col-12">
+                          <div className="bg-light rounded p-3 border">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <div className="text-muted small mb-1">Total Service Duration:</div>
+                                <div className="fw-bold text-dark fs-5">
+                                  {calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} minutes
                                 </div>
-
-                                {/* Queue Information consolidated with Enhanced Section Above */}
-
-                                {/* Current Serving */}
-                                {barberQueues[bookingData.selectedBarber]?.current && (
-                                  <div className="col-12">
-                                    <div className="bg-success bg-opacity-25 p-4 rounded-3 text-center border border-success border-opacity-50">
-                                      <div className="text-white fw-bold fs-5">
-                                        <i className="bi bi-scissors me-2 text-success"></i>
-                                        Now serving: Queue #{barberQueues[bookingData.selectedBarber].current.queue_position || 'N/A'}
-                                      </div>
-                                      <div className="text-light small mt-1">
-                                        <i className="bi bi-clock me-1"></i>
-                                        Service in progress
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
+                      </div>
                     
 
-                      {/* Friend/Child Info */}
+                      {/* Child Info */}
                       {bookingData.bookForFriend && (
                         <div className="row mb-3">
                           <div className="col-12">
                             <div className="alert alert-info border-0 shadow-sm">
                               <div className="d-flex align-items-center mb-2">
                                 <i className="bi bi-person-check me-2 fs-5 text-info"></i>
-                                <h6 className="mb-0 text-info fw-bold">Booking for Friend/Child</h6>
+                                <h6 className="mb-0 text-info fw-bold">Booking for Child</h6>
                               </div>
                               <div className="row g-2">
                                 <div className="col-md-6">
@@ -7756,9 +7408,29 @@ const Step3QueueSummary = ({
                                 <div className="col-md-6">
                                   <div className="d-flex align-items-center">
                                     <i className="bi bi-telephone me-2 text-success"></i>
-                                    <span className="fw-bold text-dark me-2">Contact:</span>
+                                    <span className="fw-bold text-dark me-2">Guardian Contact:</span>
                                     <span className="badge bg-success bg-opacity-25 text-success px-3 py-2 rounded-pill">
                                       {bookingData.friendPhone}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="row g-2 mt-2">
+                                <div className="col-md-6">
+                                  <div className="d-flex align-items-center">
+                                    <i className="bi bi-envelope me-2 text-info"></i>
+                                    <span className="fw-bold text-dark me-2">Child Email:</span>
+                                    <span className="badge bg-info bg-opacity-25 text-info px-3 py-2 rounded-pill">
+                                      {bookingData.friendEmail}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="col-md-6">
+                                  <div className="d-flex align-items-center">
+                                    <i className={`bi ${friendVerification?.verified ? 'bi-shield-check text-success' : 'bi-shield-exclamation text-warning'} me-2`}></i>
+                                    <span className="fw-bold text-dark me-2">Email Status:</span>
+                                    <span className={`badge ${friendVerification?.verified ? 'bg-success bg-opacity-25 text-success' : 'bg-warning bg-opacity-25 text-warning'} px-3 py-2 rounded-pill`}>
+                                      {friendVerification?.verified ? 'Verified' : 'Pending Verification'}
                                     </span>
                                   </div>
                                 </div>
@@ -7768,20 +7440,19 @@ const Step3QueueSummary = ({
                         </div>
                       )}
 
-                      {/* Total */}
-                      <div className="row">
+                      {/* Total Price */}
+                      <div className="row mt-3">
                         <div className="col-12">
-                          <div className="bg-primary text-white p-4 rounded shadow-sm">
+                          <div className="bg-success text-white p-4 rounded shadow-sm" style={{ backgroundColor: '#198754' }}>
                             <div className="d-flex align-items-center justify-content-between">
-                              <div className="d-flex align-items-center">
-                                <i className="bi bi-calculator me-3 fs-4"></i>
-                                <div>
-                                  <h5 className="mb-0 fw-bold">Total Price</h5>
-                                  <small className="opacity-75">Including all services & add-ons</small>
-                                </div>
+                              <div>
+                                <h5 className="mb-0 fw-bold text-white">Total Price</h5>
+                                <small className="text-white opacity-75">Including all services & add-ons</small>
                               </div>
                               <div className="text-end">
-                                <div className="fs-2 fw-bold">₱{calculateTotal().toFixed(2)}</div>
+                                <span className="badge bg-white text-success fs-4 px-3 py-2" style={{ fontWeight: 'bold' }}>
+                                  {formatPrice(calculateTotal())}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -7792,7 +7463,7 @@ const Step3QueueSummary = ({
                 </div>
               </div>
 
-                <hr className="my-4 my-lg-5" />
+              <hr className="my-4 my-lg-5" />
 
               {/* Enhanced Button Layout */}
               <div className="row g-3 mb-4">
@@ -7800,7 +7471,7 @@ const Step3QueueSummary = ({
                   <button
                     type="button"
                     className="btn btn-outline-secondary btn-lg w-100 py-3"
-                    onClick={() => window.history.back()}
+                    onClick={onPrev}
                   >
                     <i className="bi bi-arrow-left me-2"></i>
                     Back
@@ -7815,6 +7486,7 @@ const Step3QueueSummary = ({
                     !bookingData.selectedBarber || 
                     bookingData.selectedServices.length === 0 || 
                     !bookingData.selectedDate ||
+                    (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase())) ||
                     (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot && 
                      wouldCrossLunchBreak(bookingData.selectedTimeSlot, calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)))
                   }
@@ -7837,6 +7509,8 @@ const Step3QueueSummary = ({
             </div>
           </div>
         </div>
+      </div>
+    </div>
   );
 };
 

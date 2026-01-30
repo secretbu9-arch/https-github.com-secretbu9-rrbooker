@@ -431,13 +431,16 @@ class OrdersService {
         dailyOrders: {}
       };
 
+      let completedOrdersCount = 0;
+      
       orders.forEach(order => {
         // Status distribution
         stats.byStatus[order.status] = (stats.byStatus[order.status] || 0) + 1;
 
-        // Revenue calculation
-        if (order.status !== 'cancelled' && order.status !== 'refunded') {
+        // Revenue calculation - only count completed orders (picked_up status)
+        if (order.status === 'picked_up') {
           stats.totalRevenue += parseFloat(order.total_amount);
+          completedOrdersCount++;
         }
 
         // Risk distribution
@@ -451,7 +454,8 @@ class OrdersService {
         stats.dailyOrders[date] = (stats.dailyOrders[date] || 0) + 1;
       });
 
-      stats.averageOrderValue = stats.total > 0 ? stats.totalRevenue / stats.total : 0;
+      // Calculate average based on completed orders only
+      stats.averageOrderValue = completedOrdersCount > 0 ? stats.totalRevenue / completedOrdersCount : 0;
 
       return stats;
     } catch (error) {

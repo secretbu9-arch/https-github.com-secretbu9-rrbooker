@@ -1,5 +1,5 @@
 // components/common/Notifications.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 
@@ -11,6 +11,7 @@ const Notifications = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'unread', 'read'
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -19,29 +20,79 @@ const Notifications = () => {
     window.addEventListener('resize', onResize);
     
     // Set up real-time subscription for notifications
-    const user = supabase.auth.getUser();
-    if (user) {
-      const subscription = supabase
-        .channel('notifications')
-        .on('postgres_changes', 
-          { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'notifications',
-            filter: user?.data?.user ? `user_id=eq.${user.data.user.id}` : undefined
-          }, 
-          () => {
-            fetchNotifications();
-          }
-        )
-        .subscribe();
+    const setupSubscription = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) return;
+        
+        // Use a unique channel name to avoid conflicts with multiple instances
+        const channelName = `notifications-${user.id}`;
+        
+        // Check if subscription already exists for this channel
+        const existingChannel = supabase.getChannels().find(ch => ch.topic === channelName);
+        if (existingChannel) {
+          console.log('Subscription already exists for this channel');
+          subscriptionRef.current = existingChannel;
+          return;
+        }
+        
+        const subscription = supabase
+          .channel(channelName)
+          .on('postgres_changes', 
+            { 
+              event: 'INSERT', 
+              schema: 'public', 
+              table: 'notifications',
+              filter: `user_id=eq.${user.id}`
+            }, 
+            (payload) => {
+              // Check if notification already exists in state to prevent duplicates
+              setNotifications(prev => {
+                const exists = prev.some(n => n.id === payload.new.id);
+                if (exists) {
+                  console.log('Duplicate notification prevented:', payload.new.id);
+                  return prev;
+                }
+                return [payload.new, ...prev];
+              });
+              
+              // Increment unread count if notification is unread
+              if (!payload.new.read) {
+                setUnreadCount(prev => prev + 1);
+              }
+            }
+          )
+          .subscribe();
+        
+        subscriptionRef.current = subscription;
+      } catch (err) {
+        console.error('Error setting up notification subscription:', err);
+      }
+    };
+    
+    setupSubscription();
 
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-    return () => window.removeEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (subscriptionRef.current) {
+        try {
+          subscriptionRef.current.unsubscribe();
+          console.log('✅ Notification subscription cleaned up');
+        } catch (err) {
+          console.warn('Error unsubscribing from notifications:', err);
+        }
+        subscriptionRef.current = null;
+      }
+    };
   }, []);
+
+  // Dispatch custom event when notification dropdown opens/closes
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('notificationsToggle', {
+      detail: { isOpen: showNotifications }
+    }));
+  }, [showNotifications]);
 
   const fetchNotifications = async () => {
     try {
@@ -218,8 +269,100 @@ const Notifications = () => {
     }
   };
 
+  // Render notification content (shared between mobile and desktop) - without header and filters
+  const renderNotificationContent = () => (
+    <>
+      
+      {loading ? (
+        <div className="p-3 text-center">
+          <div className="spinner-border spinner-border-sm text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="p-3 text-center text-danger">
+          <i className="bi bi-exclamation-circle me-2"></i>
+          {error}
+        </div>
+      ) : getFilteredNotifications().length === 0 ? (
+        <div className="p-4 text-center text-muted">
+          <i className="bi bi-bell-slash fs-4 mb-2"></i>
+          <p className="mb-0">
+            {filter === 'all' ? 'No notifications' : 
+             filter === 'unread' ? 'No unread notifications' : 
+             'No read notifications'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {getFilteredNotifications().slice(0, 6).map(notification => (
+            <div 
+              key={notification.id} 
+              className={`notification-item p-2 p-sm-3 border-bottom ${!notification.read ? 'bg-light' : ''}`}
+            >
+              <div className="d-flex">
+                <div className="me-2 me-sm-3 flex-shrink-0">
+                  <div className={`rounded-circle bg-${
+                    notification.type === 'appointment' ? 'primary' :
+                    notification.type === 'queue' ? 'success' :
+                    notification.type === 'reminder' ? 'warning' :
+                    'secondary'
+                  } bg-opacity-10 p-2 text-center`} style={{ 
+                    width: isMobile ? '35px' : '40px', 
+                    height: isMobile ? '35px' : '40px' 
+                  }}>
+                    <i className={`bi ${getNotificationIcon(notification.type)}`} style={{ fontSize: isMobile ? '0.9rem' : '1rem' }}></i>
+                  </div>
+                </div>
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-1">
+                    <h6 className="mb-1" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.95rem)', wordBreak: 'break-word' }}>{notification.title}</h6>
+                    <small className="text-muted flex-shrink-0" style={{ fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}>
+                      {formatNotificationTime(notification.created_at)}
+                    </small>
+                  </div>
+                  <p className="mb-1 small" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)', wordBreak: 'break-word' }}>{notification.message}</p>
+                  <div className="d-flex gap-2 flex-wrap">
+                    {!notification.read && (
+                      <button 
+                        className="btn btn-sm btn-link text-decoration-none p-0"
+                        onClick={() => handleMarkAsRead(notification.id)}
+                        style={{ fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}
+                      >
+                        <span className="d-sm-none">Read</span>
+                        <span className="d-none d-sm-inline">Mark as read</span>
+                      </button>
+                    )}
+                    <button 
+                      className="btn btn-sm btn-link text-decoration-none p-0 text-danger"
+                      onClick={() => handleDeleteNotification(notification.id)}
+                      title="Delete notification"
+                      style={{ fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}
+                    >
+                      <i className="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          <div className="p-3 text-center">
+            <Link 
+              to="/notifications" 
+              className="btn btn-sm btn-link text-decoration-none"
+              onClick={() => setShowNotifications(false)}
+            >
+              View all
+            </Link>
+          </div>
+        </>
+      )}
+    </>
+  );
+
   return (
-    <div className="dropdown">
+    <div className="dropdown" style={{ position: 'relative' }}>
       <button 
         className="btn btn-link text-decoration-none position-relative text-white"
         onClick={() => setShowNotifications(!showNotifications)}
@@ -234,155 +377,282 @@ const Notifications = () => {
         )}
       </button>
       
-      {showNotifications && (
+      {/* Click outside to close - only on mobile */}
+      {showNotifications && isMobile && (
         <div 
-          className={`dropdown-menu ${isMobile ? '' : 'dropdown-menu-end'} show shadow`} 
-          style={{ 
-            width: 'auto',
-            minWidth: isMobile ? '350px' : '420px',
-            maxWidth: isMobile ? '92vw' : '500px',
-            maxHeight: '420px',
-            overflowY: 'auto',
-            zIndex: 1040,
-            marginTop: isMobile ? '0.6rem' : '0.75rem',
-            padding: 0,
-            borderRadius: isMobile ? undefined : '0.5rem',
-            // Center under bell on mobile; right align and pin to edge on desktop
-            right: isMobile ? 'auto' : 0,
-            left: isMobile ? '50%' : 'auto',
-            transform: isMobile ? 'translateX(-65%)' : 'none',
-            overflowWrap: 'anywhere',
-            wordBreak: 'break-word',
-            whiteSpace: 'normal'
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1059,
+            background: 'rgba(0, 0, 0, 0.3)'
           }}
-        >
-          <div className="d-flex justify-content-between align-items-center p-3 border-bottom">
-            <h6 className="mb-0">Notifications</h6>
-            <div className="d-flex gap-2">
-              {unreadCount > 0 && (
-                <button 
-                  className="btn btn-sm btn-link text-decoration-none"
-                  onClick={handleMarkAllAsRead}
-                >
-                  Mark all as read
-                </button>
-              )}
-              <button 
-                className="btn btn-sm btn-link text-decoration-none text-danger"
-                onClick={handleDeleteAllNotifications}
-              >
-                Delete all
-              </button>
-            </div>
-          </div>
-
-          {/* Filter Buttons */}
-          <div className="p-3 border-bottom">
-            <div className="btn-group w-100" role="group">
-              <button
-                type="button"
-                className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => setFilter('all')}
-              >
-                All ({notifications.length})
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${filter === 'unread' ? 'btn-warning' : 'btn-outline-warning'}`}
-                onClick={() => setFilter('unread')}
-              >
-                Unread ({unreadCount})
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${filter === 'read' ? 'btn-success' : 'btn-outline-success'}`}
-                onClick={() => setFilter('read')}
-              >
-                Read ({notifications.length - unreadCount})
-              </button>
-            </div>
-          </div>
-          
-          {loading ? (
-            <div className="p-3 text-center">
-              <div className="spinner-border spinner-border-sm text-primary" role="status">
-                <span className="visually-hidden">Loading...</span>
+          onClick={() => setShowNotifications(false)}
+        />
+      )}
+      
+      {showNotifications && (
+        <>
+          {/* Mobile: Fixed position modal-like dropdown */}
+          {isMobile ? (
+            <div 
+              className="show shadow"
+              style={{ 
+                width: 'calc(100vw - 20px)',
+                maxWidth: 'calc(100vw - 20px)',
+                height: 'calc(100vh - 80px)',
+                maxHeight: 'calc(100vh - 80px)',
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                zIndex: 1060,
+                padding: 0,
+                borderRadius: '0.5rem',
+                position: 'fixed',
+                top: '70px',
+                left: '10px',
+                right: '10px',
+                bottom: '10px',
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-word',
+                whiteSpace: 'normal',
+                boxSizing: 'border-box',
+                background: '#ffffff'
+              }}
+            >
+              {/* Arrow pointing to bell - Mobile (centered) */}
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '8px solid transparent',
+                  borderRight: '8px solid transparent',
+                  borderBottom: '8px solid #ffffff',
+                  filter: 'drop-shadow(0 -2px 2px rgba(0,0,0,0.1))',
+                  zIndex: 1
+                }}
+              />
+              {/* Mobile header with close button, actions, and filters */}
+              <div className="d-flex flex-column gap-2 p-3 border-bottom" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 1 }}>
+                <div className="d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>Notifications</h6>
+                  <button 
+                    className="btn btn-sm btn-link text-decoration-none"
+                    onClick={() => setShowNotifications(false)}
+                    style={{ fontSize: '1.2rem', padding: '0.25rem', minWidth: '36px', minHeight: '36px' }}
+                  >
+                    <i className="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                
+                {/* Filter Buttons - Mobile */}
+                <div className="btn-group w-100" role="group" style={{ flexWrap: 'nowrap' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => setFilter('all')}
+                    style={{ 
+                      fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)',
+                      padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.4rem, 1.2vw, 0.6rem)',
+                      flex: '1 1 0',
+                      minHeight: '36px',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    All ({notifications.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${filter === 'unread' ? 'btn-warning' : 'btn-outline-warning'}`}
+                    onClick={() => setFilter('unread')}
+                    style={{ 
+                      fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)',
+                      padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.4rem, 1.2vw, 0.6rem)',
+                      flex: '1 1 0',
+                      minHeight: '36px',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Unread ({unreadCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${filter === 'read' ? 'btn-success' : 'btn-outline-success'}`}
+                    onClick={() => setFilter('read')}
+                    style={{ 
+                      fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)',
+                      padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.4rem, 1.2vw, 0.6rem)',
+                      flex: '1 1 0',
+                      minHeight: '36px',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Read ({notifications.length - unreadCount})
+                  </button>
+                </div>
+                
+                {/* Mobile action buttons */}
+                <div className="d-flex gap-2 flex-wrap">
+                  {unreadCount > 0 && (
+                    <button 
+                      className="btn btn-sm btn-primary flex-fill"
+                      onClick={handleMarkAllAsRead}
+                      style={{ 
+                        fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', 
+                        padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                        minHeight: '36px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      <i className="bi bi-check-circle me-1"></i>
+                      Mark all as read
+                    </button>
+                  )}
+                  <button 
+                    className="btn btn-sm btn-outline-danger flex-fill"
+                    onClick={handleDeleteAllNotifications}
+                    style={{ 
+                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', 
+                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                      minHeight: '36px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    <i className="bi bi-trash me-1"></i>
+                    Delete all
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : error ? (
-            <div className="p-3 text-center text-danger">
-              <i className="bi bi-exclamation-circle me-2"></i>
-              {error}
-            </div>
-          ) : getFilteredNotifications().length === 0 ? (
-            <div className="p-4 text-center text-muted">
-              <i className="bi bi-bell-slash fs-4 mb-2"></i>
-              <p className="mb-0">
-                {filter === 'all' ? 'No notifications' : 
-                 filter === 'unread' ? 'No unread notifications' : 
-                 'No read notifications'}
-              </p>
+              {/* Mobile content */}
+              <div style={{ overflowY: 'auto', overflowX: 'hidden' }}>
+                {renderNotificationContent()}
+              </div>
             </div>
           ) : (
-            <>
-              {getFilteredNotifications().slice(0, 6).map(notification => (
-                <div 
-                  key={notification.id} 
-                  className={`notification-item p-3 border-bottom ${!notification.read ? 'bg-light' : ''}`}
-                >
-                  <div className="d-flex">
-                    <div className="me-3">
-                      <div className={`rounded-circle bg-${
-                        notification.type === 'appointment' ? 'primary' :
-                        notification.type === 'queue' ? 'success' :
-                        notification.type === 'reminder' ? 'warning' :
-                        'secondary'
-                      } bg-opacity-10 p-2 text-center`} style={{ width: '40px', height: '40px' }}>
-                        <i className={`bi ${getNotificationIcon(notification.type)} fs-5`}></i>
-                      </div>
-                    </div>
-                    <div className="flex-grow-1">
-                      <div className="d-flex justify-content-between align-items-start">
-                        <h6 className="mb-1">{notification.title}</h6>
-                        <small className="text-muted">
-                          {formatNotificationTime(notification.created_at)}
-                        </small>
-                      </div>
-                      <p className="mb-1 small">{notification.message}</p>
-                      <div className="d-flex gap-2">
-                        {!notification.read && (
-                          <button 
-                            className="btn btn-sm btn-link text-decoration-none p-0"
-                            onClick={() => handleMarkAsRead(notification.id)}
-                          >
-                            Mark as read
-                          </button>
-                        )}
-                        <button 
-                          className="btn btn-sm btn-link text-decoration-none p-0 text-danger"
-                          onClick={() => handleDeleteNotification(notification.id)}
-                          title="Delete notification"
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </div>
+            /* Desktop: Dropdown menu */
+            <div 
+              className="dropdown-menu dropdown-menu-end show shadow" 
+              style={{ 
+                width: 'auto',
+                minWidth: '420px',
+                maxWidth: '500px',
+                maxHeight: '420px',
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                zIndex: 1060,
+                marginTop: '0.75rem',
+                padding: 0,
+                borderRadius: '0.5rem',
+                right: 0,
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-word',
+                whiteSpace: 'normal',
+                position: 'absolute',
+                boxSizing: 'border-box'
+              }}
+            >
+              {/* Arrow pointing to bell - Desktop (aligned to bell icon) */}
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '15px',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '8px solid transparent',
+                  borderRight: '8px solid transparent',
+                  borderBottom: '8px solid #ffffff',
+                  filter: 'drop-shadow(0 -2px 2px rgba(0,0,0,0.1))',
+                  zIndex: 1
+                }}
+              />
+              {/* Shadow arrow for better visibility */}
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '-9px',
+                  right: '15px',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '9px solid transparent',
+                  borderRight: '9px solid transparent',
+                  borderBottom: '9px solid rgba(0,0,0,0.1)',
+                  zIndex: 0
+                }}
+              /            >
+              {/* Desktop header with actions and filters */}
+              <div className="d-flex flex-column gap-2 p-2 p-sm-3 border-bottom">
+                <div className="d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>Notifications</h6>
+                  <div className="d-flex gap-2">
+                    {unreadCount > 0 && (
+                      <button 
+                        className="btn btn-sm btn-link text-decoration-none"
+                        onClick={handleMarkAllAsRead}
+                        style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', padding: '0.25rem 0.5rem' }}
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                    <button 
+                      className="btn btn-sm btn-link text-decoration-none text-danger"
+                      onClick={handleDeleteAllNotifications}
+                      style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', padding: '0.25rem 0.5rem' }}
+                    >
+                      Delete all
+                    </button>
                   </div>
                 </div>
-              ))}
-              
-              <div className="p-3 text-center">
-                <Link 
-                  to="/notifications" 
-                  className="btn btn-sm btn-link text-decoration-none"
-                  onClick={() => setShowNotifications(false)}
-                >
-                  View all
-                </Link>
+                
+                {/* Filter Buttons - Desktop */}
+                <div className="btn-group w-100" role="group">
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => setFilter('all')}
+                    style={{ 
+                      fontSize: 'clamp(0.7rem, 1.8vw, 0.875rem)',
+                      padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
+                      flex: '1 1 auto'
+                    }}
+                  >
+                    All ({notifications.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${filter === 'unread' ? 'btn-warning' : 'btn-outline-warning'}`}
+                    onClick={() => setFilter('unread')}
+                    style={{ 
+                      fontSize: 'clamp(0.7rem, 1.8vw, 0.875rem)',
+                      padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
+                      flex: '1 1 auto'
+                    }}
+                  >
+                    Unread ({unreadCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${filter === 'read' ? 'btn-success' : 'btn-outline-success'}`}
+                    onClick={() => setFilter('read')}
+                    style={{ 
+                      fontSize: 'clamp(0.7rem, 1.8vw, 0.875rem)',
+                      padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
+                      flex: '1 1 auto'
+                    }}
+                  >
+                    Read ({notifications.length - unreadCount})
+                  </button>
+                </div>
               </div>
-            </>
+              {renderNotificationContent()}
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

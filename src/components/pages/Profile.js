@@ -68,10 +68,39 @@ const Profile = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // Handle phone number with +63 prefix
+    if (name === 'phone') {
+      // Remove all non-digit characters
+      let digits = value.replace(/\D/g, '');
+      
+      // If user is typing, extract only digits after +63
+      if (value.startsWith('+63')) {
+        // Get digits after +63
+        digits = value.substring(3).replace(/\D/g, '');
+      } else if (digits.startsWith('63')) {
+        // If user typed 63 first, remove it and get remaining digits
+        digits = digits.substring(2);
+      }
+      
+      // Limit to 10 digits
+      if (digits.length > 10) {
+        digits = digits.substring(0, 10);
+      }
+      
+      // Add +63 prefix if we have digits
+      const formatted = digits.length > 0 ? `+63${digits}` : '';
+      
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatted
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -502,15 +531,35 @@ const Profile = () => {
                         <i className="bi bi-telephone me-1"></i>
                         Phone Number
                       </label>
-                      <input
-                        type="tel"
-                        className="form-control"
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        placeholder="Enter your phone number"
-                      />
+                      <div style={{ position: 'relative' }}>
+                        <img 
+                          src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png"
+                          alt="Philippines"
+                          style={{ 
+                            position: 'absolute', 
+                            left: '12px', 
+                            top: '50%', 
+                            transform: 'translateY(-50%)',
+                            width: '20px',
+                            height: '15px',
+                            zIndex: 10,
+                            pointerEvents: 'none',
+                            objectFit: 'cover'
+                          }}
+                        />
+                        <input
+                          type="tel"
+                          className="form-control"
+                          id="phone"
+                          name="phone"
+                          value={formData.phone}
+                          onChange={handleInputChange}
+                          placeholder="+63XXXXXXXXXX"
+                          maxLength={13}
+                          style={{ paddingLeft: '45px' }}
+                        />
+                      </div>
+                      <small className="form-text text-muted">Format: +63 followed by 10 digits</small>
                     </div>
                   </div>
                   

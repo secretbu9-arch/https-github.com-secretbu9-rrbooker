@@ -218,8 +218,7 @@ const ManageOrders = () => {
     switch (status) {
       case 'pending': return 'warning';
       case 'confirmed': return 'info';
-      case 'preparing': return 'primary';
-      case 'ready_for_pickup': return 'success';
+      case 'ready_for_pickup': return 'info';
       case 'picked_up': return 'success';
       case 'cancelled': return 'danger';
       case 'refunded': return 'secondary';
@@ -231,7 +230,6 @@ const ManageOrders = () => {
     switch (status) {
       case 'pending': return 'Pending';
       case 'confirmed': return 'Confirmed';
-      case 'preparing': return 'Preparing';
       case 'ready_for_pickup': return 'Ready for Pickup';
       case 'picked_up': return 'Picked Up';
       case 'cancelled': return 'Cancelled';
@@ -265,9 +263,9 @@ const ManageOrders = () => {
     <div className="container-fluid py-4">
       <div className="row">
         <div className="col">
-          <div className="d-flex justify-content-between align-items-center mb-4">
+          <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
             <div>
-              <h2 className="mb-1">
+              <h2 className="mb-1 fw-bold">
                 <i className="bi bi-bag-check me-2"></i>
                 Manage Orders
               </h2>
@@ -319,7 +317,7 @@ const ManageOrders = () => {
                         <h3 className="mb-0">₱{stats.totalRevenue.toFixed(0)}</h3>
                       </div>
                       <div className="ms-auto">
-                        <i className="bi bi-currency-dollar display-6"></i>
+                        <span className="display-6" style={{ fontSize: '3.5rem', lineHeight: '1' }}>₱</span>
                       </div>
                     </div>
                   </div>
@@ -359,7 +357,6 @@ const ManageOrders = () => {
                     <option value="all">All Status</option>
                     <option value="pending">Pending</option>
                     <option value="confirmed">Confirmed</option>
-                    <option value="preparing">Preparing</option>
                     <option value="ready_for_pickup">Ready for Pickup</option>
                     <option value="picked_up">Picked Up</option>
                     <option value="cancelled">Cancelled</option>
@@ -503,19 +500,9 @@ const ManageOrders = () => {
                               
                               {order.status === 'confirmed' && (
                                 <button
-                                  className="btn btn-outline-info"
-                                  onClick={() => handleStatusUpdate(order.id, 'preparing')}
-                                  title="Start Preparing"
-                                >
-                                  <i className="bi bi-gear"></i>
-                                </button>
-                              )}
-                              
-                              {order.status === 'preparing' && (
-                                <button
                                   className="btn btn-outline-success"
                                   onClick={() => handleStatusUpdate(order.id, 'ready_for_pickup')}
-                                  title="Mark Ready"
+                                  title="Mark Ready for Pickup"
                                 >
                                   <i className="bi bi-bag-check"></i>
                                 </button>
@@ -720,16 +707,26 @@ const ManageOrders = () => {
 
 
                 {/* Notes */}
-                {orderDetails.order.notes && (
-                  <div className="mt-4">
-                    <h6>Special Instructions</h6>
-                    <div className="card">
-                      <div className="card-body">
-                        <p className="mb-0">{orderDetails.order.notes}</p>
-                      </div>
+                <div className="mt-4">
+                  <h6>Special Instructions</h6>
+                  <div className="card">
+                    <div className="card-body">
+                      <p className="mb-0">
+                        {orderDetails.order.notes && orderDetails.order.notes.trim() !== '' ? (
+                          orderDetails.order.notes
+                        ) : (
+                          <span style={{ 
+                            color: '#ff8c00', 
+                            fontStyle: 'italic',
+                            fontWeight: '500'
+                          }}>
+                            No additional order request
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
               <div className="modal-footer">
                 <button
@@ -760,26 +757,13 @@ const ManageOrders = () => {
                 {selectedOrder.status === 'confirmed' && (
                   <button
                     type="button"
-                    className="btn btn-info"
-                    onClick={() => {
-                      handleStatusUpdate(selectedOrder.id, 'preparing');
-                      setSelectedOrder({ ...selectedOrder, status: 'preparing' });
-                    }}
-                  >
-                    Start Preparing
-                  </button>
-                )}
-                
-                {selectedOrder.status === 'preparing' && (
-                  <button
-                    type="button"
                     className="btn btn-success"
                     onClick={() => {
                       handleStatusUpdate(selectedOrder.id, 'ready_for_pickup');
                       setSelectedOrder({ ...selectedOrder, status: 'ready_for_pickup' });
                     }}
                   >
-                    Mark Ready
+                    Mark Ready for Pickup
                   </button>
                 )}
                 

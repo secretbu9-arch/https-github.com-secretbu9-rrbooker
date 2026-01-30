@@ -341,7 +341,7 @@ class UnifiedSlotBookingService {
         add_ons_data: JSON.stringify(addOns),
         appointment_date: date,
         appointment_time: isScheduled ? timeSlot : null,
-        status: isScheduled ? 'scheduled' : 'pending',
+        status: isScheduled ? 'confirmed' : 'pending',
         appointment_type: isScheduled ? 'scheduled' : 'queue',
         priority_level: 'normal',
         total_price: this.calculateTotalPrice(services, addOns),

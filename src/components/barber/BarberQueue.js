@@ -10,6 +10,7 @@ import dateService from '../../services/DateService';
 import appointmentTypeManager from '../../services/AppointmentTypeManager';
 import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
+import RescheduleModal from './RescheduleModal';
 import '../../styles/barber-appointments.css';
 import '../../styles/hybrid-queue.css';
 
@@ -27,6 +28,7 @@ const BarberQueue = () => {
     pendingRequests: 0
   });
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null });
   
   // Advanced Hybrid Queue System state
   const [timeline, setTimeline] = useState([]);
@@ -350,16 +352,8 @@ const BarberQueue = () => {
         if (result.success) {
           console.log('✅ Enhanced queue acceptance completed:', result);
           
-          // Send notification using centralized service
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-          await centralizedNotificationService.createBookingConfirmationNotification({
-            userId: appointment.customer_id,
-            appointmentId: appointment.id,
-            queuePosition: result.queuePosition,
-            estimatedTime: result.estimatedTime
-          });
-
-          // Push notification is now handled by CentralizedNotificationService
+          // Notification is already sent by EnhancedQueueService.notifyCustomerQueueAcceptance()
+          // No need to send duplicate notification here
 
           // Log the action
           await supabase.from('system_logs').insert({
@@ -412,7 +406,7 @@ const BarberQueue = () => {
       window.dispatchEvent(new CustomEvent('appointmentStatusChanged', {
         detail: {
           appointmentId,
-          newStatus: action === 'accept' ? 'scheduled' : 'cancelled',
+          newStatus: action === 'accept' ? 'confirmed' : 'cancelled',
           barberId: user.id,
           appointmentDate: appointment.appointment_date,
           timestamp: Date.now()
@@ -462,7 +456,7 @@ const BarberQueue = () => {
       console.log(`🔄 Queue updating appointment ${appointmentId} to ${status}`);
 
       // Optimistic updates
-      if (appointmentId === currentAppointment?.id && status === 'done') {
+      if (appointmentId === currentAppointment?.id && status === 'completed') {
         setCurrentAppointment(null);
       }
 
@@ -512,7 +506,7 @@ const BarberQueue = () => {
       }
 
       // Notify next customer if appointment completed
-      if (status === 'done' && queuedAppointments.length > 0) {
+      if (status === 'completed' && queuedAppointments.length > 0) {
         const nextAppointment = queuedAppointments[0];
         
         // Notify next customer using centralized service
@@ -581,31 +575,64 @@ const BarberQueue = () => {
     return <LoadingSpinner />;
   }
 
+  // Calculate total service time
+  const totalServiceTime = queuedAppointments.reduce((total, apt) => {
+    return total + (apt.total_duration || apt.service?.duration || 30);
+  }, 0);
+
   return (
-    <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Today's Queue & Requests</h2>
-        <div className="d-flex align-items-center">
-          <div className="form-check form-switch me-3">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="autoRefreshSwitch"
-              checked={autoRefresh}
-              onChange={() => setAutoRefresh(!autoRefresh)}
-            />
-            <label className="form-check-label" htmlFor="autoRefreshSwitch">
-              Auto-refresh
-            </label>
-          </div>
-          <button 
-            className="btn btn-outline-primary"
-            onClick={fetchQueueData}
+    <div className="container py-4" style={{ maxWidth: '1200px' }}>
+      {/* Header */}
+      <div
+        className="d-flex justify-content-between align-items-center mb-3 mb-md-4 queue-status-header"
+        style={{
+          borderRadius: '12px',
+          padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
+        }}
+      >
+        <div className="d-flex align-items-center gap-2">
+          <div
+            className="d-flex align-items-center justify-content-center"
+            style={{
+              width: 'clamp(32px, 7vw, 38px)',
+              height: 'clamp(32px, 7vw, 38px)',
+              borderRadius: '999px',
+              background: 'rgba(255,255,255,0.16)',
+            }}
           >
-            <i className="bi bi-arrow-clockwise me-1"></i>
-            Refresh
-          </button>
+            <i className="bi bi-list-ol" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)' }}></i>
+          </div>
+          <div>
+            <h3
+              className="mb-0 text-white fw-bold"
+              style={{ fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}
+            >
+              Today's Queue & Requests
+            </h3>
+            <small
+              className="text-white-50 d-none d-sm-inline"
+              style={{ fontSize: 'clamp(0.75rem, 2.2vw, 0.85rem)' }}
+            >
+              Quickly see who&apos;s waiting and manage new booking requests
+            </small>
+          </div>
         </div>
+        <button
+          className="btn btn-light rounded-circle"
+          onClick={fetchQueueData}
+          style={{
+            width: 'clamp(35px, 8vw, 40px)',
+            height: 'clamp(35px, 8vw, 40px)',
+            padding: 0,
+            minWidth: '35px',
+          }}
+          title="Refresh queue"
+        >
+          <i
+            className="bi bi-arrow-clockwise"
+            style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}
+          ></i>
+        </button>
       </div>
       
       {error && (
@@ -620,574 +647,406 @@ const BarberQueue = () => {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="row mb-4">
-        <div className="col-md-3 mb-3">
-          <div className="card bg-success text-white h-100">
-            <div className="card-body">
-              <h6 className="card-title">Completed Today</h6>
-              <h3 className="mb-0">{stats.completed}</h3>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 mb-3">
-          <div className="card bg-warning text-white h-100">
-            <div className="card-body">
-              <h6 className="card-title">In Queue</h6>
-              <h3 className="mb-0">{stats.remaining}</h3>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 mb-3">
-          <div className="card bg-info text-white h-100">
-            <div className="card-body">
-              <h6 className="card-title">Est. Time Remaining</h6>
-              <h3 className="mb-0">{stats.totalTime ? formatTimeRemaining(stats.totalTime) : '0 min'}</h3>
+      {/* Stats Cards */}
+      <div className="row mb-4 g-2 g-md-3">
+        <div className="col-6 col-md-3 mb-2 mb-md-3">
+          <div className="queue-stat-card h-100">
+            <div className="d-flex flex-column align-items-center text-center">
+              <div className="mb-1">
+                <i
+                  className="bi bi-check-circle-fill text-success"
+                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
+                ></i>
+              </div>
+              <div className="queue-stat-number">{stats.completed || 0}</div>
+              <div className="queue-stat-label">Completed Today</div>
             </div>
           </div>
         </div>
 
-        <div className="col-md-3 mb-3">
-          <div className="card bg-primary text-white h-100">
-            <div className="card-body">
-              <h6 className="card-title">Pending Requests</h6>
-              <h3 className="mb-0">{stats.pendingRequests}</h3>
+        <div className="col-6 col-md-3 mb-2 mb-md-3">
+          <div className="queue-stat-card h-100">
+            <div className="d-flex flex-column align-items-center text-center">
+              <div className="mb-1">
+                <i
+                  className="bi bi-people-fill text-primary"
+                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
+                ></i>
+              </div>
+              <div className="queue-stat-number">{stats.remaining || 0}</div>
+              <div className="queue-stat-label">In Queue</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-6 col-md-3 mb-2 mb-md-3">
+          <div className="queue-stat-card h-100">
+            <div className="d-flex flex-column align-items-center text-center">
+              <div className="mb-1">
+                <i
+                  className="bi bi-bell-fill text-warning"
+                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
+                ></i>
+              </div>
+              <div className="queue-stat-number">{stats.pendingRequests || 0}</div>
+              <div className="queue-stat-label">Pending Requests</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-6 col-md-3 mb-2 mb-md-3">
+          <div className="queue-stat-card h-100">
+            <div className="d-flex flex-column align-items-center text-center">
+              <div className="mb-1">
+                <i
+                  className="bi bi-clock-history text-info"
+                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
+                ></i>
+              </div>
+              <div className="queue-stat-number">{totalServiceTime}</div>
+              <div className="queue-stat-label">Total Service Time (min)</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Advanced Hybrid Queue - Unified Timeline */}
-      {timeline.length > 0 && (
-        <div className="card mb-4 border-primary shadow-sm">
-          <div className="card-header bg-primary text-white">
-            <div className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">
-                <i className="bi bi-clock-history me-2"></i>
-                Today's Unified Timeline ({timeline.length} appointments)
-              </h5>
-              <div className="d-flex align-items-center gap-3">
-                <div className="text-center">
-                  <div className="fw-bold fs-5">{efficiency}%</div>
-                  <div className="small opacity-75">Efficiency</div>
-                </div>
-                <div className="text-center">
-                  <div className="fw-bold fs-5">{queueStats.completed || 0}</div>
-                  <div className="small opacity-75">Completed</div>
-                </div>
+      {/* Customer to Service Section */}
+      {queuedAppointments.length > 0 && !currentAppointment && (
+        <div className="mb-3 mb-md-4">
+          <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Customer to Service</h5>
+          <div className="d-flex align-items-center mb-2 mb-md-3" style={{
+            background: '#e5e7eb',
+            borderRadius: '12px',
+            padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
+            gap: 'clamp(0.5rem, 2vw, 1rem)'
+          }}>
+            {/* Queue Number Badge */}
+            <div className="d-flex align-items-center justify-content-center flex-shrink-0" style={{
+              width: 'clamp(35px, 8vw, 40px)',
+              height: 'clamp(35px, 8vw, 40px)',
+              background: '#d1d5db',
+              borderRadius: '50%',
+              color: '#16a34a',
+              fontWeight: 'bold',
+              fontSize: 'clamp(1rem, 3vw, 1.2rem)'
+            }}>
+              {queuedAppointments[0].queue_position || 1}
+            </div>
+            
+            {/* Customer Info */}
+            <div className="flex-grow-1" style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 'clamp(0.95rem, 3vw, 1.1rem)', fontWeight: '500', marginBottom: '0.25rem' }}>
+                {queuedAppointments[0].customer?.full_name || 'Unknown Customer'}
+              </div>
+              <div style={{ fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)', color: '#6b7280' }}>
+                Services: {getServicesDisplay(queuedAppointments[0]) || 'Classic'}
               </div>
             </div>
-          </div>
-          <div className="card-body p-0">
-            <div className="unified-timeline">
-              {/* Current Appointment */}
-              {currentAppointment && (
-                <div className="timeline-item current-appointment">
-                  <div className="timeline-marker current">
-                    <i className="bi bi-play-circle-fill"></i>
-                  </div>
-                  <div className="timeline-content">
-                    <div className="card border-success border-2">
-                      <div className="card-header bg-success text-white">
-                        <h6 className="mb-0">
-                          <i className="bi bi-scissors me-2"></i>
-                          CURRENT - {currentAppointment.customer?.full_name}
-                        </h6>
-                      </div>
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <strong>Services:</strong> {getServicesDisplay(currentAppointment)}
-                          </div>
-                          <div className="col-md-6">
-                            <strong>Duration:</strong> {currentAppointment.total_duration || 30} min
-                          </div>
-                        </div>
-                        <div className="mt-2">
-                          <AddOnsDisplay appointment={currentAppointment} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Timeline Items */}
-              {timeline.map((appointment, index) => (
-                <div key={appointment.id} className={`timeline-item ${appointment.id === currentAppointment?.id ? 'current' : ''}`}>
-                  <div className={`timeline-marker ${appointment.appointment_type === 'scheduled' ? 'scheduled' : 'queue'}`}>
-                    {appointment.appointment_type === 'scheduled' ? (
-                      <i className="bi bi-calendar-check"></i>
-                    ) : (
-                      <span>{appointment.queue_position || index + 1}</span>
-                    )}
-                  </div>
-                  <div className="timeline-content">
-                    <div className={`card ${appointment.is_urgent ? 'border-danger' : 'border-secondary'}`}>
-                      <div className={`card-header ${appointment.appointment_type === 'scheduled' ? 'bg-info' : 'bg-warning'} text-white`}>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <h6 className="mb-0">
-                            {appointment.appointment_type === 'scheduled' ? (
-                              <i className="bi bi-calendar-check me-2"></i>
-                            ) : (
-                              <i className="bi bi-people me-2"></i>
-                            )}
-                            {appointment.customer?.full_name}
-                          </h6>
-                          <div className="d-flex gap-1">
-                            {appointment.is_urgent && (
-                              <span className="badge bg-danger">
-                                <i className="bi bi-lightning-fill me-1"></i>URGENT
-                              </span>
-                            )}
-                            <span className="badge bg-light text-dark">
-                              {appointment.appointment_time || `Queue #${appointment.queue_position || index + 1}`}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <strong>Services:</strong> {getServicesDisplay(appointment)}
-                          </div>
-                          <div className="col-md-6">
-                            <strong>Duration:</strong> {appointment.total_duration || 30} min
-                          </div>
-                        </div>
-                        <div className="mt-2">
-                          <AddOnsDisplay appointment={appointment} />
-                        </div>
-                        {(appointment.estimated_arrival || appointment.estimated_time) && (
-                          <div className="mt-2">
-                            <small className="text-muted">
-                              <i className="bi bi-clock me-1"></i>
-                              Est. Start: {appointment.estimated_arrival || appointment.estimated_time}
-                            </small>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            
+            {/* Duration */}
+            <div className="flex-shrink-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#4b5563' }}>
+              {queuedAppointments[0].total_duration || queuedAppointments[0].service?.duration || 30} min
             </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="d-flex gap-2 mb-4">
+            <button
+              className="btn text-white flex-fill"
+              onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
+              style={{
+                background: '#16a34a',
+                borderRadius: '8px',
+                padding: 'clamp(0.625rem, 2vw, 0.75rem)',
+                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
+                fontWeight: '500',
+                border: 'none'
+              }}
+            >
+              Start
+            </button>
+            <button
+              className="btn text-white flex-fill"
+              onClick={() => {
+                if (queuedAppointments.length > 1) {
+                  handleAppointmentStatus(queuedAppointments[1].id, 'ongoing');
+                }
+              }}
+              disabled={queuedAppointments.length <= 1}
+              style={{
+                background: '#eab308',
+                borderRadius: '8px',
+                padding: 'clamp(0.625rem, 2vw, 0.75rem)',
+                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
+                fontWeight: '500',
+                border: 'none',
+                opacity: queuedAppointments.length <= 1 ? 0.5 : 1
+              }}
+            >
+              Next
+            </button>
           </div>
         </div>
       )}
 
-      {/* Pending Booking Requests */}
-      {pendingRequests.length > 0 && (
-        <div className="card mb-4 border-warning shadow-sm">
-          <div className="card-header bg-warning text-dark">
-            <h5 className="mb-0">
-              <i className="bi bi-bell me-2"></i>
-              Pending Booking Requests ({pendingRequests.length})
-              {pendingRequests.some(req => req.is_urgent) && (
-                <span className="badge bg-danger ms-2">
-                  <i className="bi bi-lightning-fill me-1"></i>
-                  {pendingRequests.filter(req => req.is_urgent).length} URGENT
-                </span>
-              )}
-            </h5>
-          </div>
-          <div className="card-body p-3">
-            <div className="row g-3">
-              {pendingRequests.map((request) => (
-                <div key={request.id} className="col-12 col-md-6 col-lg-4">
-                  <div className={`card h-100 ${request.is_urgent ? 'border-danger border-2' : 'border-secondary'} shadow-sm`}>
-                    <div className="card-body p-3">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <h6 className="card-title mb-0">{request.customer?.full_name}</h6>
-                        <div className="d-flex gap-1">
-                          {request.is_urgent && (
-                            <span className="badge bg-danger">
-                              <i className="bi bi-lightning-fill me-1"></i>URGENT
-                            </span>
-                          )}
-                          {request.is_rebooking && (
-                            <span className="badge bg-info">RESCHEDULE</span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="mb-2">
-                        <small className="text-muted">
-                          <i className="bi bi-calendar me-1"></i>
-                          {new Date(request.appointment_date).toLocaleDateString()}
-                        </small>
-                      </div>
-
-                      <div className="mb-2">
-                        <strong>Services:</strong>
-                        <div className="text-muted small">{getServicesDisplay(request)}</div>
-                      </div>
-
-                      <div className="mb-2">
-                        <small className="text-muted">Add-ons:</small>
-                        <div className="addon-display">
-                          <AddOnsDisplay appointment={request} />
-                        </div>
-                      </div>
-
-                      {/* Friend/Child Booking Information */}
-                      <FriendBookingDisplay appointment={request} variant="compact" />
-
-                      <div className="mb-2">
-                        <strong>Total:</strong> 
-                        <span className="text-success ms-1">₱{getTotalPrice(request)}</span>
-                        <small className="text-muted ms-2">
-                          ({request.total_duration || (request.service?.duration || 30)} min)
-                        </small>
-                      </div>
-
-                      {request.notes && (
-                        <div className="mb-2">
-                          <strong>Notes:</strong>
-                          <div className="text-muted small bg-light p-2 rounded">{request.notes}</div>
-                        </div>
-                      )}
-
-                      <div className="d-flex justify-content-between gap-2">
-                        <button
-                          className={`btn ${request.is_urgent ? 'btn-danger' : 'btn-success'} btn-sm flex-fill`}
-                          onClick={() => handleBookingResponse(request.id, 'accept')}
-                        >
-                          <i className="bi bi-check-circle me-1"></i>
-                          {request.is_urgent ? 'Accept URGENT' : 'Accept'}
-                        </button>
-                        <button
-                          className="btn btn-outline-danger btn-sm"
-                          onClick={() => {
-                            const reason = prompt('Reason for declining (optional):');
-                            if (reason !== null) {
-                              handleBookingResponse(request.id, 'decline', reason);
-                            }
-                          }}
-                        >
-                          <i className="bi bi-x-circle me-1"></i>
-                          Decline
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+      {/* Current Customer Being Served */}
+      {currentAppointment && (
+        <div className="mb-3 mb-md-4">
+          <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Customer to Service</h5>
+          <div className="d-flex align-items-center mb-2 mb-md-3" style={{
+            background: '#e5e7eb',
+            borderRadius: '12px',
+            padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
+            gap: 'clamp(0.5rem, 2vw, 1rem)'
+          }}>
+            {/* Queue Number Badge */}
+            <div className="d-flex align-items-center justify-content-center flex-shrink-0" style={{
+              width: 'clamp(35px, 8vw, 40px)',
+              height: 'clamp(35px, 8vw, 40px)',
+              background: '#d1d5db',
+              borderRadius: '50%',
+              color: '#16a34a',
+              fontWeight: 'bold',
+              fontSize: 'clamp(1rem, 3vw, 1.2rem)'
+            }}>
+              1
+            </div>
+            
+            {/* Customer Info */}
+            <div className="flex-grow-1" style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 'clamp(0.95rem, 3vw, 1.1rem)', fontWeight: '500', marginBottom: '0.25rem' }}>
+                {currentAppointment.customer?.full_name || 'Unknown Customer'}
+              </div>
+              <div style={{ fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)', color: '#6b7280' }}>
+                Services: {getServicesDisplay(currentAppointment) || 'Classic'}
+              </div>
+            </div>
+            
+            {/* Duration */}
+            <div className="flex-shrink-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#4b5563' }}>
+              {currentAppointment.total_duration || currentAppointment.service?.duration || 30} min
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Current appointment - Enhanced UI */}
-      {currentAppointment ? (
-        <div className="card mb-4 border-0 shadow-lg current-appointment-card">
-          <div className="card-header bg-gradient bg-primary text-white position-relative overflow-hidden">
-            <div className="position-absolute top-0 end-0 w-100 h-100 opacity-10">
-              <i className="bi bi-scissors" style={{ fontSize: '6rem', position: 'absolute', top: '-1rem', right: '-1rem' }}></i>
-            </div>
-            <div className="d-flex align-items-center justify-content-between position-relative">
-              <div>
-                <h4 className="mb-1 fw-bold">
-                  <i className="bi bi-scissors me-2"></i>
-                  Currently Serving
-                </h4>
-                <p className="mb-0 opacity-75">Active appointment in progress</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-white bg-opacity-20 rounded-pill px-3 py-2">
-                  <div className="fw-bold fs-5">IN PROGRESS</div>
-                  <div className="small opacity-75">Live Service</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="card-body p-4">
-            <div className="row g-4">
-              {/* Customer Profile */}
-              <div className="col-12 col-md-4 mb-3 mb-md-0">
-                <div className="text-center">
-                  <div className="customer-avatar mb-3">
-                    <div className="rounded-circle bg-primary bg-opacity-10 p-4 d-inline-block position-relative">
-                      <i className="bi bi-person-circle fs-1 text-primary"></i>
-                      <div className="position-absolute top-0 end-0 translate-middle">
-                        <span className="badge bg-success rounded-pill">
-                          <i className="bi bi-check-circle me-1"></i>
-                          Active
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <h3 className="mb-3 fw-bold text-primary">{currentAppointment.customer?.full_name}</h3>
-                  <div className="d-flex flex-column flex-sm-row gap-2 justify-content-center">
-                    {currentAppointment.customer?.phone && (
-                      <a 
-                        href={`tel:${currentAppointment.customer.phone}`}
-                        className="btn btn-outline-primary btn-lg contact-btn"
-                      >
-                        <i className="bi bi-telephone me-2"></i>
-                        Call Customer
-                      </a>
-                    )}
-                    {currentAppointment.customer?.email && (
-                      <a 
-                        href={`mailto:${currentAppointment.customer.email}`}
-                        className="btn btn-outline-secondary btn-lg contact-btn"
-                      >
-                        <i className="bi bi-envelope me-2"></i>
-                        Email
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Service Details */}
-              <div className="col-md-5 mb-3 mb-md-0">
-                <div className="card h-100 border-0 shadow-sm">
-                  <div className="card-header bg-light">
-                    <h5 className="mb-0 fw-bold">
-                      <i className="bi bi-scissors me-2"></i>
-                      Service Details
-                    </h5>
-                  </div>
-                  <div className="card-body">
-                    <div className="service-details">
-                      <div className="detail-row">
-                        <span className="detail-label">Services:</span>
-                        <span className="detail-value">{getServicesDisplay(currentAppointment)}</span>
-                      </div>
-                      
-                      <div className="detail-row">
-                        <span className="detail-label">Add-ons:</span>
-                        <span className="detail-value">
-                          <AddOnsDisplay appointment={currentAppointment} />
-                        </span>
-                      </div>
-                      
-                      <div className="detail-row">
-                        <span className="detail-label">Total:</span>
-                        <span className="detail-value fw-bold text-success">₱{getTotalPrice(currentAppointment)}</span>
-                      </div>
-                      
-                      <div className="detail-row">
-                        <span className="detail-label">Duration:</span>
-                        <span className="detail-value">
-                          {currentAppointment.total_duration || currentAppointment.service?.duration} minutes
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Friend/Child Booking Information */}
-                    <div className="mt-3">
-                      <FriendBookingDisplay appointment={currentAppointment} variant="card" />
-                    </div>
-                    
-                    {currentAppointment.notes && (
-                      <div className="mt-3">
-                        <div className="notes-section">
-                          <h6 className="detail-label">
-                            <i className="bi bi-chat-right-text me-2"></i>
-                            Notes
-                          </h6>
-                          <div className="notes-content">
-                            {currentAppointment.notes}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Action Button */}
-              <div className="col-md-3 d-flex align-items-center justify-content-center">
-                <button
-                  className="btn btn-success btn-lg w-100 action-btn complete-btn"
-                  onClick={() => handleAppointmentStatus(currentAppointment.id, 'done')}
-                >
-                  <i className="bi bi-check-circle me-2"></i>
-                  Complete Service
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="card mb-4 border-0 shadow-sm">
-          <div className="card-body text-center py-5 empty-state">
-            <div className="display-1 text-muted mb-4">
-              <i className="bi bi-scissors"></i>
-            </div>
-            <h4 className="text-muted mb-3">No customer currently being served</h4>
-            <p className="text-muted mb-4">Ready to start the next appointment</p>
+          {/* Action Buttons */}
+          <div className="d-flex gap-2 mb-4">
+            <button
+              className="btn text-white flex-fill"
+              onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
+              style={{
+                background: '#16a34a',
+                borderRadius: '8px',
+                padding: 'clamp(0.625rem, 2vw, 0.75rem)',
+                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
+                fontWeight: '500',
+                border: 'none'
+              }}
+            >
+              Complete
+            </button>
             {queuedAppointments.length > 0 && (
               <button
-                className="btn btn-primary btn-lg action-btn"
+                className="btn text-white flex-fill"
                 onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
+                style={{
+                  background: '#eab308',
+                  borderRadius: '8px',
+                  padding: 'clamp(0.625rem, 2vw, 0.75rem)',
+                  fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
+                  fontWeight: '500',
+                  border: 'none'
+                }}
               >
-                <i className="bi bi-play-fill me-2"></i>
-                Start Next Appointment
+                Next
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* Queue - Enhanced UI */}
-      <div className="card border-0 shadow-lg">
-        <div className="card-header bg-gradient bg-light">
-          <div className="d-flex align-items-center justify-content-between">
-            <h4 className="mb-0 fw-bold">
-              <i className="bi bi-people-fill me-2 text-primary"></i>
-              Waiting Queue
-            </h4>
-            <div className="text-center">
-              <div className="bg-primary bg-opacity-10 rounded-pill px-3 py-2">
-                <span className="fw-bold fs-4 text-primary">{queuedAppointments.length}</span>
-                <div className="small text-muted">
-                  {queuedAppointments.length === 1 ? 'customer' : 'customers'} waiting
-                </div>
-              </div>
-            </div>
+      {/* Waiting List Section */}
+      <div className="mb-3 mb-md-4">
+        <div className="d-flex justify-content-between align-items-center mb-2 mb-md-3 flex-wrap gap-2">
+          <h5 className="mb-0" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Waiting List</h5>
+          <div className="d-flex align-items-center gap-2">
+            <span className="d-none d-md-inline" style={{ fontSize: 'clamp(0.8rem, 2vw, 0.9rem)', color: '#6b7280' }}>Customer Waiting</span>
+            <span className="badge" style={{
+              background: '#bfdbfe',
+              color: '#fff',
+              borderRadius: '50%',
+              width: 'clamp(28px, 6vw, 32px)',
+              height: 'clamp(28px, 6vw, 32px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
+              fontWeight: '600'
+            }}>
+              {(() => {
+                if (currentAppointment) {
+                  return queuedAppointments.length;
+                } else {
+                  return Math.max(0, queuedAppointments.length - 1);
+                }
+              })()}
+            </span>
           </div>
         </div>
-        
-        <div className="card-body p-0">
-          {queuedAppointments.length === 0 ? (
-            <div className="text-center py-5 empty-state">
-              <div className="display-1 text-muted mb-4">
-                <i className="bi bi-list-check"></i>
-              </div>
-              <h5 className="text-muted mb-3">No customers waiting</h5>
-              <p className="text-muted mb-4">All appointments are completed or in progress</p>
-              <Link to="/schedule" className="btn btn-outline-primary btn-lg">
-                <i className="bi bi-calendar3 me-2"></i>
-                View Full Schedule
-              </Link>
+
+        {(() => {
+          const waitingList = currentAppointment 
+            ? queuedAppointments 
+            : queuedAppointments.slice(1);
+          
+          return waitingList.length === 0 ? (
+            <div className="text-center py-5" style={{
+              background: '#f9fafb',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <p className="text-muted mb-0">No customers waiting</p>
             </div>
           ) : (
-            <div className="queue-list">
-              {queuedAppointments.map((appointment, index) => (
-                <div key={appointment.id} className={`queue-item ${appointment.is_urgent ? 'urgent-item' : ''} ${index === 0 ? 'next-in-line' : ''}`}>
-                  <div className="queue-item-content">
-                    {/* Queue Position & Customer Info */}
-                    <div className="queue-position-section">
-                      <div className={`queue-number ${appointment.is_urgent ? 'urgent' : 'normal'}`}>
-                        {appointment.is_urgent ? (
-                          <i className="bi bi-lightning-fill"></i>
-                        ) : (
-                          <span>{appointment.queue_position || index + 1}</span>
-                        )}
-                      </div>
-                      
-                      <div className="customer-details">
-                        <h5 className="customer-name mb-1">{appointment.customer?.full_name}</h5>
-                        <div className="customer-meta">
-                          {appointment.customer?.phone && (
-                            <span className="text-muted">
-                              <i className="bi bi-telephone me-1"></i>
-                              {appointment.customer.phone}
-                            </span>
-                          )}
-                          {appointment.is_urgent && (
-                            <span className="badge bg-danger ms-2">
-                              <i className="bi bi-lightning-fill me-1"></i>
-                              URGENT
-                            </span>
-                          )}
-                        </div>
-                        <FriendBookingDisplay appointment={appointment} variant="inline" />
-                      </div>
+            <div className="d-flex flex-column gap-2">
+              {waitingList.map((appointment, displayIndex) => {
+                const actualIndex = currentAppointment ? displayIndex + 1 : displayIndex + 2;
+                return (
+                  <div
+                    key={appointment.id}
+                    className="d-flex align-items-center"
+                    style={{
+                      background: '#e5e7eb',
+                      borderRadius: '12px',
+                      padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
+                      gap: 'clamp(0.5rem, 2vw, 1rem)'
+                    }}
+                  >
+                    {/* Queue Number Badge */}
+                    <div className="d-flex align-items-center justify-content-center flex-shrink-0" style={{
+                      width: 'clamp(35px, 8vw, 40px)',
+                      height: 'clamp(35px, 8vw, 40px)',
+                      background: '#d1d5db',
+                      borderRadius: '50%',
+                      color: '#16a34a',
+                      fontWeight: 'bold',
+                      fontSize: 'clamp(0.95rem, 3vw, 1.1rem)'
+                    }}>
+                      {appointment.queue_position || (actualIndex + 1)}
                     </div>
-
-                    {/* Service Details */}
-                    <div className="service-details-section">
-                      <h6 className="service-name mb-1">{getServicesDisplay(appointment)}</h6>
-                      <div className="service-meta">
-                        <span className="text-muted">
-                          <i className="bi bi-clock me-1"></i>
-                          {appointment.total_duration || appointment.service?.duration} min
-                        </span>
-                        <span className="text-success fw-semibold ms-2">
-                          <i className="bi bi-currency-dollar me-1"></i>
-                          <span className="currency-amount">₱{Number(getTotalPrice(appointment)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </span>
+                    
+                    {/* Customer Info */}
+                    <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', marginBottom: '0.25rem', color: '#1f2937' }}>
+                        {appointment.customer?.full_name || 'Customer'}
                       </div>
-                      <div className="addons-info">
-                        <AddOnsDisplay appointment={appointment} />
+                      <div style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: '#6b7280' }}>
+                        {getServicesDisplay(appointment) || 'Service'}
                       </div>
-                    </div>
-
-                    {/* Queue Info */}
-                    <div className="queue-info-section">
-                      <div className="queue-position-info">
-                        <span className="position-text">
-                          Position #{appointment.queue_position || index + 1}
-                        </span>
-                        {appointment.priority_level && appointment.priority_level !== 'normal' && (
-                          <span className={`priority-badge ${appointment.priority_level}`}>
-                            {appointment.priority_level}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {(appointment.estimated_arrival || appointment.estimated_time) && (
-                        <div className="wait-time">
-                          <i className="bi bi-clock me-1"></i>
-                          Est. arrival: {appointment.estimated_arrival || appointment.estimated_time}
-                        </div>
-                      )}
-                      
-                      {appointment.wait_time && appointment.wait_time > 0 && (
-                        <div className="wait-time">
-                          <i className="bi bi-hourglass-split me-1"></i>
-                          Wait: {appointment.wait_time} min
-                        </div>
-                      )}
-                      
-                      {appointment.notes && (
-                        <div className="notes-indicator">
-                          <i className="bi bi-chat-right-text me-1"></i>
-                          Has notes
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action Button */}
-                    <div className="action-section">
-                      {index === 0 && !currentAppointment ? (
-                        <button
-                          className="btn btn-primary btn-lg action-btn"
-                          onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
-                        >
-                          <i className="bi bi-play-fill me-2"></i>
-                          Start Service
-                        </button>
-                      ) : (
-                        <button
-                          className="btn btn-outline-danger btn-lg action-btn"
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to cancel this appointment?')) {
-                              handleAppointmentStatus(appointment.id, 'cancelled');
-                            }
-                          }}
-                        >
-                          <i className="bi bi-x-circle me-2"></i>
-                          Cancel
-                        </button>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
 
+      {/* Pending Requests Section */}
+      <div>
+        <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Pending Requests</h5>
+        {pendingRequests.length === 0 ? (
+          <div className="text-center py-4" style={{
+            background: '#f9fafb',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <p className="text-muted mb-0">No pending requests</p>
+          </div>
+        ) : (
+          <div className="d-flex flex-column gap-2">
+            {pendingRequests.map((request) => (
+              <div
+                key={request.id}
+                className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 gap-md-0"
+                style={{
+                  background: '#f3f4f6',
+                  borderRadius: '12px',
+                  padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
+                  border: request.is_urgent ? '2px solid #ef4444' : '1px solid #e5e7eb'
+                }}
+              >
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div className="d-flex align-items-center gap-2 mb-1 mb-md-2 flex-wrap">
+                    <div style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#1f2937' }}>
+                      {request.customer?.full_name || 'Unknown Customer'}
+                    </div>
+                    {request.is_urgent && (
+                      <span className="badge bg-danger" style={{ fontSize: 'clamp(0.7rem, 2vw, 0.75rem)' }}>
+                        URGENT
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: '#6b7280', marginBottom: '0.5rem' }}>
+                    Services: {getServicesDisplay(request) || 'Classic'}
+                  </div>
+                  <div style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: '#6b7280' }}>
+                    Total: <span className="text-success fw-bold">₱{getTotalPrice(request)}</span>
+                    {' '}({request.total_duration || (request.service?.duration || 30)} min)
+                  </div>
+                </div>
+                
+                <div className="d-flex gap-2 w-100 w-md-auto">
+                  <button
+                    className="btn btn-sm flex-fill flex-md-initial"
+                    onClick={() => handleBookingResponse(request.id, 'accept')}
+                    style={{
+                      background: request.is_urgent ? '#ef4444' : '#16a34a',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      border: 'none',
+                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                      fontWeight: '500',
+                      fontSize: 'clamp(0.85rem, 2vw, 0.9rem)'
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-danger flex-fill flex-md-initial"
+                    onClick={() => {
+                      const reason = prompt('Reason for declining (optional):');
+                      if (reason !== null) {
+                        handleBookingResponse(request.id, 'decline', reason);
+                      }
+                    }}
+                    style={{
+                      borderRadius: '8px',
+                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                      fontWeight: '500',
+                      fontSize: 'clamp(0.85rem, 2vw, 0.9rem)'
+                    }}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+
+      {/* Reschedule Modal */}
+      <RescheduleModal
+        isOpen={rescheduleModal.isOpen}
+        onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
+        appointment={rescheduleModal.appointment}
+        onSuccess={(request) => {
+          console.log('✅ Reschedule request created:', request);
+          setRescheduleModal({ isOpen: false, appointment: null });
+          fetchQueueData(); // Refresh the queue after reschedule request
+        }}
+      />
     </div>
   );
 };

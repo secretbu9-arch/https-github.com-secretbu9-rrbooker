@@ -170,7 +170,7 @@ class ApiService {
 
   async confirmAppointment(appointmentId, queueNumber, isUrgent = false) {
     const updates = {
-      status: 'scheduled',
+      status: 'confirmed',
       queue_position: queueNumber,
       updated_at: new Date().toISOString()
     };
@@ -185,7 +185,7 @@ class ApiService {
         .select('id, queue_position')
         .eq('barber_id', appointment.barber_id)
         .eq('appointment_date', appointment.appointment_date)
-        .eq('status', 'scheduled')
+        .eq('status', 'confirmed')
         .gte('queue_position', 1)
         .order('queue_position', { ascending: false });
 
@@ -246,7 +246,7 @@ class ApiService {
     // Handle queue number based on status
     if (status === 'ongoing') {
       updates.queue_position = 0; // 0 means currently being served
-    } else if (status === 'done' || status === 'cancelled') {
+    } else if (status === 'completed' || status === 'cancelled') {
       updates.queue_position = null; // Remove from queue
     }
 
@@ -672,7 +672,7 @@ class ApiService {
     
     if (error) throw error;
     
-    const completed = data?.filter(apt => apt.status === 'done') || [];
+    const completed = data?.filter(apt => apt.status === 'completed') || [];
     const cancelled = data?.filter(apt => apt.status === 'cancelled') || [];
     const revenue = completed.reduce((sum, apt) => {
       const basePrice = apt.total_price || apt.service?.price || 0;
@@ -825,7 +825,7 @@ class ApiService {
         is_urgent,
         service:service_id(price)
       `)
-      .eq('status', 'done')
+      .eq('status', 'completed')
       .gte('appointment_date', dateFrom)
       .lte('appointment_date', dateTo);
     
@@ -905,7 +905,7 @@ class ApiService {
         analytics.barberWorkload[barberId].urgentAppointments += 1;
       }
       
-      if (appointment.status === 'done') {
+      if (appointment.status === 'completed') {
         analytics.barberWorkload[barberId].completedAppointments += 1;
       }
     });

@@ -1,5 +1,6 @@
 // components/dashboards/ManagerDashboard.js (Enhanced with analytics, queue management, and orders)
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { apiService } from '../../services/ApiService';
 import { PushService } from '../../services/PushService';
@@ -7,6 +8,7 @@ import NotificationModal from '../manager/NotificationModal';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 
 const ManagerDashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalAppointments: 0,
     todayAppointments: 0,
@@ -183,7 +185,7 @@ const ManagerDashboard = () => {
             is_urgent,
             service:service_id(price)
           `)
-          .eq('status', 'done'),
+          .eq('status', 'completed'),
         
         // Recent appointments
         supabase
@@ -276,9 +278,9 @@ const ManagerDashboard = () => {
 
       // Calculate completion rate
       const totalScheduled = appointments?.filter(apt => 
-        ['scheduled', 'done', 'cancelled'].includes(apt.status)
+        ['scheduled', 'completed', 'cancelled'].includes(apt.status)
       ).length || 0;
-      const completed = appointments?.filter(apt => apt.status === 'done').length || 0;
+      const completed = appointments?.filter(apt => apt.status === 'completed').length || 0;
       const completionRate = totalScheduled > 0 ? (completed / totalScheduled) * 100 : 0;
 
       // Get barber queues for today
@@ -603,288 +605,99 @@ const ManagerDashboard = () => {
   }
 
   return (
-    <div className="container-fluid py-4 dashboard-container">
-      {/* Manager Welcome Header */}
-      <div className="row mb-4">
+    <div className="container-fluid py-3 dashboard-container">
+      {/* Simplified Header */}
+      <div className="row mb-3">
         <div className="col">
-          <div className="manager-welcome-header p-4 rounded shadow-sm d-flex align-items-center">
+          <div className="d-flex justify-content-between align-items-center rounded shadow-sm" style={{ 
+            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            padding: 'clamp(1rem, 3vw, 1.5rem)'
+          }}>
             <div>
-              <div className="d-flex align-items-center mb-2">
-                <img 
-                  src={logoImage} 
-                  alt="Raf & Rok" 
-                  className="dashboard-logo me-3" 
-                  height="40"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    padding: '3px',
-                    borderRadius: '5px'
-                  }}
-                />
-                <h1 className="h3 mb-0 text-white">Manager Dashboard</h1>
-              </div>
-              <p className="text-light mb-0">
-                <i className="bi bi-graph-up me-2"></i>
-                Complete overview of barbershop operations and queue management
+              <h2 className="mb-1 fw-bold" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)' }}>
+                <i className="bi bi-speedometer2 me-2"></i>
+                Manager Dashboard
+              </h2>
+              <p className="text-muted mb-0" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
-            <div className="ms-auto text-end text-light">
-              <div className="h4 mb-0">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-              <div className="text-light">
-                <i className="bi bi-calendar-check me-2"></i>
-                Real-time Operations
-              </div>
-            </div>
+            <button 
+              className="btn btn-outline-secondary btn-sm"
+              onClick={fetchDashboardData}
+              disabled={isFetchingData}
+              style={{ fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)' }}
+            >
+              <i className={`bi bi-arrow-clockwise me-1 ${isFetchingData ? 'spinner-border spinner-border-sm' : ''}`}></i>
+              Refresh
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Appointment Statistics Cards */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <h5 className="mb-3">
-            <i className="bi bi-calendar-week me-2"></i>
-            Appointment Statistics
-          </h5>
-        </div>
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.1s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Today's Appointments</h6>
-                <h2 className="mb-0">{stats.todayAppointments}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-calendar-check"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.2s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Pending Requests</h6>
-                <h2 className="mb-0">{stats.pendingRequests}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-clock-fill"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-danger text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.3s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Urgent Bookings</h6>
-                <h2 className="mb-0">{stats.urgentBookings}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-lightning-fill"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.4s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Total Revenue</h6>
-                <h2 className="mb-0"><span className="currency-amount-large">₱{stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-cash-coin"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.5s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Active Queues</h6>
-                <h2 className="mb-0">{stats.activeQueues}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-people-fill"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-secondary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.6s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Completion Rate</h6>
-                <h2 className="mb-0">{stats.completionRate}%</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-check-circle"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Order Statistics Cards */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <h5 className="mb-3">
-            <i className="bi bi-box-seam me-2"></i>
-            Order Statistics
-          </h5>
-        </div>
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.7s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Total Orders</h6>
-                <h2 className="mb-0">{stats.totalOrders}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-box-seam"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.8s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Today's Orders</h6>
-                <h2 className="mb-0">{stats.todayOrders}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-calendar-day"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.9s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Pending Orders</h6>
-                <h2 className="mb-0">{stats.pendingOrders}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-clock"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '1.0s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Ready for Pickup</h6>
-                <h2 className="mb-0">{stats.readyOrders}</h2>
-              </div>
-              <div className="ms-auto card-icon">
-                <i className="bi bi-check-circle-fill"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-3 col-lg-2 mb-3">
-          <div 
-            className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '1.1s' }}
-          >
-            <div className="card-body d-flex align-items-center">
-              <div>
-                <h6 className="card-title mb-1">Order Revenue</h6>
-                <h2 className="mb-0"><span className="currency-amount-large">₱{stats.orderRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
-              </div>
-              <div className="ms-auto card-icon">
-              <i className="bi bi-cash-coin"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Capacity Overview */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="card shadow-sm">
-            <div className="card-header">
-              <h5 className="mb-0">
-                <i className="bi bi-speedometer me-2"></i>
-                Barber Capacity Overview
-              </h5>
-            </div>
+      {/* Key Metrics - Simplified Grid */}
+      <div className="row g-3 mb-4">
+        <div className="col-md-6 col-lg-3">
+          <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)' }}>
             <div className="card-body">
-              <div className="row">
-                {capacityOverview.map((barber) => (
-                  <div key={barber.barber_id} className="col-md-4 col-lg-3 mb-3">
-                    <div className="card border-0 bg-light">
-                      <div className="card-body p-3">
-                        <h6 className="card-title">{barber.barber_name}</h6>
-                        <div className="progress mb-2" style={{ height: '10px' }}>
-                          <div 
-                            className={`progress-bar bg-${getCapacityColor(barber.current_capacity, barber.max_capacity)}`}
-                            style={{ width: `${(barber.current_capacity / barber.max_capacity) * 100}%` }}
-                          ></div>
-                        </div>
-                        <div className="d-flex justify-content-between">
-                          <small>{barber.current_capacity}/{barber.max_capacity}</small>
-                          <small className="text-muted">
-                            {barber.is_full ? 'FULL' : `${barber.available_slots} available`}
-                          </small>
-                        </div>
-                        {barber.estimated_wait_time > 0 && (
-                          <div className="mt-1">
-                            <small className="text-info">
-                              <i className="bi bi-clock me-1"></i>
-                              Wait: {calculateWaitTime(barber.current_capacity)}
-                            </small>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Today's Appointments</div>
+                  <div className="h3 mb-0 fw-bold">{stats.todayAppointments}</div>
+                </div>
+                <div className="text-primary" style={{ fontSize: '2.5rem' }}>
+                  <i className="bi bi-calendar-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="col-md-6 col-lg-3">
+          <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Pending Requests</div>
+                  <div className="h3 mb-0 fw-bold text-warning">{stats.pendingRequests}</div>
+                </div>
+                <div className="text-warning" style={{ fontSize: '2.5rem' }}>
+                  <i className="bi bi-clock-fill"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="col-md-6 col-lg-3">
+          <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' }}>
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Total Revenue</div>
+                  <div className="h4 mb-0 fw-bold text-success">
+                    ₱{stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </div>
-                ))}
+                </div>
+                <div className="text-success" style={{ fontSize: '2.5rem' }}>
+                  <span style={{ fontSize: '2rem' }}>₱</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="col-md-6 col-lg-3">
+          <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Pending Orders</div>
+                  <div className="h3 mb-0 fw-bold text-warning">{stats.pendingOrders}</div>
+                </div>
+                <div className="text-warning" style={{ fontSize: '2.5rem' }}>
+                  <i className="bi bi-box-seam"></i>
+                </div>
               </div>
             </div>
           </div>
@@ -893,20 +706,19 @@ const ManagerDashboard = () => {
 
       {/* Pending Requests Alert */}
       {pendingRequests.length > 0 && (
-        <div className="row mb-4">
+        <div className="row mb-3">
           <div className="col-12">
-            <div className="alert alert-warning shadow-sm">
+            <div className="alert alert-warning border-0 shadow-sm mb-0">
               <div className="d-flex align-items-center">
-                <i className="bi bi-exclamation-triangle me-2 fs-4"></i>
+                <i className="bi bi-exclamation-triangle me-2 fs-5"></i>
                 <div className="flex-grow-1">
-                  <h5 className="alert-heading">Pending Booking Requests</h5>
-                  <p className="mb-0">You have {pendingRequests.length} booking requests awaiting approval.</p>
+                  <strong>Pending Booking Requests:</strong> You have {pendingRequests.length} booking request{pendingRequests.length !== 1 ? 's' : ''} awaiting approval.
                 </div>
                 <button 
-                  className="btn btn-warning"
-                  onClick={() => document.getElementById('pending-requests').scrollIntoView()}
+                  className="btn btn-warning btn-sm"
+                  onClick={() => document.getElementById('pending-requests')?.scrollIntoView({ behavior: 'smooth' })}
                 >
-                  Review Requests
+                  Review <i className="bi bi-arrow-down ms-1"></i>
                 </button>
               </div>
             </div>
@@ -914,128 +726,93 @@ const ManagerDashboard = () => {
         </div>
       )}
 
-      <div className="row">
+
+      <div className="row g-3">
         {/* Recent Appointments */}
-        <div className="col-md-8 mb-4">
-          <div className="card shadow-sm appointments-card">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <div className="d-flex align-items-center">
-                <i className="bi bi-calendar-week me-2 header-icon"></i>
-                <h5 className="card-title mb-0">Recent Appointments</h5>
-              </div>
-              <div className="d-flex gap-2">
-                <button className="btn btn-light btn-sm" onClick={fetchDashboardData}>
-                  <i className="bi bi-arrow-clockwise me-1"></i>
-                  Refresh
-                </button>
-              </div>
+        <div className="col-lg-8 mb-3">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-header border-bottom d-flex justify-content-between align-items-center py-3" style={{ background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)', color: 'white' }}>
+              <h5 className="mb-0 fw-bold" style={{ color: 'white' }}>
+                <i className="bi bi-calendar-week me-2"></i>
+                Recent Appointments
+              </h5>
+              <span className="badge bg-light text-primary">{recentAppointments.length}</span>
             </div>
-            <div className="card-body">
+            <div className="card-body p-0">
               {recentAppointments.length === 0 ? (
-                <div className="empty-state text-center py-4">
-                  <div className="empty-icon">
-                    <i className="bi bi-calendar-x"></i>
-                  </div>
-                  <h5>No Appointments Found</h5>
-                  <p className="text-muted">There are no appointments in the system yet.</p>
+                <div className="text-center py-5">
+                  <i className="bi bi-calendar-x text-muted" style={{ fontSize: '3rem' }}></i>
+                  <p className="text-muted mt-2 mb-0">No appointments found</p>
                 </div>
               ) : (
                 <div className="table-responsive">
-                  <table className="table align-middle">
-                    <thead>
+                  <table className="table table-hover mb-0">
+                    <thead className="table-light">
                       <tr>
                         <th>Customer</th>
                         <th>Barber</th>
                         <th>Service</th>
-                        <th>Date & Time</th>
+                        <th>Date</th>
                         <th>Status</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {recentAppointments.slice(0, 8).map((appointment) => (
-                        <tr key={appointment.id} className={appointment.status === 'ongoing' ? 'table-active current-row' : ''}>
+                      {recentAppointments.slice(0, 6).map((appointment) => (
+                        <tr key={appointment.id}>
                           <td>
-                            <div className="d-flex align-items-center">
-                              <div className="avatar-placeholder me-2">
-                                {appointment.customer?.full_name?.charAt(0) || '?'}
-                              </div>
-                              <div>
-                                <div>{appointment.customer?.full_name || 'Unknown'}</div>
-                                {appointment.customer?.phone && (
-                                  <div className="phone-number">
-                                    <i className="bi bi-telephone me-1"></i>
-                                    {appointment.customer.phone}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="barber-name">
-                              <i className="bi bi-scissors me-1"></i>
-                              {appointment.barber?.full_name || 'Unknown'}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="service-name">{appointment.service?.name || 'Unknown'}</div>
-                            <div className="service-details">
-                              <span className="duration">
-                                <i className="bi bi-clock me-1"></i>
-                                {appointment.total_duration || appointment.service?.duration} min
-                              </span>
-                              <span className="price ms-2">
-                                <i className="bi bi-cash me-1"></i>
-                                ₱{appointment.total_price || appointment.service?.price}
-                              </span>
-                              {appointment.is_urgent && (
-                                <span className="badge bg-warning ms-2">URGENT</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="date-info">
-                              <i className="bi bi-calendar3 me-1"></i>
-                              {appointment.appointment_date}
-                            </div>
-                            {appointment.queue_position && (
-                              <div className="queue-info">
-                                <i className="bi bi-list-ol me-1"></i>
-                                Queue #{appointment.queue_position}
-                              </div>
+                            <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
+                            {appointment.customer?.phone && (
+                              <small className="text-muted">
+                                <i className="bi bi-telephone me-1"></i>
+                                {appointment.customer.phone}
+                              </small>
                             )}
                           </td>
                           <td>
-                            <span className={`status-badge status-${appointment.status}`}>
+                            <i className="bi bi-scissors me-1 text-muted"></i>
+                            {appointment.barber?.full_name || 'Unknown'}
+                          </td>
+                          <td>
+                            <div>{appointment.service?.name || 'Unknown'}</div>
+                            <small className="text-muted">
+                              ₱{appointment.total_price || appointment.service?.price}
+                              {appointment.is_urgent && (
+                                <span className="badge bg-warning ms-2">URGENT</span>
+                              )}
+                            </small>
+                          </td>
+                          <td>
+                            <div>{appointment.appointment_date}</div>
+                            {appointment.queue_position && (
+                              <small className="text-muted">Queue #{appointment.queue_position}</small>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`badge bg-${
+                              appointment.status === 'completed' ? 'success' :
+                              appointment.status === 'ongoing' ? 'primary' :
+                              appointment.status === 'scheduled' ? 'info' :
+                              appointment.status === 'cancelled' ? 'danger' : 'secondary'
+                            }`}>
                               {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                             </span>
                           </td>
                           <td>
                             {appointment.status === 'scheduled' && (
-                              <div className="btn-group" role="group">
-                                <button
-                                  className="btn btn-sm btn-primary action-btn"
-                                  onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
-                                >
-                                  <i className="bi bi-play-fill me-1"></i>
-                                  Start
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-danger action-btn"
-                                  onClick={() => handleAppointmentStatus(appointment.id, 'cancelled')}
-                                >
-                                  <i className="bi bi-x-lg me-1"></i>
-                                  Cancel
-                                </button>
-                              </div>
+                              <button
+                                className="btn btn-sm btn-primary"
+                                onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
+                              >
+                                <i className="bi bi-play-fill"></i>
+                              </button>
                             )}
                             {appointment.status === 'ongoing' && (
                               <button
-                                className="btn btn-sm btn-success action-btn"
-                                onClick={() => handleAppointmentStatus(appointment.id, 'done')}
+                                className="btn btn-sm btn-success"
+                                onClick={() => handleAppointmentStatus(appointment.id, 'completed')}
                               >
-                                <i className="bi bi-check-lg me-1"></i>
-                                Complete
+                                <i className="bi bi-check-lg"></i>
                               </button>
                             )}
                           </td>
@@ -1049,403 +826,96 @@ const ManagerDashboard = () => {
           </div>
         </div>
 
-        {/* Right Column - Pending Requests & Pending Orders */}
-        <div className="col-md-4 mb-4">
+        {/* Right Column - Quick Actions */}
+        <div className="col-lg-4 mb-3">
           {/* Pending Requests */}
-          <div id="pending-requests" className="card shadow-sm mb-4">
-            <div className="card-header">
-              <div className="d-flex align-items-center">
-                <i className="bi bi-bell me-2 header-icon"></i>
-                <h5 className="card-title mb-0">Pending Requests</h5>
-                <span className="badge bg-warning ms-2">{pendingRequests.length}</span>
-              </div>
+          <div id="pending-requests" className="card border-0 shadow-sm mb-3">
+            <div className="card-header border-bottom py-3" style={{ background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', color: 'white' }}>
+              <h6 className="mb-0 fw-bold" style={{ color: 'white' }}>
+                <i className="bi bi-bell me-2"></i>
+                Pending Requests
+                <span className="badge bg-light text-warning ms-2">{pendingRequests.length}</span>
+              </h6>
             </div>
             <div className="card-body p-0">
-              <div className="pending-requests-feed">
-                {pendingRequests.length === 0 ? (
-                  <div className="empty-state text-center py-4">
-                    <div className="empty-icon">
-                      <i className="bi bi-check-circle"></i>
-                    </div>
-                    <h5>No Pending Requests</h5>
-                    <p className="text-muted">All booking requests have been processed.</p>
-                  </div>
-                ) : (
-                  pendingRequests.map((request) => (
-                    <div key={request.id} className="pending-request-item p-3 border-bottom">
+              {pendingRequests.length === 0 ? (
+                <div className="text-center py-4">
+                  <i className="bi bi-check-circle text-success" style={{ fontSize: '2rem' }}></i>
+                  <p className="text-muted small mt-2 mb-0">All requests processed</p>
+                </div>
+              ) : (
+                <div className="list-group list-group-flush">
+                  {pendingRequests.slice(0, 4).map((request) => (
+                    <div key={request.id} className="list-group-item">
                       <div className="d-flex justify-content-between align-items-start mb-2">
-                        <div>
-                          <h6 className="mb-1">{request.customer?.full_name}</h6>
-                          <small className="text-muted">
-                            {request.service?.name} with {request.barber?.full_name}
-                          </small>
+                        <div className="flex-grow-1">
+                          <div className="fw-bold small">{request.customer?.full_name}</div>
+                          <div className="text-muted small">
+                            {request.service?.name} • {request.barber?.full_name}
+                          </div>
                         </div>
                         {request.is_urgent && (
                           <span className="badge bg-danger">URGENT</span>
                         )}
                       </div>
-                      
-                      <div className="mb-2">
-                        <small className="text-muted">
-                          <i className="bi bi-calendar me-1"></i>
-                          {new Date(request.appointment_date).toLocaleDateString()}
-                        </small>
-                        <br />
-                        <small className="text-success">
-                          <i className="bi bi-cash me-1"></i>
-                          ₱{request.total_price || request.service?.price}
-                        </small>
-                      </div>
-                      
                       <div className="d-flex gap-2">
                         <button
                           className="btn btn-sm btn-success flex-fill"
                           onClick={() => handlePendingRequest(request.id, 'approve')}
                         >
-                          <i className="bi bi-check me-1"></i>
-                          Approve
+                          <i className="bi bi-check"></i> Approve
                         </button>
                         <button
                           className="btn btn-sm btn-outline-danger flex-fill"
                           onClick={() => handlePendingRequest(request.id, 'decline')}
                         >
-                          <i className="bi bi-x me-1"></i>
-                          Decline
+                          <i className="bi bi-x"></i> Decline
                         </button>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Pending Orders */}
-          <div className="card shadow-sm mb-4">
-            <div className="card-header">
-              <div className="d-flex align-items-center">
-                <i className="bi bi-box-seam me-2 header-icon"></i>
-                <h5 className="card-title mb-0">Pending Orders</h5>
-                <span className="badge bg-warning ms-2">{pendingOrders.length}</span>
-              </div>
+          <div className="card border-0 shadow-sm mb-3">
+            <div className="card-header border-bottom py-3" style={{ background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', color: 'white' }}>
+              <h6 className="mb-0 fw-bold" style={{ color: 'white' }}>
+                <i className="bi bi-box-seam me-2"></i>
+                Pending Orders
+                <span className="badge bg-light text-warning ms-2">{pendingOrders.length}</span>
+              </h6>
             </div>
             <div className="card-body p-0">
-              <div className="pending-orders-feed">
-                {pendingOrders.length === 0 ? (
-                  <div className="empty-state text-center py-4">
-                    <div className="empty-icon">
-                      <i className="bi bi-check-circle"></i>
-                    </div>
-                    <h5>No Pending Orders</h5>
-                    <p className="text-muted">All orders have been processed.</p>
-                  </div>
-                ) : (
-                  pendingOrders.map((order) => (
-                    <div key={order.id} className="pending-order-item p-3 border-bottom">
+              {pendingOrders.length === 0 ? (
+                <div className="text-center py-4">
+                  <i className="bi bi-check-circle text-success" style={{ fontSize: '2rem' }}></i>
+                  <p className="text-muted small mt-2 mb-0">All orders processed</p>
+                </div>
+              ) : (
+                <div className="list-group list-group-flush">
+                  {pendingOrders.slice(0, 4).map((order) => (
+                    <div key={order.id} className="list-group-item">
                       <div className="d-flex justify-content-between align-items-start mb-2">
-                        <div>
-                          <h6 className="mb-1">Order #{order.order_number || order.id.slice(0, 8)}</h6>
-                          <small className="text-muted">
-                            {order.customer?.full_name || 'Unknown Customer'}
-                          </small>
+                        <div className="flex-grow-1">
+                          <div className="fw-bold small">Order #{order.order_number || order.id.slice(0, 8)}</div>
+                          <div className="text-muted small">{order.customer?.full_name || 'Unknown'}</div>
+                          <div className="text-success small mt-1">
+                            ₱{Number(order.total_amount || 0).toFixed(2)}
+                          </div>
                         </div>
                         <span className="badge bg-warning">PENDING</span>
                       </div>
-                      
-                      <div className="mb-2">
-                        <small className="text-muted">
-                          <i className="bi bi-calendar me-1"></i>
-                          {new Date(order.created_at).toLocaleDateString()}
-                        </small>
-                        <br />
-                        <small className="text-success">
-                          <i className="bi bi-cash me-1"></i>
-                          ₱{order.total_amount || 0}
-                        </small>
-                      </div>
-                      
-                      <div className="d-flex gap-2">
-                        <button
-                          className="btn btn-sm btn-success flex-fill"
-                          onClick={async () => {
-                            try {
-                              const { default: ordersService } = await import('../../services/OrdersService');
-                              await ordersService.updateOrderStatus(order.id, 'confirmed');
-                              await fetchDashboardData();
-                              alert('Order confirmed successfully!');
-                            } catch (error) {
-                              console.error('Error confirming order:', error);
-                              alert('Failed to confirm order. Please try again.');
-                            }
-                          }}
-                        >
-                          <i className="bi bi-check me-1"></i>
-                          Confirm
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-primary flex-fill"
-                          onClick={() => window.location.href = `/manage-orders?order=${order.id}`}
-                        >
-                          <i className="bi bi-eye me-1"></i>
-                          View
-                        </button>
-                      </div>
+                      <button
+                        className="btn btn-sm btn-primary w-100"
+                        onClick={() => navigate(`/manage/orders?order=${order.id}`)}
+                      >
+                        <i className="bi bi-eye me-1"></i> View Details
+                      </button>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* System Activity Log */}
-          <div className="card shadow-sm">
-            <div className="card-header">
-              <div className="d-flex align-items-center">
-                <i className="bi bi-activity me-2 header-icon"></i>
-                <h5 className="card-title mb-0">Recent Activity</h5>
-              </div>
-            </div>
-            <div className="card-body p-0">
-              <div className="activity-feed">
-                {recentLogs.length === 0 ? (
-                  <div className="empty-state text-center py-4">
-                    <div className="empty-icon">
-                      <i className="bi bi-clock-history"></i>
-                    </div>
-                    <h5>No Recent Activity</h5>
-                    <p className="text-muted">System activity will appear here.</p>
-                  </div>
-                ) : (
-                  recentLogs.slice(0, 5).map((log) => (
-                    <div key={log.id} className="activity-item p-3 border-bottom">
-                      <div className="activity-icon me-3">
-                        <div className={`activity-icon-bg icon-${
-                          log.action.includes('success') ? 'success' :
-                          log.action.includes('failed') ? 'danger' :
-                          log.action.includes('appointment') ? 'primary' :
-                          log.action.includes('login') ? 'info' :
-                          'secondary'
-                        }`}>
-                          <i className={`bi ${
-                            log.action.includes('login') ? 'bi-box-arrow-in-right' :
-                            log.action.includes('appointment') ? 'bi-calendar' :
-                            log.action.includes('registration') ? 'bi-person-plus' :
-                            'bi-activity'
-                          }`}></i>
-                        </div>
-                      </div>
-                      <div className="activity-content">
-                        <div className="d-flex justify-content-between mb-1">
-                          <div className="activity-title">{formatAction(log.action)}</div>
-                          <div className="activity-time">
-                            {formatTimestamp(log.created_at)}
-                          </div>
-                        </div>
-                        <div className="activity-user">
-                          {log.user ? (
-                            <span>
-                              <i className="bi bi-person me-1"></i>
-                              {log.user.full_name} 
-                              <span className="user-role">({log.user.role})</span>
-                            </span>
-                          ) : (
-                            <span className="system-user">System</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="card-footer bg-light">
-              <div className="d-flex justify-content-between align-items-center">
-                <small className="text-muted">Showing last {Math.min(recentLogs.length, 5)} activities</small>
-                <button className="btn btn-sm btn-light" onClick={fetchDashboardData}>
-                  <i className="bi bi-arrow-clockwise me-1"></i>
-                  Refresh
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Orders Section */}
-      <div className="row">
-        <div className="col-12 mb-4">
-          <div className="card shadow-sm orders-card">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <div className="d-flex align-items-center">
-                <i className="bi bi-box-seam me-2 header-icon"></i>
-                <h5 className="card-title mb-0">Recent Orders</h5>
-              </div>
-              <div className="d-flex gap-2">
-                <button 
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={() => window.location.href = '/manage-orders'}
-                >
-                  <i className="bi bi-gear me-1"></i>
-                  Manage Orders
-                </button>
-                <button className="btn btn-light btn-sm" onClick={fetchDashboardData}>
-                  <i className="bi bi-arrow-clockwise me-1"></i>
-                  Refresh
-                </button>
-              </div>
-            </div>
-            <div className="card-body">
-              {recentOrders.length === 0 ? (
-                <div className="empty-state text-center py-4">
-                  <div className="empty-icon">
-                    <i className="bi bi-box"></i>
-                  </div>
-                  <h5>No Orders Found</h5>
-                  <p className="text-muted">There are no orders in the system yet.</p>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table align-middle">
-                    <thead>
-                      <tr>
-                        <th>Order #</th>
-                        <th>Customer</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentOrders.slice(0, 8).map((order) => (
-                        <tr key={order.id}>
-                          <td>
-                            <div className="order-number">
-                              <i className="bi bi-hash me-1"></i>
-                              {order.order_number || order.id.slice(0, 8)}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <div className="avatar-placeholder me-2">
-                                {order.customer?.full_name?.charAt(0) || '?'}
-                              </div>
-                              <div>
-                                <div>{order.customer?.full_name || 'Unknown'}</div>
-                                {order.customer?.phone && (
-                                  <div className="phone-number">
-                                    <i className="bi bi-telephone me-1"></i>
-                                    {order.customer.phone}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="order-items">
-                              {order.items && Array.isArray(order.items) ? (
-                                <span className="badge bg-info">
-                                  {order.items.length} item{order.items.length !== 1 ? 's' : ''}
-                                </span>
-                              ) : (
-                                <span className="text-muted">No items</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="order-total">
-                              <i className="bi bi-cash me-1"></i>
-                              <span className="currency-amount">₱{Number(order.total_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`status-badge status-${order.status}`}>
-                              {order.status.replace('_', ' ').toUpperCase()}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="date-info">
-                              <i className="bi bi-calendar3 me-1"></i>
-                              {new Date(order.created_at).toLocaleDateString()}
-                            </div>
-                            <div className="time-info">
-                              <i className="bi bi-clock me-1"></i>
-                              {new Date(order.created_at).toLocaleTimeString()}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="btn-group" role="group">
-                              <button
-                                className="btn btn-sm btn-outline-primary"
-                                onClick={() => window.location.href = `/manage-orders?order=${order.id}`}
-                              >
-                                <i className="bi bi-eye me-1"></i>
-                                View
-                              </button>
-                              {order.status === 'pending' && (
-                                <button
-                                  className="btn btn-sm btn-success"
-                                  onClick={async () => {
-                                    try {
-                                      const { default: ordersService } = await import('../../services/OrdersService');
-                                      await ordersService.updateOrderStatus(order.id, 'confirmed');
-                                      await fetchDashboardData();
-                                      alert('Order confirmed successfully!');
-                                    } catch (error) {
-                                      console.error('Error confirming order:', error);
-                                      alert('Failed to confirm order. Please try again.');
-                                    }
-                                  }}
-                                >
-                                  <i className="bi bi-check me-1"></i>
-                                  Confirm
-                                </button>
-                              )}
-                              {order.status === 'confirmed' && (
-                                <button
-                                  className="btn btn-sm btn-warning"
-                                  onClick={async () => {
-                                    try {
-                                      const { default: ordersService } = await import('../../services/OrdersService');
-                                      await ordersService.updateOrderStatus(order.id, 'preparing');
-                                      await fetchDashboardData();
-                                      alert('Order marked as preparing!');
-                                    } catch (error) {
-                                      console.error('Error updating order:', error);
-                                      alert('Failed to update order. Please try again.');
-                                    }
-                                  }}
-                                >
-                                  <i className="bi bi-gear me-1"></i>
-                                  Prepare
-                                </button>
-                              )}
-                              {order.status === 'preparing' && (
-                                <button
-                                  className="btn btn-sm btn-info"
-                                  onClick={async () => {
-                                    try {
-                                      const { default: ordersService } = await import('../../services/OrdersService');
-                                      await ordersService.updateOrderStatus(order.id, 'ready_for_pickup');
-                                      await fetchDashboardData();
-                                      alert('Order marked as ready for pickup!');
-                                    } catch (error) {
-                                      console.error('Error updating order:', error);
-                                      alert('Failed to update order. Please try again.');
-                                    }
-                                  }}
-                                >
-                                  <i className="bi bi-check-circle me-1"></i>
-                                  Ready
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  ))}
                 </div>
               )}
             </div>
@@ -1453,67 +923,132 @@ const ManagerDashboard = () => {
         </div>
       </div>
 
-      {/* Barber Ratings Overview */}
-      {barberRatings.length > 0 && (
-        <div className="row mt-4">
+      {/* Recent Orders Section - Simplified */}
+      {recentOrders.length > 0 && (
+        <div className="row mt-3">
           <div className="col-12">
-            <div className="card shadow-sm">
-              <div className="card-header bg-warning text-dark">
-                <h6 className="mb-0">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header border-bottom d-flex justify-content-between align-items-center py-3" style={{ background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)', color: 'white' }}>
+                <h5 className="mb-0 fw-bold" style={{ color: 'white' }}>
+                  <i className="bi bi-box-seam me-2"></i>
+                  Recent Orders
+                </h5>
+                <button 
+                  className="btn btn-light btn-sm"
+                  onClick={() => navigate('/manage/orders')}
+                >
+                  <i className="bi bi-gear me-1"></i>
+                  Manage All
+                </button>
+              </div>
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table table-hover mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Order #</th>
+                        <th>Customer</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentOrders.slice(0, 5).map((order) => (
+                        <tr key={order.id}>
+                          <td className="fw-bold">#{order.order_number || order.id.slice(0, 8)}</td>
+                          <td>{order.customer?.full_name || 'Unknown'}</td>
+                          <td>
+                            <span className="fw-bold text-success">
+                              ₱{Number(order.total_amount || 0).toFixed(2)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge bg-${
+                              order.status === 'picked_up' || order.status === 'completed' ? 'success' :
+                              order.status === 'ready_for_pickup' ? 'info' :
+                              order.status === 'preparing' ? 'primary' :
+                              order.status === 'confirmed' ? 'warning' :
+                              order.status === 'pending' ? 'secondary' : 'danger'
+                            }`}>
+                              {order.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            <small className="text-muted">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </small>
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => navigate(`/manage/orders?order=${order.id}`)}
+                            >
+                              <i className="bi bi-eye"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barber Ratings - Simplified */}
+      {barberRatings.length > 0 && (
+        <div className="row mt-3">
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header border-bottom py-3" style={{ background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)', color: 'white' }}>
+                <h6 className="mb-0 fw-bold" style={{ color: 'white' }}>
                   <i className="bi bi-star-fill me-2"></i>
-                  Barber Performance Ratings
+                  Barber Performance
                 </h6>
               </div>
               <div className="card-body">
-                <div className="row">
-                  {barberRatings.map((barber) => (
-                    <div key={barber.id} className="col-md-6 col-lg-4 mb-3">
-                      <div className="card h-100 border-0 bg-light">
-                        <div className="card-body p-3">
-                          <div className="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                              <h6 className="card-title mb-1">{barber.full_name}</h6>
-                              <small className="text-muted">{barber.email}</small>
-                            </div>
-                            <span className={`badge ${
-                              barber.barber_status === 'available' ? 'bg-success' : 
-                              barber.barber_status === 'busy' ? 'bg-warning' : 'bg-secondary'
-                            }`}>
+                <div className="row g-3">
+                  {barberRatings.slice(0, 4).map((barber) => (
+                    <div key={barber.id} className="col-md-6 col-lg-3">
+                      <div className="border rounded p-3">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <div>
+                            <div className="fw-bold small">{barber.full_name}</div>
+                            <span className={`badge bg-${
+                              barber.barber_status === 'available' ? 'success' : 
+                              barber.barber_status === 'busy' ? 'warning' : 'secondary'
+                            } small`}>
                               {barber.barber_status}
                             </span>
                           </div>
-                          <div className="d-flex align-items-center justify-content-between">
-                            <div className="d-flex align-items-center">
-                              {[...Array(5)].map((_, i) => (
-                                <i
-                                  key={i}
-                                  className={`bi bi-star-fill ${
-                                    i < Math.floor(barber.average_rating || 0) ? 'text-warning' : 'text-muted'
-                                  }`}
-                                  style={{ fontSize: '0.9rem' }}
-                                ></i>
-                              ))}
+                        </div>
+                        <div className="d-flex align-items-center justify-content-between">
+                          <div className="d-flex align-items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <i
+                                key={i}
+                                className={`bi bi-star-fill ${
+                                  i < Math.floor(barber.average_rating || 0) ? 'text-warning' : 'text-muted'
+                                }`}
+                                style={{ fontSize: '0.8rem' }}
+                              ></i>
+                            ))}
+                          </div>
+                          <div className="text-end">
+                            <div className="fw-bold text-warning small">
+                              {barber.average_rating || '0'}/5
                             </div>
-                            <div className="text-end">
-                              <div className="fw-bold text-warning">
-                                {barber.average_rating || '0'}/5
-                              </div>
-                              <small className="text-muted">
-                                {barber.total_ratings || 0} reviews
-                              </small>
-                            </div>
+                            <small className="text-muted">{barber.total_ratings || 0} reviews</small>
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                {barberRatings.length === 0 && (
-                  <div className="text-center py-4">
-                    <i className="bi bi-star text-muted" style={{ fontSize: '3rem' }}></i>
-                    <p className="text-muted mt-2">No ratings available yet</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>

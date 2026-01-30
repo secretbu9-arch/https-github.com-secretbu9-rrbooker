@@ -17,7 +17,7 @@ class AppointmentTypeManager {
       PENDING: 'pending',
       SCHEDULED: 'scheduled',
       ONGOING: 'ongoing',
-      DONE: 'done',
+      COMPLETED: 'completed',
       CANCELLED: 'cancelled'
     };
 

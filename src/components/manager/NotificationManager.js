@@ -67,19 +67,29 @@ const NotificationManager = () => {
       };
 
       let result;
+      // Use centralized service for consistency and duplicate prevention
+      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      
       if (notificationData.target === 'all') {
+        // For all users, still use PushService directly as centralized service doesn't support bulk
         result = await PushService.sendNotificationToAllUsers(
           notificationData.title,
           notificationData.body,
           data
         );
       } else {
-        result = await PushService.sendNotificationToUser(
-          notificationData.userId,
-          notificationData.title,
-          notificationData.body,
-          data
-        );
+        // For single user, use centralized service to create both database and push notifications
+        await centralizedNotificationService.createNotification({
+          userId: notificationData.userId,
+          title: notificationData.title,
+          message: notificationData.body,
+          type: notificationData.type || 'system',
+          category: 'manager_notification',
+          priority: 'high',
+          channels: ['app', 'push'],
+          data: data
+        });
+        result = true;
       }
 
       if (result) {

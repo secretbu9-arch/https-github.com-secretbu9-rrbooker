@@ -1,7 +1,6 @@
 // components/barber/AppointmentRequestManager.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
 
 const AppointmentRequestManager = ({ user, userRole }) => {
   const [requests, setRequests] = useState([]);
@@ -93,95 +92,79 @@ const AppointmentRequestManager = ({ user, userRole }) => {
 
           if (cancelError) throw cancelError;
 
-          // Send database notification to customer (fallback)
-          await supabase.from('notifications').insert({
-            user_id: request.customer_id,
-            title: 'Appointment Cancelled',
-            message: 'Your appointment cancellation request has been approved.',
-            type: 'appointment_cancelled_approved',
-            data: {
-              appointment_id: request.appointment_id,
-              request_id: requestId
-            }
-          });
-
-          // Send push notification to customer
+          // Create notification using centralized service (prevents duplicates)
+          // Send single detailed notification instead of two separate ones
           try {
-            await PushService.sendNotificationToUser(
-              request.customer_id,
-              'Appointment Cancelled ❌',
-              'Your appointment cancellation request has been approved.',
-              {
-                type: 'appointment_cancelled_approved',
-                appointment_id: request.appointment_id,
-                request_id: requestId
+            const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+            await centralizedNotificationService.createNotification({
+              userId: request.customer_id,
+              title: 'Cancellation Request Approved',
+              message: 'Your appointment cancellation request has been approved. The appointment has been cancelled.',
+              type: 'appointment',
+              category: 'status_update',
+              priority: 'high',
+              channels: ['app', 'push'],
+              appointmentId: request.appointment_id,
+              data: {
+                status: 'cancelled',
+                changed_by: 'system',
+                request_id: requestId,
+                cancellation_type: 'customer_request_approved'
               }
-            );
-            console.log('✅ Cancellation approval notification sent via PushService');
-          } catch (pushError) {
-            console.warn('Failed to send cancellation approval notification:', pushError);
+            });
+            console.log('✅ Cancellation approval notification sent');
+          } catch (notifError) {
+            console.warn('Failed to send cancellation approval notification:', notifError);
           }
 
         } else if (request.action_type === 'reschedule') {
           // For reschedule, we need to wait for customer to select new time
-          // Send database notification to customer (fallback)
-          await supabase.from('notifications').insert({
-            user_id: request.customer_id,
-            title: 'Reschedule Request Approved',
-            message: 'Your reschedule request has been approved. Please select a new date and time.',
-            type: 'appointment_reschedule_approved',
-            data: {
-              appointment_id: request.appointment_id,
-              request_id: requestId
-            }
-          });
-
-          // Send push notification to customer
+          // Create notification using centralized service (prevents duplicates)
           try {
-            await PushService.sendNotificationToUser(
-              request.customer_id,
-              'Reschedule Request Approved ✅',
-              'Your reschedule request has been approved. Please select a new date and time.',
-              {
-                type: 'appointment_reschedule_approved',
-                appointment_id: request.appointment_id,
-                request_id: requestId
+            const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+            await centralizedNotificationService.createNotification({
+              userId: request.customer_id,
+              title: 'Reschedule Request Approved ✅',
+              message: 'Your reschedule request has been approved. Please select a new date and time.',
+              type: 'appointment',
+              category: 'status_update',
+              priority: 'high',
+              channels: ['app', 'push'],
+              appointmentId: request.appointment_id,
+              data: {
+                request_id: requestId,
+                reschedule_type: 'approved'
               }
-            );
-            console.log('✅ Reschedule approval notification sent via PushService');
-          } catch (pushError) {
-            console.warn('Failed to send reschedule approval notification:', pushError);
+            });
+            console.log('✅ Reschedule approval notification sent');
+          } catch (notifError) {
+            console.warn('Failed to send reschedule approval notification:', notifError);
           }
         }
       } else {
         // Request rejected
-        // Send database notification to customer (fallback)
-        await supabase.from('notifications').insert({
-          user_id: request.customer_id,
-          title: `${request.action_type === 'reschedule' ? 'Reschedule' : 'Cancellation'} Request Rejected`,
-          message: `Your ${request.action_type} request has been rejected. Reason: ${action}`,
-          type: `appointment_${request.action_type}_rejected`,
-          data: {
-            appointment_id: request.appointment_id,
-            request_id: requestId
-          }
-        });
-
-        // Send push notification to customer
+        // Create notification using centralized service (prevents duplicates)
         try {
-          await PushService.sendNotificationToUser(
-            request.customer_id,
-            `${request.action_type === 'reschedule' ? 'Reschedule' : 'Cancellation'} Request Rejected ❌`,
-            `Your ${request.action_type} request has been rejected. Reason: ${action}`,
-            {
-              type: `appointment_${request.action_type}_rejected`,
-              appointment_id: request.appointment_id,
-              request_id: requestId
+          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          const actionTypeLabel = request.action_type === 'reschedule' ? 'Reschedule' : 'Cancellation';
+          await centralizedNotificationService.createNotification({
+            userId: request.customer_id,
+            title: `${actionTypeLabel} Request Rejected ❌`,
+            message: `Your ${request.action_type} request has been rejected. Reason: ${action}`,
+            type: 'appointment',
+            category: 'status_update',
+            priority: 'normal',
+            channels: ['app', 'push'],
+            appointmentId: request.appointment_id,
+            data: {
+              request_id: requestId,
+              rejection_reason: action,
+              request_type: request.action_type
             }
-          );
-          console.log('✅ Request rejection notification sent via PushService');
-        } catch (pushError) {
-          console.warn('Failed to send request rejection notification:', pushError);
+          });
+          console.log('✅ Request rejection notification sent');
+        } catch (notifError) {
+          console.warn('Failed to send request rejection notification:', notifError);
         }
       }
 

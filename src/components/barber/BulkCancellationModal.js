@@ -1,7 +1,6 @@
 // components/barber/BulkCancellationModal.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
 
 const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSuccess }) => {
   const [appointments, setAppointments] = useState([]);
@@ -130,76 +129,34 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
 
       if (updateError) throw updateError;
 
-      // Send notifications to customers
+      // Send notifications to customers using centralized service (prevents duplicates)
+      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      
       for (const appointment of selectedAppointmentData) {
-        // Database notification
-        await supabase.from('notifications').insert({
-          user_id: appointment.customer_id,
-          title: 'Appointment Cancelled - Barber Unavailable',
-          message: `Your appointment on ${selectedDate} at ${appointment.appointment_time} has been cancelled because your barber is unavailable.${reason ? ` Reason: ${reason}` : ''} Please reschedule or book with another barber.`,
-          type: 'appointment_cancelled',
-          data: {
-            appointment_id: appointment.id,
-            cancellation_reason: reason,
-            barber_id: barberId,
-            appointment_date: selectedDate
-          }
-        });
-
-        // Push notification
         try {
-          console.log('🔔 Sending push notification to user:', appointment.customer_id);
-          
-          // Test if PushService is properly initialized
-          if (!PushService.initialized) {
-            console.log('⚠️ PushService not initialized, initializing now...');
-            await PushService.initialize();
-          }
-          
-          await PushService.sendNotificationToUser(
-            appointment.customer_id,
-            'Appointment Cancelled',
-            `Your appointment on ${selectedDate} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
-            {
-              type: 'appointment_cancelled',
-              appointmentId: appointment.id,
-              barberId: barberId
+          // Send single detailed cancellation notification (prevents duplicates)
+          // Using createNotification instead of createAppointmentStatusNotification to include detailed reason
+          await centralizedNotificationService.createNotification({
+            userId: appointment.customer_id,
+            title: 'Appointment Cancelled - Barber Unavailable',
+            message: `Your appointment on ${selectedDate} at ${appointment.appointment_time || 'the scheduled time'} has been cancelled because your barber is unavailable.${reason ? ` Reason: ${reason}` : ''} Please reschedule or book with another barber.`,
+            type: 'appointment',
+            category: 'cancellation',
+            priority: 'high',
+            channels: ['app', 'push'],
+            appointmentId: appointment.id,
+            data: {
+              status: 'cancelled',
+              changed_by: 'barber',
+              cancellation_reason: reason,
+              barber_id: barberId,
+              appointment_date: selectedDate,
+              cancellation_type: 'barber_unavailable'
             }
-          );
-          console.log('✅ Push notification sent successfully');
-          
-          // Show local notification for immediate feedback (works without HTTPS)
-          try {
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('Appointment Cancelled', {
-                body: `Your appointment on ${selectedDate} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
-                icon: '/favicon.ico',
-                tag: `cancelled-${appointment.id}`
-              });
-              console.log('✅ Browser notification shown');
-            }
-          } catch (localError) {
-            console.warn('❌ Browser notification failed:', localError);
-          }
-          
-        } catch (pushError) {
-          console.warn('❌ Push notification failed:', pushError);
-          
-          // Try browser notification as fallback (works without HTTPS)
-          try {
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('Appointment Cancelled', {
-                body: `Your appointment on ${selectedDate} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
-                icon: '/favicon.ico',
-                tag: `cancelled-${appointment.id}`
-              });
-              console.log('✅ Browser notification fallback shown');
-            } else {
-              console.log('⚠️ Browser notifications not available or permission not granted');
-            }
-          } catch (localError) {
-            console.warn('❌ Browser notification fallback also failed:', localError);
-          }
+          });
+          console.log('✅ Cancellation notification sent to customer:', appointment.customer_id);
+        } catch (notifError) {
+          console.warn('❌ Failed to send cancellation notification:', notifError);
         }
 
         // Email notification
@@ -325,7 +282,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
                                       <h6 className="mb-1">{appointment.customers?.full_name}</h6>
                                       <div className="d-flex gap-3 text-muted small">
                                         <span><i className="bi bi-clock me-1"></i>{formatTime(appointment.appointment_time)}</span>
-                                        <span><i className="bi bi-currency-dollar me-1"></i>${appointment.total_price}</span>
+                                        <span><span className="me-1">₱</span>₱{appointment.total_price}</span>
                                         <span><i className="bi bi-tag me-1"></i>{appointment.appointment_type}</span>
                                       </div>
                                     </div>

@@ -58,7 +58,7 @@ class BarberRecommendationService {
         .from('appointments')
         .select('barber_id, customer_rating, status, appointment_date')
         .eq('customer_id', customerId)
-        .in('status', ['completed', 'done']);
+        .in('status', ['completed']);
 
       if (historyError) throw historyError;
 

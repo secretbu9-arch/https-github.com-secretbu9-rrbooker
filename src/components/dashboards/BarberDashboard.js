@@ -4,6 +4,9 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { PushService } from '../../services/PushService';
 import logoImage from '../../assets/images/raf-rok-logo.png';
+import { ROUTES } from '../utils/constants';
+import RescheduleModal from '../barber/RescheduleModal';
+import addOnsService from '../../services/AddOnsService';
 
 const BarberDashboard = () => {
   const [todaySchedule, setTodaySchedule] = useState([]);
@@ -19,46 +22,26 @@ const BarberDashboard = () => {
     averageWaitTime: 0
   });
 
-  // Enhanced revenue tracking state
-  const [revenueData, setRevenueData] = useState({
-    today: 0,
-    thisWeek: 0,
-    thisMonth: 0,
-    lastMonth: 0,
-    breakdown: {
-      services: 0,
-      addOns: 0,
-      urgentFees: 0
-    },
-    topServices: [],
-    dailyTrend: []
-  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [user, setUser] = useState(null);
   const [barberInfo, setBarberInfo] = useState(null);
   const [animateCards, setAnimateCards] = useState(false);
+  const [animateActions, setAnimateActions] = useState(false);
   const [barberStatus, setBarberStatus] = useState('available');
   const [recentReviews, setRecentReviews] = useState([]);
   const [isFetchingData, setIsFetchingData] = useState(false);
   const [debounceTimeout, setDebounceTimeout] = useState(null);
-
-  // Add-ons data for display
-  const ADD_ONS_DATA = [
-    { id: 'addon1', name: 'Beard Trim', price: 50.00, duration: 15 },
-    { id: 'addon2', name: 'Hot Towel Treatment', price: 30.00, duration: 10 },
-    { id: 'addon3', name: 'Scalp Massage', price: 80.00, duration: 20 },
-    { id: 'addon4', name: 'Hair Wash', price: 40.00, duration: 15 },
-    { id: 'addon5', name: 'Styling', price: 60.00, duration: 20 },
-    { id: 'addon6', name: 'Hair Wax Application', price: 25.00, duration: 5 },
-    { id: 'addon7', name: 'Eyebrow Trim', price: 35.00, duration: 10 },
-    { id: 'addon8', name: 'Mustache Trim', price: 20.00, duration: 5 }
-  ];
+  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null });
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     getCurrentUser();
     setTimeout(() => {
       setAnimateCards(true);
+      setTimeout(() => {
+        setAnimateActions(true);
+      }, 300);
     }, 300);
   }, []);
 
@@ -67,23 +50,23 @@ const BarberDashboard = () => {
       getBarberInfo();
       fetchBarberData();
       fetchRecentReviews();
-      
+
       // Set up real-time subscription with enhanced error handling
       const channelName = `barber-dashboard-${user.id}-${Date.now()}`;
       console.log(`📡 Setting up dashboard subscription: ${channelName}`);
-      
+
       const subscription = supabase
         .channel(channelName)
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
+        .on('postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
             table: 'appointments',
             filter: `barber_id=eq.${user.id}`
-          }, 
+          },
           (payload) => {
             console.log(`📥 Dashboard received real-time update:`, payload);
-            
+
             // Debounce rapid updates
             clearTimeout(window.dashboardUpdateTimeout);
             window.dashboardUpdateTimeout = setTimeout(() => {
@@ -111,7 +94,7 @@ const BarberDashboard = () => {
       const handleAppointmentChange = (event) => {
         const { appointmentId, newStatus, barberId, timestamp } = event.detail;
         console.log(`📢 Dashboard received custom event:`, event.detail);
-        
+
         if (barberId === user.id) {
           // Update immediately if it's our barber
           clearTimeout(window.dashboardUpdateTimeout);
@@ -133,6 +116,12 @@ const BarberDashboard = () => {
       window.addEventListener('appointmentStatusChanged', handleAppointmentChange);
       window.addEventListener('forceRefreshBarberData', handleForceRefresh);
 
+      // Listen for notification dropdown toggle
+      const handleNotificationsToggle = (event) => {
+        setNotificationsOpen(event.detail.isOpen);
+      };
+      window.addEventListener('notificationsToggle', handleNotificationsToggle);
+
       return () => {
         console.log('🧹 Cleaning up dashboard subscriptions');
         clearInterval(interval);
@@ -140,6 +129,7 @@ const BarberDashboard = () => {
         subscription.unsubscribe();
         window.removeEventListener('appointmentStatusChanged', handleAppointmentChange);
         window.removeEventListener('forceRefreshBarberData', handleForceRefresh);
+        window.removeEventListener('notificationsToggle', handleNotificationsToggle);
       };
     }
   }, [user]);
@@ -161,28 +151,28 @@ const BarberDashboard = () => {
     if (debounceTimeout) {
       clearTimeout(debounceTimeout);
     }
-    
+
     const timeout = setTimeout(() => {
       fetchBarberData();
     }, 1000); // 1 second debounce
-    
+
     setDebounceTimeout(timeout);
   };
-  
+
   const getBarberInfo = async () => {
     try {
       if (!user) return;
-      
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .single();
-        
+
       if (error) throw error;
       setBarberInfo(data);
       setBarberStatus(data.barber_status || 'available');
-      
+
     } catch (error) {
       console.error('Error getting barber info:', error);
       setError('Failed to load barber info');
@@ -190,28 +180,54 @@ const BarberDashboard = () => {
   };
 
   const fetchBarberData = async () => {
-    if (isFetchingData) return; // Prevent multiple simultaneous calls
-    
+    if (isFetchingData) {
+      console.log('⚠️ fetchBarberData already in progress, skipping...');
+      return; // Prevent multiple simultaneous calls
+    }
+
     try {
       setIsFetchingData(true);
-      if (!user) return;
+      if (!user) {
+        console.log('⚠️ No user, setting loading to false and returning');
+        setLoading(false);
+        setIsFetchingData(false);
+        return;
+      }
 
       setError('');
       const today = new Date().toISOString().split('T')[0];
-      
+
       console.log('Fetching barber data for:', user.id, 'on:', today);
-      
-      // Fetch today's schedule (all appointments) with more detailed query
+
+      // Fetch today's schedule (all appointments) with optimized query
+      // Limit reduced to 100 for better performance (should be more than enough for one day)
       const { data: schedule, error: scheduleError } = await supabase
         .from('appointments')
         .select(`
-          *,
+          id,
+          barber_id,
+          customer_id,
+          service_id,
+          appointment_date,
+          appointment_time,
+          status,
+          queue_position,
+          total_price,
+          total_duration,
+          is_urgent,
+          is_rebooking,
+          notes,
+          created_at,
+          updated_at,
+          services_data,
+          add_ons_data,
           customer:customer_id(full_name, email, phone),
           service:service_id(name, price, duration)
         `)
         .eq('barber_id', user.id)
         .eq('appointment_date', today)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100); // Reduced limit for better performance
 
       if (scheduleError) {
         console.error('Schedule fetch error:', scheduleError);
@@ -224,8 +240,17 @@ const BarberDashboard = () => {
 
       // Separate appointments by status with better filtering
       const current = safeSchedule.find(apt => apt.status === 'ongoing') || null;
+
+      // Include all reschedulable appointments (scheduled, confirmed, and any other non-completed/non-cancelled statuses)
+      // Only exclude: completed, cancelled, ongoing, pending (pending needs acceptance first)
+      const reschedulableStatuses = ['scheduled', 'confirmed', 'done']; // 'done' is sometimes used instead of 'completed'
       const queue = safeSchedule
-        .filter(apt => apt.status === 'scheduled')
+        .filter(apt => {
+          const status = apt.status?.toLowerCase();
+          // Include appointments that are scheduled, confirmed, or any status that's not pending, completed, cancelled, or ongoing
+          return reschedulableStatuses.includes(status) ||
+            (status !== 'pending' && status !== 'completed' && status !== 'cancelled' && status !== 'ongoing' && status !== 'cancel');
+        })
         .sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
       const pending = safeSchedule
         .filter(apt => apt.status === 'pending')
@@ -235,26 +260,72 @@ const BarberDashboard = () => {
           if (!a.is_urgent && b.is_urgent) return 1;
           return new Date(b.created_at) - new Date(a.created_at);
         });
-      const completed = safeSchedule.filter(apt => apt.status === 'done');
+      const completed = Array.isArray(safeSchedule) ? safeSchedule.filter(apt => apt.status === 'completed') : [];
 
       console.log('Separated appointments:', {
         current,
         queue: queue.length,
         pending: pending.length,
-        completed: completed.length
+        completed: completed.length,
+        allStatuses: safeSchedule.map(apt => ({ id: apt.id, status: apt.status, date: apt.appointment_date }))
       });
+
+      // Debug: Log all appointments and their statuses
+      console.log('📊 All appointments today:', safeSchedule.map(apt => ({
+        id: apt.id,
+        status: apt.status,
+        customer: apt.customer?.full_name,
+        date: apt.appointment_date
+      })));
 
       setTodaySchedule(safeSchedule);
       setCurrentAppointment(current);
       setQueueStatus(queue);
       setPendingRequests(pending);
 
-      // Calculate revenue
-      const revenueToday = completed.reduce((sum, apt) => {
-        const basePrice = apt.total_price || apt.service?.price || 0;
-        const urgentFee = apt.is_urgent ? 100 : 0;
-        return sum + basePrice + urgentFee;
-      }, 0);
+      // Calculate revenue - ensure proper number conversion and handle edge cases
+      let revenueToday = 0;
+      try {
+        revenueToday = completed.reduce((sum, apt) => {
+          try {
+            // Calculate total price: base price + urgent fee
+            const basePrice = Number(apt.total_price) || Number(apt.service?.price) || 0;
+            const urgentFee = apt.is_urgent ? 100 : 0;
+            const total = basePrice + urgentFee;
+
+            // Ensure it's a valid number
+            const revenue = Number(total);
+            if (isNaN(revenue) || revenue < 0) {
+              console.warn('Invalid revenue value for appointment:', apt.id, {
+                total_price: apt.total_price,
+                service_price: apt.service?.price,
+                is_urgent: apt.is_urgent,
+                calculated: total
+              });
+              return sum;
+            }
+            return sum + revenue;
+          } catch (error) {
+            console.error('Error calculating revenue for appointment:', apt.id, error);
+            return sum;
+          }
+        }, 0);
+      } catch (error) {
+        console.error('Error in revenue calculation:', error);
+        revenueToday = 0; // Fallback to 0 if calculation fails
+      }
+
+      console.log('💰 Revenue calculation:', {
+        completedCount: completed.length,
+        revenueToday,
+        appointments: completed.map(apt => ({
+          id: apt.id,
+          total_price: apt.total_price,
+          service_price: apt.service?.price,
+          is_urgent: apt.is_urgent,
+          calculated: (Number(apt.total_price) || Number(apt.service?.price) || 0) + (apt.is_urgent ? 100 : 0)
+        }))
+      });
 
       // Calculate average wait time
       const totalWaitTime = queue.reduce((total, apt) => {
@@ -263,145 +334,43 @@ const BarberDashboard = () => {
       }, 0);
       const averageWaitTime = queue.length > 0 ? Math.ceil(totalWaitTime / queue.length) : 0;
 
+      // Update stats with revenue - ensure it's always a number
       setTodayStats({
         totalAppointments: safeSchedule.length,
         completedAppointments: completed.length,
-        revenue: revenueToday,
+        revenue: Number(revenueToday) || 0,
         pendingRequests: pending.length,
         queueLength: queue.length,
         averageWaitTime
       });
 
-      // Fetch comprehensive revenue data
-      await fetchRevenueData();
+      console.log('✅ fetchBarberData completed successfully, revenue:', revenueToday);
 
     } catch (error) {
       console.error('Error fetching barber data:', error);
-      setError('Failed to load appointments. Please try again.');
-    } finally {
-      setLoading(false);
-      setIsFetchingData(false);
-    }
-  };
 
-  // Enhanced revenue tracking function
-  const fetchRevenueData = async () => {
-    try {
-      if (!user) return;
-
-      const today = new Date().toISOString().split('T')[0];
-      const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      const startOfMonth = new Date();
-      startOfMonth.setMonth(startOfMonth.getMonth(), 1);
-      const startOfLastMonth = new Date();
-      startOfLastMonth.setMonth(startOfLastMonth.getMonth() - 1, 1);
-      const endOfLastMonth = new Date();
-      endOfLastMonth.setMonth(endOfLastMonth.getMonth(), 0);
-
-      // Fetch completed appointments for different time periods
-      const [todayData, weekData, monthData, lastMonthData] = await Promise.all([
-        // Today's revenue
-        supabase
-          .from('appointments')
-          .select('*, service:service_id(name, price), add_ons_data, total_price, is_urgent')
-          .eq('barber_id', user.id)
-          .eq('appointment_date', today)
-          .eq('status', 'done'),
-        
-        // This week's revenue
-        supabase
-          .from('appointments')
-          .select('*, service:service_id(name, price), add_ons_data, total_price, is_urgent')
-          .eq('barber_id', user.id)
-          .gte('appointment_date', startOfWeek.toISOString().split('T')[0])
-          .eq('status', 'done'),
-        
-        // This month's revenue
-        supabase
-          .from('appointments')
-          .select('*, service:service_id(name, price), add_ons_data, total_price, is_urgent')
-          .eq('barber_id', user.id)
-          .gte('appointment_date', startOfMonth.toISOString().split('T')[0])
-          .eq('status', 'done'),
-        
-        // Last month's revenue
-        supabase
-          .from('appointments')
-          .select('*, service:service_id(name, price), add_ons_data, total_price, is_urgent')
-          .eq('barber_id', user.id)
-          .gte('appointment_date', startOfLastMonth.toISOString().split('T')[0])
-          .lte('appointment_date', endOfLastMonth.toISOString().split('T')[0])
-          .eq('status', 'done')
-      ]);
-
-      // Calculate revenue for each period
-      const calculateRevenue = (appointments) => {
-        return appointments.reduce((sum, apt) => {
-          const basePrice = apt.total_price || apt.service?.price || 0;
-          const urgentFee = apt.is_urgent ? 100 : 0;
-          return sum + basePrice + urgentFee;
-        }, 0);
-      };
-
-      const todayRevenue = calculateRevenue(todayData.data || []);
-      const weekRevenue = calculateRevenue(weekData.data || []);
-      const monthRevenue = calculateRevenue(monthData.data || []);
-      const lastMonthRevenue = calculateRevenue(lastMonthData.data || []);
-
-      // Calculate breakdown for this month
-      const monthAppointments = monthData.data || [];
-      const breakdown = {
-        services: monthAppointments.reduce((sum, apt) => sum + (apt.service?.price || 0), 0),
-        addOns: monthAppointments.reduce((sum, apt) => {
-          if (apt.add_ons_data && Array.isArray(apt.add_ons_data)) {
-            return sum + apt.add_ons_data.reduce((addOnSum, addOn) => addOnSum + (addOn.price || 0), 0);
-          }
-          return sum;
-        }, 0),
-        urgentFees: monthAppointments.filter(apt => apt.is_urgent).length * 100
-      };
-
-      // Calculate top services
-      const serviceCounts = {};
-      monthAppointments.forEach(apt => {
-        const serviceName = apt.service?.name || 'Unknown';
-        serviceCounts[serviceName] = (serviceCounts[serviceName] || 0) + 1;
-      });
-      const topServices = Object.entries(serviceCounts)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
-        .map(([name, count]) => ({ name, count }));
-
-      // Calculate daily trend for the last 7 days
-      const dailyTrend = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        const dayAppointments = monthAppointments.filter(apt => apt.appointment_date === dateStr);
-        const dayRevenue = calculateRevenue(dayAppointments);
-        
-        dailyTrend.push({
-          date: dateStr,
-          revenue: dayRevenue,
-          appointments: dayAppointments.length
-        });
+      // Provide more specific error messages
+      let errorMessage = 'Failed to load appointments. Please try again.';
+      if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+        errorMessage = 'Request timed out. Please check your internet connection and try again.';
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.code === 'PGRST116') {
+        errorMessage = 'No appointments found for today.';
       }
 
-      setRevenueData({
-        today: todayRevenue,
-        thisWeek: weekRevenue,
-        thisMonth: monthRevenue,
-        lastMonth: lastMonthRevenue,
-        breakdown,
-        topServices,
-        dailyTrend
-      });
+      setError(errorMessage);
 
-    } catch (error) {
-      console.error('Error fetching revenue data:', error);
+      // Ensure stats are set even on error to prevent infinite loading
+      setTodayStats(prev => ({
+        ...prev,
+        revenue: prev.revenue || 0 // Keep previous revenue or default to 0
+      }));
+    } finally {
+      // Always set loading to false and reset fetching flag
+      console.log('🔄 Setting loading to false and resetting isFetchingData');
+      setLoading(false);
+      setIsFetchingData(false);
     }
   };
 
@@ -441,11 +410,11 @@ const BarberDashboard = () => {
 
   const getServicesDisplay = (appointment) => {
     const services = [];
-    
+
     if (appointment.service?.name) {
       services.push(appointment.service.name);
     }
-    
+
     if (appointment.services_data) {
       try {
         let parsed;
@@ -480,43 +449,57 @@ const BarberDashboard = () => {
         console.error('Error parsing services data:', e);
       }
     }
-    
+
     return services.join(', ');
   };
 
-  const getAddOnsDisplay = (appointment) => {
-    if (!appointment.add_ons_data) return '';
-    
+  // Async function to get add-ons display using AddOnsService
+  const getAddOnsDisplay = async (appointment) => {
+    if (!appointment?.add_ons_data) return '';
     try {
-      let parsed;
-      const raw = appointment.add_ons_data;
-      if (Array.isArray(raw)) {
-        parsed = raw;
-      } else if (typeof raw === 'string') {
-        const t = raw.trim();
-        if (t.startsWith('[') || t.startsWith('{')) {
-          parsed = JSON.parse(t);
-        } else {
-          parsed = t.split(',').map(s => s.trim()).filter(Boolean);
-        }
-      } else if (typeof raw === 'object') {
-        parsed = raw;
-      }
-
-      const addOnIds = Array.isArray(parsed) ? parsed
-        : (parsed && Array.isArray(parsed.ids)) ? parsed.ids
-        : [];
-
-      const addOnNames = addOnIds.map(addonId => {
-        const addon = ADD_ONS_DATA.find(a => a.id === addonId);
-        return addon?.name || 'Unknown';
-      });
-      
-      return addOnNames.join(', ');
-    } catch (e) {
-      console.error('Error parsing add_ons_data:', e);
+      return await addOnsService.getAddOnsDisplay(appointment.add_ons_data);
+    } catch (error) {
+      console.error('Error getting add-ons display:', error);
       return '';
     }
+  };
+
+  // Component to display add-ons with async loading
+  const AddOnsDisplay = ({ appointment }) => {
+    const [addOnsText, setAddOnsText] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      const loadAddOns = async () => {
+        if (!appointment?.add_ons_data) {
+          setAddOnsText('');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const text = await getAddOnsDisplay(appointment);
+          setAddOnsText(text);
+        } catch (error) {
+          console.error('Error loading add-ons display:', error);
+          setAddOnsText('');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadAddOns();
+    }, [appointment?.add_ons_data]);
+
+    if (loading) {
+      return <span className="text-muted small">Loading add-ons...</span>;
+    }
+
+    if (!addOnsText) {
+      return null;
+    }
+
+    return <span className="text-info addon-display">{addOnsText}</span>;
   };
 
   const getTotalPrice = (appointment) => {
@@ -525,6 +508,11 @@ const BarberDashboard = () => {
       total += 100;
     }
     return total;
+  };
+
+  const formatStatus = (status) => {
+    if (!status) return '';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
   };
 
   const handleBookingResponse = async (appointmentId, action, reason = '') => {
@@ -536,20 +524,38 @@ const BarberDashboard = () => {
 
       if (action === 'accept') {
         const updates = {
-          status: 'scheduled',
+          status: 'confirmed',
           updated_at: new Date().toISOString()
         };
 
         if (appointment.is_urgent) {
           updates.queue_position = 1;
-          
+
           // Increment all existing queue numbers
-          await supabase
+          // Fetch appointments that need their queue positions incremented
+          const { data: existingAppointments, error: fetchError } = await supabase
             .from('appointments')
-            .update({ queue_position: supabase.raw('queue_position + 1') })
+            .select('id, queue_position')
             .eq('barber_id', user.id)
             .eq('appointment_date', appointment.appointment_date)
-            .eq('status', 'scheduled');
+            .eq('status', 'confirmed')
+            .not('queue_position', 'is', null)
+            .neq('id', appointmentId);
+
+          if (fetchError) {
+            console.warn('Warning: Could not fetch appointments for queue position increment:', fetchError);
+          } else if (existingAppointments && existingAppointments.length > 0) {
+            // Update each appointment's queue position
+            for (const apt of existingAppointments) {
+              await supabase
+                .from('appointments')
+                .update({
+                  queue_position: (apt.queue_position || 0) + 1,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', apt.id);
+            }
+          }
         } else {
           const maxQueueNumber = Math.max(0, ...queueStatus.map(apt => apt.queue_position || 0));
           updates.queue_position = maxQueueNumber + 1;
@@ -562,8 +568,37 @@ const BarberDashboard = () => {
 
         if (error) throw error;
 
-        // Do NOT send approval notification here to avoid duplicates.
-        // Approval notifications are sent from the dedicated BarberSchedule flow.
+        // Create notification using centralized service (handles both database and push)
+        try {
+          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+
+          // Determine appointment type from the appointment data
+          const appointmentType = appointment.appointment_type || 'queue';
+
+          if (appointmentType === 'queue') {
+            // For queue appointments, send queue-specific notification
+            await centralizedNotificationService.createBookingConfirmationNotification({
+              userId: appointment.customer_id,
+              appointmentId: appointmentId,
+              queuePosition: updates.queue_position,
+              estimatedTime: null,
+              appointmentType: 'queue'
+            });
+            console.log('✅ Queue appointment approval notification sent from dashboard');
+          } else {
+            // For scheduled appointments, send scheduled-specific notification
+            await centralizedNotificationService.createBookingConfirmationNotification({
+              userId: appointment.customer_id,
+              appointmentId: appointmentId,
+              queuePosition: null,
+              estimatedTime: appointment.appointment_time,
+              appointmentType: 'scheduled'
+            });
+            console.log('✅ Scheduled appointment approval notification sent from dashboard');
+          }
+        } catch (notificationError) {
+          console.warn('Failed to send dashboard approval notification:', notificationError);
+        }
 
         // Log the action
         await supabase.from('system_logs').insert({
@@ -579,7 +614,7 @@ const BarberDashboard = () => {
       } else {
         const { error } = await supabase
           .from('appointments')
-          .update({ 
+          .update({
             status: 'cancelled',
             updated_at: new Date().toISOString(),
             cancellation_reason: reason || 'Declined by barber'
@@ -622,7 +657,7 @@ const BarberDashboard = () => {
       window.dispatchEvent(new CustomEvent('appointmentStatusChanged', {
         detail: {
           appointmentId,
-          newStatus: action === 'accept' ? 'scheduled' : 'cancelled',
+          newStatus: action === 'accept' ? 'confirmed' : 'cancelled',
           barberId: user.id,
           appointmentDate: appointment.appointment_date,
           timestamp: Date.now()
@@ -630,12 +665,19 @@ const BarberDashboard = () => {
       }));
 
       console.log(`✅ Dashboard booking ${action} completed`);
-      
+
       // Refresh data
       setTimeout(() => fetchBarberData(), 1000);
     } catch (err) {
       console.error('Error responding to booking request:', err);
-      setError('Failed to process booking request. Please try again.');
+      const errorMessage = err?.message || 'Unknown error occurred';
+      console.error('Error details:', {
+        message: errorMessage,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint
+      });
+      setError(`Failed to process booking request: ${errorMessage}. Please try again.`);
     }
   };
 
@@ -652,17 +694,17 @@ const BarberDashboard = () => {
       if (status === 'ongoing') {
         setCurrentAppointment(appointment);
         setQueueStatus(prev => prev.filter(apt => apt.id !== appointmentId));
-      } else if (status === 'done' && currentAppointment?.id === appointmentId) {
+      } else if (status === 'completed' && currentAppointment?.id === appointmentId) {
         setCurrentAppointment(null);
       }
 
       const { error } = await supabase
         .from('appointments')
-        .update({ 
-          status, 
+        .update({
+          status,
           updated_at: new Date().toISOString(),
-          queue_position: status === 'done' || status === 'cancelled' ? null : 
-                       status === 'ongoing' ? 0 : undefined
+          queue_position: status === 'completed' || status === 'cancelled' ? null :
+            status === 'ongoing' ? 0 : undefined
         })
         .eq('id', appointmentId);
 
@@ -680,7 +722,7 @@ const BarberDashboard = () => {
           notificationData.title = 'Your appointment has started! ✂️';
           notificationData.message = 'Your barber is ready for you now.';
           break;
-        case 'done':
+        case 'completed':
           notificationData.title = 'Appointment Completed ✅';
           notificationData.message = 'Thank you for visiting us! Please rate your experience.';
           break;
@@ -701,11 +743,11 @@ const BarberDashboard = () => {
         status: status,
         changedBy: 'barber'
       });
-      
+
       // Push notification is now handled by CentralizedNotificationService
-      
+
       // Notify next customer if completing appointment
-      if (status === 'done' && queueStatus.length > 0) {
+      if (status === 'completed' && queueStatus.length > 0) {
         const nextAppointment = queueStatus[0];
         await centralizedNotificationService.createQueuePositionNotification({
           userId: nextAppointment.customer_id,
@@ -736,7 +778,7 @@ const BarberDashboard = () => {
     } catch (error) {
       console.error('Error updating appointment status:', error);
       setError('Failed to update appointment status. Please try again.');
-      
+
       // Revert optimistic updates on error
       fetchBarberData();
     }
@@ -746,7 +788,7 @@ const BarberDashboard = () => {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ 
+        .update({
           barber_status: newStatus,
           updated_at: new Date().toISOString()
         })
@@ -764,8 +806,7 @@ const BarberDashboard = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'available': return 'success';
-      case 'busy': return 'warning';
-      case 'break': return 'info';
+      case 'day_off': return 'info';
       case 'offline': return 'secondary';
       default: return 'primary';
     }
@@ -811,51 +852,59 @@ const BarberDashboard = () => {
   return (
     <div className="container-fluid py-4 dashboard-container">
       {/* Barber Welcome Header */}
-      <div className="row mb-4">
+      <div className="row mb-1">
         <div className="col">
-          <div className="barber-welcome-header p-4 rounded shadow-sm d-flex align-items-center">
+          <div className="barber-welcome-header rounded shadow-sm d-flex align-items-center" style={{ padding: 'clamp(1rem, 3vw, 1.5rem)' }}>
             <div>
               <div className="d-flex align-items-center mb-2">
-                <img 
-                  src={logoImage} 
-                  alt="Raf & Rok" 
-                  className="dashboard-logo me-3" 
-                  height="40"
+                <img
+                  src={logoImage}
+                  alt="Raf & Rok"
+                  className="dashboard-logo me-3"
                   style={{
+                    height: 'clamp(30px, 5vw, 40px)',
                     backgroundColor: '#ffffff',
                     padding: '3px',
                     borderRadius: '5px'
                   }}
                 />
-                <h1 className="h3 mb-0 text-white">Welcome, {barberInfo?.full_name || 'Barber'}</h1>
+                <h1 className="mb-0 text-white" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>Welcome, {barberInfo?.full_name || 'Barber'}</h1>
               </div>
-              <p className="text-light mb-0">
+              <p className="text-light mb-0" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}>
                 <i className="bi bi-calendar3 me-2"></i>
                 Manage your queue and booking requests
               </p>
             </div>
             <div className="ms-auto text-end">
-              <div className="h4 mb-2 text-white">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-              
+              <div className="mb-1 text-white" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1.25rem)', fontWeight: '600' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+
               {/* Barber Status Toggle */}
-              <div className="dropdown">
-                <button 
+              <div
+                className="dropdown"
+                style={{
+                  position: 'relative',
+                  zIndex: 1050,
+                  opacity: notificationsOpen ? 0 : 1,
+                  visibility: notificationsOpen ? 'hidden' : 'visible',
+                  transition: 'opacity 0.2s ease, visibility 0.2s ease'
+                }}
+              >
+                <button
                   className={`btn btn-${getStatusColor(barberStatus)} dropdown-toggle`}
-                  type="button" 
+                  type="button"
                   data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  style={{ fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)' }}
                 >
                   <i className="bi bi-person-badge me-2"></i>
-                  {barberStatus.charAt(0).toUpperCase() + barberStatus.slice(1)}
+                  {barberStatus === 'day_off' ? 'Day Off' : barberStatus.charAt(0).toUpperCase() + barberStatus.slice(1)}
                 </button>
-                <ul className="dropdown-menu">
+                <ul className="dropdown-menu" style={{ zIndex: 1051 }}>
                   <li><button className="dropdown-item" onClick={() => updateBarberStatus('available')}>
                     <i className="bi bi-check-circle me-2 text-success"></i>Available
                   </button></li>
-                  <li><button className="dropdown-item" onClick={() => updateBarberStatus('busy')}>
-                    <i className="bi bi-exclamation-circle me-2 text-warning"></i>Busy
-                  </button></li>
-                  <li><button className="dropdown-item" onClick={() => updateBarberStatus('break')}>
-                    <i className="bi bi-pause-circle me-2 text-info"></i>On Break
+                  <li><button className="dropdown-item" onClick={() => updateBarberStatus('day_off')}>
+                    <i className="bi bi-calendar-x me-2 text-info"></i>Day Off
                   </button></li>
                   <li><button className="dropdown-item" onClick={() => updateBarberStatus('offline')}>
                     <i className="bi bi-x-circle me-2 text-secondary"></i>Offline
@@ -865,6 +914,80 @@ const BarberDashboard = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="quick-actions-container mb-2" style={{ paddingTop: '0.5rem', paddingBottom: '0.5rem' }}>
+        <div className="quick-actions-grid">
+          <Link
+            to="/queue"
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
+            style={{ animationDelay: '0.1s' }}
+          >
+            <div className="quick-action-icon-wrapper primary-action">
+              <i className="bi bi-people"></i>
+            </div>
+            <span className="quick-action-name">Queue</span>
+            <span className="quick-action-description d-none d-md-block">Manage your queue</span>
+          </Link>
+
+          <Link
+            to="/schedule"
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
+            style={{ animationDelay: '0.2s' }}
+          >
+            <div className="quick-action-icon-wrapper info-action">
+              <i className="bi bi-calendar-week"></i>
+            </div>
+            <span className="quick-action-name">Schedule</span>
+            <span className="quick-action-description d-none d-md-block">View full schedule</span>
+          </Link>
+
+          <Link
+            to="/appointment-requests"
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
+            style={{ animationDelay: '0.3s' }}
+          >
+            <div className="quick-action-icon-wrapper warning-action">
+              <i className="bi bi-clipboard-check"></i>
+            </div>
+            <span className="quick-action-name">Requests</span>
+            <span className="quick-action-description d-none d-md-block">Appointment requests</span>
+          </Link>
+
+          <Link
+            to="/day-off-manager"
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
+            style={{ animationDelay: '0.4s' }}
+          >
+            <div className="quick-action-icon-wrapper info-action" style={{ background: 'rgba(108, 117, 125, 0.15)', color: '#6c757d' }}>
+              <i className="bi bi-calendar-x"></i>
+            </div>
+            <span className="quick-action-name">Day Off</span>
+            <span className="quick-action-description d-none d-md-block">Manage days off</span>
+          </Link>
+
+          <Link
+            to={ROUTES.BARBER_REVENUE}
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
+            style={{ animationDelay: '0.5s' }}
+          >
+            <div className="quick-action-icon-wrapper success-action">
+              <i className="bi bi-cash-coin"></i>
+            </div>
+            <span className="quick-action-name">Revenue</span>
+            <span className="quick-action-description d-none d-md-block">View revenue details</span>
+          </Link>
+        </div>
+
+        {todayStats.queueLength > 0 && (
+          <div className="mt-3 p-2 bg-light rounded">
+            <small className="text-muted">
+              <i className="bi bi-info-circle me-1"></i>
+              Estimated time to clear queue: {formatTimeRemaining(todayStats.queueLength * todayStats.averageWaitTime)}
+            </small>
+          </div>
+        )}
       </div>
 
       {/* Urgent Pending Requests Alert */}
@@ -910,206 +1033,82 @@ const BarberDashboard = () => {
       )}
 
       {/* Stats Cards */}
-      <div className="row mb-4">
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Total Today</h6>
-              <h2 className="mb-0">{todayStats.totalAppointments}</h2>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Completed</h6>
-              <h2 className="mb-0">{todayStats.completedAppointments}</h2>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Revenue</h6>
-              <h2 className="mb-0"><span className="currency-amount-large">₱{todayStats.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
-            </div>
-          </div>
-        </div>
-        
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card ${pendingRequests.length > 0 ? 'bg-gradient-warning' : 'bg-gradient-secondary'} text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Pending</h6>
-              <h2 className="mb-0">{todayStats.pendingRequests}</h2>
+      <div className="row mb-4 g-2 g-md-3">
+        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+          <div className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Total Today</h6>
+              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.totalAppointments}</h2>
             </div>
           </div>
         </div>
 
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card bg-gradient-dark text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Queue</h6>
-              <h2 className="mb-0">{todayStats.queueLength}</h2>
+        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+          <div className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Completed</h6>
+              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.completedAppointments}</h2>
             </div>
           </div>
         </div>
 
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card bg-gradient-secondary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Avg Wait</h6>
-              <h2 className="mb-0">{todayStats.averageWaitTime}m</h2>
+        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+          <Link
+            to={ROUTES.BARBER_REVENUE}
+            style={{ textDecoration: 'none' }}
+            title="View revenue details"
+          >
+            <div className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = ''; }}>
+              <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Revenue</h6>
+                <h2 className="mb-0" style={{ fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 'bold', lineHeight: '1.2' }}>
+                  <span className="currency-amount-large">
+                    ₱{(todayStats.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </h2>
+              </div>
+            </div>
+          </Link>
+        </div>
+
+        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+          <div className={`card stats-card ${pendingRequests.length > 0 ? 'bg-gradient-warning' : 'bg-gradient-secondary'} text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Pending</h6>
+              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.pendingRequests}</h2>
             </div>
           </div>
         </div>
 
-        <div className="col-md-2 mb-3">
-          <div className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}>
-            <div className="card-body">
-              <h6 className="card-title mb-1">Rating</h6>
-              <h2 className="mb-0">
+        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+          <div className={`card stats-card bg-gradient-dark text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Queue</h6>
+              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.queueLength}</h2>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+          <div className={`card stats-card bg-gradient-secondary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Avg Wait</h6>
+              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.averageWaitTime}m</h2>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 col-sm-12 col-md-12 col-lg-6 mb-2 mb-md-3">
+          <div className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Rating</h6>
+              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>
                 {barberInfo?.average_rating || '0'}
-                <small className="fs-6">/5</small>
+                <small className="fs-6" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1rem)' }}>/5</small>
               </h2>
-              <small className="opacity-75">
+              <small className="opacity-75 d-block mt-1" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
                 {barberInfo?.total_ratings || 0} reviews
               </small>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Enhanced Revenue Tracking Section */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="card shadow-sm">
-            <div className="card-header bg-success text-white">
-              <h5 className="mb-0">
-                <i className="bi bi-graph-up me-2"></i>
-                Revenue Tracking
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="row">
-                {/* Revenue Overview */}
-                <div className="col-md-8">
-                  <div className="row">
-                    <div className="col-md-3 mb-3">
-                      <div className="card bg-light">
-                        <div className="card-body text-center">
-                          <h6 className="card-title text-success">Today</h6>
-                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.today.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <div className="card bg-light">
-                        <div className="card-body text-center">
-                          <h6 className="card-title text-primary">This Week</h6>
-                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.thisWeek.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <div className="card bg-light">
-                        <div className="card-body text-center">
-                          <h6 className="card-title text-info">This Month</h6>
-                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.thisMonth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <div className="card bg-light">
-                        <div className="card-body text-center">
-                          <h6 className="card-title text-secondary">Last Month</h6>
-                          <h4 className="mb-0"><span className="currency-amount">₱{revenueData.lastMonth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h4>
-                          {revenueData.lastMonth > 0 && (
-                            <small className={`${revenueData.thisMonth > revenueData.lastMonth ? 'text-success' : 'text-danger'}`}>
-                              {revenueData.thisMonth > revenueData.lastMonth ? '↗' : '↘'} 
-                              {Math.abs(((revenueData.thisMonth - revenueData.lastMonth) / revenueData.lastMonth * 100)).toFixed(1)}%
-                            </small>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Revenue Breakdown */}
-                  <div className="row mt-3">
-                    <div className="col-12">
-                      <h6 className="text-muted">Revenue Breakdown (This Month)</h6>
-                      <div className="row">
-                        <div className="col-md-4">
-                          <div className="d-flex justify-content-between align-items-center p-2 bg-light rounded">
-                            <span>Services</span>
-                            <strong className="currency-amount">₱{revenueData.breakdown.services.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="d-flex justify-content-between align-items-center p-2 bg-light rounded">
-                            <span>Add-ons</span>
-                            <strong className="currency-amount">₱{revenueData.breakdown.addOns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="d-flex justify-content-between align-items-center p-2 bg-light rounded">
-                            <span>Urgent Fees</span>
-                            <strong className="currency-amount">₱{revenueData.breakdown.urgentFees.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Daily Trend */}
-                  <div className="row mt-3">
-                    <div className="col-12">
-                      <h6 className="text-muted">7-Day Revenue Trend</h6>
-                      <div className="table-responsive">
-                        <table className="table table-sm">
-                          <thead>
-                            <tr>
-                              <th>Date</th>
-                              <th>Revenue</th>
-                              <th>Appointments</th>
-                              <th>Avg per Appt</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {revenueData.dailyTrend.map((day, index) => (
-                              <tr key={index}>
-                                <td>{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                                <td className="currency-table-cell">₱{day.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                <td>{day.appointments}</td>
-                                <td className="currency-table-cell">₱{day.appointments > 0 ? (day.revenue / day.appointments).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Top Services */}
-                <div className="col-md-4">
-                  <h6 className="text-muted">Top Services (This Month)</h6>
-                  {revenueData.topServices.length > 0 ? (
-                    <div className="list-group">
-                      {revenueData.topServices.map((service, index) => (
-                        <div key={index} className="list-group-item d-flex justify-content-between align-items-center">
-                          <span>{service.name}</span>
-                          <span className="badge bg-primary rounded-pill">{service.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted">No completed services this month</p>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1149,7 +1148,7 @@ const BarberDashboard = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="mb-2">
                         <small className="text-muted">
                           <i className="bi bi-calendar me-1"></i>
@@ -1164,15 +1163,15 @@ const BarberDashboard = () => {
                         <div className="text-muted small">{getServicesDisplay(request)}</div>
                       </div>
 
-                      {getAddOnsDisplay(request) && (
-                        <div className="mb-2">
-                          <small className="text-muted">Add-ons:</small>
-                          <div className="text-muted small addon-display">{getAddOnsDisplay(request)}</div>
+                      <div className="mb-2">
+                        <small className="text-muted">Add-ons:</small>
+                        <div className="text-muted small">
+                          <AddOnsDisplay appointment={request} />
                         </div>
-                      )}
+                      </div>
 
                       <div className="mb-2">
-                        <strong>Total:</strong> 
+                        <strong>Total:</strong>
                         <span className="text-success ms-1 fw-bold currency-amount">₱{Number(getTotalPrice(request)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         <small className="text-muted ms-2">
                           ({request.total_duration || (request.service?.duration || 30)} min)
@@ -1186,27 +1185,60 @@ const BarberDashboard = () => {
                         </div>
                       )}
 
-                      <div className="d-flex justify-content-between gap-2">
+                      <div className="d-flex flex-column flex-sm-row justify-content-between gap-2">
                         <button
                           className={`btn ${request.is_urgent ? 'btn-danger' : 'btn-success'} btn-sm flex-fill`}
                           onClick={() => handleBookingResponse(request.id, 'accept')}
+                          style={{
+                            minHeight: 'clamp(36px, 8vw, 40px)',
+                            fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                            padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                            fontWeight: '500',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
                         >
                           <i className="bi bi-check-circle me-1"></i>
-                          {request.is_urgent ? 'Accept URGENT' : 'Accept'}
+                          <span className="d-none d-sm-inline">{request.is_urgent ? 'Accept URGENT' : 'Accept'}</span>
+                          <span className="d-sm-none">Accept</span>
                         </button>
                         <button
-                          className="btn btn-outline-danger btn-sm"
+                          className="btn btn-outline-danger btn-sm flex-fill flex-sm-none"
                           onClick={() => {
                             const reason = prompt('Reason for declining (optional):');
                             if (reason !== null) { // Allow empty string but not null (cancelled)
                               handleBookingResponse(request.id, 'decline', reason);
                             }
                           }}
+                          style={{
+                            minHeight: 'clamp(36px, 8vw, 40px)',
+                            fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                            padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                            fontWeight: '500',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
                         >
                           <i className="bi bi-x-circle me-1"></i>
                           Decline
                         </button>
                       </div>
+
+                      {/* Note: Reschedule option will be available after accepting the appointment */}
                     </div>
                   </div>
                 </div>
@@ -1241,28 +1273,70 @@ const BarberDashboard = () => {
                   )}
                 </div>
               </div>
-              
+
               <div className="col-md-5">
                 <h5>Service Details</h5>
                 <p><strong>Services:</strong> {getServicesDisplay(currentAppointment)}</p>
-                {getAddOnsDisplay(currentAppointment) && (
-                  <p><strong>Add-ons:</strong> {getAddOnsDisplay(currentAppointment)}</p>
-                )}
+                <p><strong>Add-ons:</strong> <AddOnsDisplay appointment={currentAppointment} /></p>
                 <p><strong>Total:</strong> <span className="text-success fw-bold">₱{getTotalPrice(currentAppointment)}</span></p>
                 <p><strong>Duration:</strong> {(currentAppointment.total_duration || currentAppointment.service?.duration)} min</p>
                 {currentAppointment.notes && (
                   <p><strong>Notes:</strong> <span className="bg-light p-2 rounded d-inline-block">{currentAppointment.notes}</span></p>
                 )}
               </div>
-              
+
               <div className="col-md-3 text-center">
-                <button
-                  className="btn btn-success btn-lg w-100"
-                  onClick={() => handleAppointmentStatus(currentAppointment.id, 'done')}
-                >
-                  <i className="bi bi-check-circle me-2"></i>
-                  Complete Service
-                </button>
+                <div className="d-grid gap-2">
+                  <button
+                    className="btn btn-warning w-100"
+                    onClick={() => setRescheduleModal({ isOpen: true, appointment: currentAppointment })}
+                    title="Reschedule Appointment"
+                    style={{
+                      minHeight: 'clamp(40px, 9vw, 48px)',
+                      fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
+                      padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <i className="bi bi-arrow-repeat me-2 d-none d-sm-inline"></i>
+                    <i className="bi bi-arrow-repeat me-1 d-sm-none"></i>
+                    <span className="d-none d-sm-inline">Reschedule</span>
+                    <span className="d-sm-none">Reschedule</span>
+                  </button>
+                  <button
+                    className="btn btn-success w-100"
+                    onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
+                    style={{
+                      minHeight: 'clamp(40px, 9vw, 48px)',
+                      fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
+                      padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <i className="bi bi-check-circle me-2 d-none d-sm-inline"></i>
+                    <i className="bi bi-check-circle me-1 d-sm-none"></i>
+                    <span className="d-none d-sm-inline">Complete Service</span>
+                    <span className="d-sm-none">Complete</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1270,21 +1344,292 @@ const BarberDashboard = () => {
       )}
 
       <div className="row">
-        {/* Queue Status */}
-        <div className="col-md-8 mb-4">
-          <div className="card shadow-sm">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">
-                <i className="bi bi-list-ol me-2"></i>
-                Today's Queue ({queueStatus.length})
-              </h5>
-              <div>
-                <Link to="/queue" className="btn btn-primary btn-sm me-2">
-                  Manage Queue
-                </Link>
-                <button className="btn btn-outline-primary btn-sm" onClick={fetchBarberData}>
-                  <i className="bi bi-arrow-clockwise"></i>
+        {/* All Today's Appointments - Reschedule Section */}
+        <div className="col-md-12 mb-4">
+          <div className="card shadow-sm" style={{ border: 'none', borderRadius: '12px' }}>
+            <div className="card-header" style={{
+              background: '#f3f4f6',
+              border: 'none',
+              borderRadius: '12px 12px 0 0',
+              padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)'
+            }}>
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-2 mb-md-0">
+                <h5 className="mb-0 flex-grow-1" style={{ fontWeight: '600', fontSize: 'clamp(0.9rem, 2.5vw, 1.25rem)', color: '#1f2937' }}>
+                  <i className="bi bi-calendar-check me-2" style={{ color: '#6366f1' }}></i>
+                  Reschedule Appointments
+                  {todaySchedule.length > 0 && (
+                    <span className="badge ms-2" style={{
+                      background: '#818cf8',
+                      color: '#ffffff',
+                      fontSize: 'clamp(0.65rem, 1.5vw, 0.75rem)',
+                      fontWeight: '600',
+                      padding: 'clamp(0.25rem, 1vw, 0.35rem) clamp(0.4rem, 1.5vw, 0.65rem)'
+                    }}>
+                      {todaySchedule.filter(apt => {
+                        const status = apt.status?.toLowerCase();
+                        return status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done';
+                      }).length} Available
+                    </span>
+                  )}
+                </h5>
+                <button
+                  className="btn btn-sm flex-shrink-0"
+                  onClick={fetchBarberData}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: 'clamp(0.5rem, 1.5vw, 0.625rem)',
+                    minHeight: 'clamp(36px, 8vw, 40px)',
+                    minWidth: 'clamp(36px, 8vw, 40px)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  title="Refresh"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f8f9fa';
+                    e.currentTarget.style.borderColor = '#6366f1';
+                    e.currentTarget.style.transform = 'rotate(180deg)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#ffffff';
+                    e.currentTarget.style.borderColor = '#e5e7eb';
+                    e.currentTarget.style.transform = 'rotate(0deg)';
+                  }}
+                >
+                  <i className="bi bi-arrow-clockwise" style={{ fontSize: 'clamp(0.8rem, 2vw, 0.875rem)' }}></i>
                 </button>
+              </div>
+            </div>
+            <div className="card-body" style={{ padding: '0' }}>
+              {todaySchedule.length === 0 ? (
+                <div className="text-center py-5" style={{ padding: '2rem' }}>
+                  <div className="mb-3" style={{ fontSize: '3rem', color: '#d1d5db' }}>
+                    <i className="bi bi-calendar-x"></i>
+                  </div>
+                  <p className="text-muted mb-0">No appointments found for today</p>
+                </div>
+              ) : todaySchedule.filter(apt => {
+                const status = apt.status?.toLowerCase();
+                return status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done';
+              }).length === 0 ? (
+                <div className="text-center py-5" style={{ padding: '2rem' }}>
+                  <div className="mb-3" style={{ fontSize: '3rem', color: '#d1d5db' }}>
+                    <i className="bi bi-check-circle"></i>
+                  </div>
+                  <p className="text-muted mb-0">No reschedulable appointments today</p>
+                </div>
+              ) : (
+                <div style={{ padding: '0' }}>
+                  {todaySchedule
+                    .filter(apt => {
+                      const status = apt.status?.toLowerCase();
+                      return status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done';
+                    })
+                    .map((appointment, index) => (
+                      <div
+                        key={appointment.id}
+                        style={{
+                          padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
+                          borderBottom: index < todaySchedule.filter(apt => {
+                            const status = apt.status?.toLowerCase();
+                            return status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done';
+                          }).length - 1 ? '1px solid #e5e7eb' : 'none',
+                          background: '#ffffff'
+                        }}
+                      >
+                        <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+                          {/* Left Side - Customer Info */}
+                          <div className="flex-grow-1 w-100" style={{ minWidth: 0 }}>
+                            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                              <h6 className="mb-0" style={{
+                                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
+                                fontWeight: '500',
+                                color: '#1f2937'
+                              }}>
+                                {appointment.customer?.full_name || 'Unknown'}
+                              </h6>
+                              {appointment.is_urgent && (
+                                <span className="badge" style={{
+                                  background: '#ef4444',
+                                  fontSize: 'clamp(0.6rem, 1.5vw, 0.7rem)',
+                                  padding: 'clamp(0.2rem, 0.8vw, 0.25rem) clamp(0.4rem, 1.2vw, 0.5rem)'
+                                }}>
+                                  URGENT
+                                </span>
+                              )}
+                              <span className={`badge`} style={{
+                                background: appointment.status === 'ongoing' ? '#3b82f6' :
+                                  appointment.status === 'pending' ? '#6366f1' :
+                                    '#10b981',
+                                fontSize: 'clamp(0.6rem, 1.5vw, 0.7rem)',
+                                padding: 'clamp(0.2rem, 0.8vw, 0.25rem) clamp(0.4rem, 1.2vw, 0.5rem)',
+                                color: '#ffffff'
+                              }}>
+                                {formatStatus(appointment.status)}
+                              </span>
+                            </div>
+                            <div className="d-flex flex-wrap align-items-center gap-2 mb-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', color: '#6b7280' }}>
+                              <span>
+                                <i className="bi bi-scissors me-1"></i>
+                                {getServicesDisplay(appointment) || 'Service'}
+                              </span>
+                              {appointment.queue_position && (
+                                <span>
+                                  <i className="bi bi-list-ol me-1"></i>
+                                  Queue #{appointment.queue_position}
+                                </span>
+                              )}
+                              {appointment.appointment_time && (
+                                <span>
+                                  <i className="bi bi-clock me-1"></i>
+                                  {new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1 mb-2" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
+                              <AddOnsDisplay appointment={appointment} />
+                            </div>
+                          </div>
+
+                          {/* Right Side - Price & Action */}
+                          <div className="d-flex flex-row align-items-center justify-content-end gap-2" style={{ minWidth: 'fit-content' }}>
+                            <div className="text-end d-none d-md-block">
+                              <div className="fw-bold" style={{
+                                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
+                                color: '#10b981'
+                              }}>
+                                ₱{getTotalPrice(appointment)}
+                              </div>
+                              <small style={{ color: '#6b7280', fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
+                                {appointment.total_duration || appointment.service?.duration || 30} min
+                              </small>
+                            </div>
+                            <div className="d-flex align-items-center gap-2">
+                              <div className="text-end d-md-none">
+                                <div className="fw-bold" style={{
+                                  fontSize: 'clamp(0.85rem, 2vw, 0.95rem)',
+                                  color: '#10b981'
+                                }}>
+                                  ₱{getTotalPrice(appointment)}
+                                </div>
+                                <small style={{ color: '#6b7280', fontSize: 'clamp(0.65rem, 1.5vw, 0.75rem)' }}>
+                                  {appointment.total_duration || appointment.service?.duration || 30} min
+                                </small>
+                              </div>
+                              {appointment.status?.toLowerCase() !== 'ongoing' ? (
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => {
+                                    console.log('Reschedule button clicked for appointment:', appointment);
+                                    setRescheduleModal({ isOpen: true, appointment: appointment });
+                                  }}
+                                  title="Reschedule Appointment"
+                                  style={{
+                                    background: '#6366f1',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                                    fontWeight: '500',
+                                    fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                                    whiteSpace: 'nowrap',
+                                    minHeight: 'clamp(36px, 8vw, 40px)',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#4f46e5';
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#6366f1';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                  }}
+                                >
+                                  <i className="bi bi-arrow-repeat me-1 d-none d-sm-inline"></i>
+                                  <span>Reschedule</span>
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-sm"
+                                  disabled
+                                  title="Cannot reschedule ongoing appointment"
+                                  style={{
+                                    background: '#e5e7eb',
+                                    color: '#6b7280',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                                    fontWeight: '500',
+                                    fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                                    whiteSpace: 'nowrap',
+                                    minHeight: 'clamp(36px, 8vw, 40px)'
+                                  }}
+                                >
+                                  <i className="bi bi-info-circle me-1 d-none d-sm-inline"></i>
+                                  <span>Serving</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Queue Status (Legacy View) */}
+        <div className="col-md-12 mb-4">
+          <div className="card shadow-sm">
+            <div className="card-header" style={{ padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)' }}>
+              <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <h5 className="mb-0 flex-grow-1" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.25rem)' }}>
+                  <i className="bi bi-list-ol me-2"></i>
+                  Today's Queue ({queueStatus.length})
+                </h5>
+                <div className="d-flex gap-2 align-items-center">
+                  <Link
+                    to="/queue"
+                    className="btn btn-primary btn-sm"
+                    style={{
+                      minHeight: 'clamp(36px, 8vw, 40px)',
+                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    <i className="bi bi-list-ol me-1 d-none d-sm-inline"></i>
+                    <span className="d-sm-none">Queue</span>
+                    <span className="d-none d-sm-inline">Manage Queue</span>
+                  </Link>
+                  <button
+                    className="btn btn-outline-primary btn-sm flex-shrink-0"
+                    onClick={fetchBarberData}
+                    style={{
+                      minHeight: 'clamp(36px, 8vw, 40px)',
+                      minWidth: 'clamp(36px, 8vw, 40px)',
+                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem)',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="Refresh"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'rotate(180deg)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'rotate(0deg)';
+                    }}
+                  >
+                    <i className="bi bi-arrow-clockwise" style={{ fontSize: 'clamp(0.8rem, 2vw, 0.875rem)' }}></i>
+                  </button>
+                </div>
               </div>
             </div>
             <div className="card-body">
@@ -1294,120 +1639,85 @@ const BarberDashboard = () => {
                     <i className="bi bi-list-ul"></i>
                   </div>
                   <h5>Queue is Empty</h5>
-                  <p className="text-muted">No customers waiting in the queue.</p>
+                  <p className="text-muted">No confirmed appointments today. Check pending requests above.</p>
                 </div>
               ) : (
                 <div className="list-group">
                   {queueStatus.slice(0, 5).map((appointment, index) => (
-                    <div key={appointment.id} className={`list-group-item ${index === 0 ? 'border-start border-5 border-primary' : ''}`}>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center">
-                          <div className={`rounded-circle ${appointment.is_urgent ? 'bg-danger' : 'bg-primary'} text-white d-flex align-items-center justify-content-center me-3`} style={{ width: '40px', height: '40px' }}>
+                    <div key={appointment.id} className={`list-group-item ${index === 0 ? 'border-start border-5 border-primary' : ''}`} style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+                      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                        <div className="d-flex align-items-center w-100 w-md-auto" style={{ minWidth: 0 }}>
+                          <div className={`rounded-circle ${appointment.is_urgent ? 'bg-danger' : 'bg-primary'} text-white d-flex align-items-center justify-content-center me-3 flex-shrink-0`} style={{ width: 'clamp(35px, 8vw, 40px)', height: 'clamp(35px, 8vw, 40px)', fontSize: 'clamp(0.8rem, 2vw, 1rem)' }}>
                             {appointment.is_urgent ? <i className="bi bi-lightning-fill"></i> : (appointment.queue_position || index + 1)}
                           </div>
-                          <div>
-                            <h6 className="mb-1">{appointment.customer?.full_name}</h6>
-                            <p className="mb-0 text-muted">{getServicesDisplay(appointment)}</p>
-                            {getAddOnsDisplay(appointment) && (
-                              <small className="text-info addon-display">Add-ons: {getAddOnsDisplay(appointment)}</small>
-                            )}
+                          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                            <h6 className="mb-1" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>{appointment.customer?.full_name}</h6>
+                            <p className="mb-1 text-muted" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>{getServicesDisplay(appointment)}</p>
+                            <small className="text-info addon-display" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
+                              Add-ons: <AddOnsDisplay appointment={appointment} />
+                            </small>
                           </div>
                         </div>
-                        <div className="text-end">
-                          <div className="text-success fw-bold">₱{getTotalPrice(appointment)}</div>
-                          <small className="text-muted">
-                            {appointment.total_duration || appointment.service?.duration} min
-                          </small>
-                          {appointment.is_urgent && (
-                            <div><span className="badge bg-danger">URGENT</span></div>
-                          )}
+                        <div className="d-flex flex-row flex-md-column align-items-center align-items-md-end justify-content-between justify-content-md-end gap-2" style={{ minWidth: 'fit-content', width: '100%' }}>
+                          <div className="text-end">
+                            <div className="text-success fw-bold" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>₱{getTotalPrice(appointment)}</div>
+                            <small className="text-muted" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
+                              {appointment.total_duration || appointment.service?.duration} min
+                            </small>
+                            {appointment.is_urgent && (
+                              <div className="mt-1">
+                                <span className="badge bg-danger" style={{ fontSize: 'clamp(0.65rem, 1.5vw, 0.75rem)' }}>URGENT</span>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            className="btn btn-sm btn-warning"
+                            onClick={() => setRescheduleModal({ isOpen: true, appointment: appointment })}
+                            title="Reschedule Appointment"
+                            style={{
+                              minHeight: 'clamp(36px, 8vw, 40px)',
+                              fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                              whiteSpace: 'nowrap',
+                              width: '100%',
+                              padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                              fontWeight: '500',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-1px)';
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          >
+                            <i className="bi bi-arrow-repeat me-1 d-none d-sm-inline"></i>
+                            <span>Reschedule</span>
+                          </button>
                         </div>
                       </div>
                     </div>
                   ))}
                   {queueStatus.length > 5 && (
-                    <div className="list-group-item text-center">
-                      <Link to="/queue" className="btn btn-outline-primary">
-                        View All {queueStatus.length} Customers
+                    <div className="list-group-item text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+                      <Link
+                        to="/queue"
+                        className="btn btn-outline-primary w-100 w-md-auto"
+                        style={{
+                          minHeight: 'clamp(36px, 8vw, 40px)',
+                          fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                          padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                          fontWeight: '500',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <i className="bi bi-arrow-right me-1 d-none d-sm-inline"></i>
+                        <span className="d-sm-none">View All ({queueStatus.length})</span>
+                        <span className="d-none d-sm-inline">View All {queueStatus.length} Customers</span>
                       </Link>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions & Next Up */}
-        <div className="col-md-4">
-          {/* Next Customer */}
-          {!currentAppointment && queueStatus.length > 0 && (
-            <div className="card shadow-sm mb-4">
-              <div className="card-header bg-info text-white">
-                <h6 className="mb-0">
-                  <i className="bi bi-person-up me-2"></i>
-                  Next Customer
-                </h6>
-              </div>
-              <div className="card-body text-center">
-                <h5>{queueStatus[0].customer?.full_name}</h5>
-                <p className="text-muted">{getServicesDisplay(queueStatus[0])}</p>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleAppointmentStatus(queueStatus[0].id, 'ongoing')}
-                >
-                  <i className="bi bi-play-fill me-1"></i>
-                  Start Service
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Quick Actions */}
-          <div className="card shadow-sm">
-            <div className="card-header">
-              <h6 className="mb-0">
-                <i className="bi bi-lightning-charge me-2"></i>
-                Quick Actions
-              </h6>
-            </div>
-            <div className="card-body">
-              <div className="d-grid gap-2">
-                <Link to="/queue" className="btn btn-primary">
-                  <i className="bi bi-people me-2"></i>
-                  Manage Queue
-                </Link>
-                <Link to="/schedule" className="btn btn-info">
-                  <i className="bi bi-calendar-week me-2"></i>
-                  Full Schedule
-                </Link>
-                <Link to="/appointment-requests" className="btn btn-warning">
-                  <i className="bi bi-clipboard-check me-2"></i>
-                  Appointment Requests
-                </Link>
-                <Link to="/day-off-manager" className="btn btn-secondary">
-                  <i className="bi bi-calendar-x me-2"></i>
-                  Day-Off Manager
-                </Link>
-                <button 
-                  className="btn btn-success"
-                  onClick={() => updateBarberStatus(barberStatus === 'available' ? 'break' : 'available')}
-                >
-                  <i className={`bi ${barberStatus === 'available' ? 'bi-pause' : 'bi-play'} me-2`}></i>
-                  {barberStatus === 'available' ? 'Take Break' : 'Resume Work'}
-                </button>
-                <button className="btn btn-outline-secondary" onClick={fetchBarberData}>
-                  <i className="bi bi-arrow-clockwise me-2"></i>
-                  Refresh Data
-                </button>
-              </div>
-              
-              {todayStats.queueLength > 0 && (
-                <div className="mt-3 p-2 bg-light rounded">
-                  <small className="text-muted">
-                    <i className="bi bi-info-circle me-1"></i>
-                    Estimated time to clear queue: {formatTimeRemaining(todayStats.queueLength * todayStats.averageWaitTime)}
-                  </small>
                 </div>
               )}
             </div>
@@ -1439,9 +1749,8 @@ const BarberDashboard = () => {
                                 {[...Array(5)].map((_, i) => (
                                   <i
                                     key={i}
-                                    className={`bi bi-star-fill ${
-                                      i < (review.customer_rating || 0) ? 'text-warning' : 'text-muted'
-                                    }`}
+                                    className={`bi bi-star-fill ${i < (review.customer_rating || 0) ? 'text-warning' : 'text-muted'
+                                      }`}
                                     style={{ fontSize: '0.8rem' }}
                                   ></i>
                                 ))}
@@ -1476,6 +1785,17 @@ const BarberDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Reschedule Modal */}
+      <RescheduleModal
+        isOpen={rescheduleModal.isOpen}
+        onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
+        appointment={rescheduleModal.appointment}
+        onSuccess={(request) => {
+          setRescheduleModal({ isOpen: false, appointment: null });
+          fetchBarberData(); // Refresh data after reschedule request
+        }}
+      />
     </div>
   );
 };

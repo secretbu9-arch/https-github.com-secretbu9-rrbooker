@@ -49,7 +49,7 @@ class EnhancedQueueService {
         `)
         .eq('barber_id', barberId)
         .eq('appointment_date', normalizedDate)
-        .in('status', ['scheduled', 'ongoing', 'pending'])
+        .in('status', ['confirmed', 'scheduled', 'ongoing', 'pending'])
         .order('created_at', { ascending: true });
 
       if (appointmentsError) {
@@ -151,7 +151,7 @@ class EnhancedQueueService {
    */
   processQueueAppointments(queueAppointments) {
     return queueAppointments
-      .filter(apt => apt.status === 'scheduled')
+      .filter(apt => apt.status === 'confirmed' || apt.status === 'scheduled')
       .sort((a, b) => {
         // Sort by queue_position
         const aPos = a.queue_position || 999;
@@ -255,7 +255,7 @@ class EnhancedQueueService {
 
       // Update appointment
       const updateData = {
-        status: 'scheduled',
+        status: 'confirmed',
         queue_position: queuePosition,
         priority_level: isUrgent ? 'urgent' : 'normal',
         updated_at: new Date().toISOString()
@@ -302,20 +302,37 @@ class EnhancedQueueService {
   async incrementQueuePositions(barberId, date, startPosition) {
     try {
       // Only increment queue appointments, not scheduled ones
-      const { error } = await supabase
+      // Fetch appointments that need their queue positions incremented
+      const { data: existingAppointments, error: fetchError } = await supabase
         .from('appointments')
-        .update({ 
-          queue_position: supabase.raw('queue_position + 1'),
-          updated_at: new Date().toISOString()
-        })
+        .select('id, queue_position')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .eq('status', 'scheduled')
+        .in('status', ['confirmed', 'scheduled'])
         .eq('appointment_type', 'queue') // Only queue appointments
+        .not('queue_position', 'is', null)
         .gte('queue_position', startPosition);
 
-      if (error) {
-        console.warn('Warning: Could not increment all queue positions:', error);
+      if (fetchError) {
+        console.warn('Warning: Could not fetch appointments for queue position increment:', fetchError);
+        return;
+      }
+
+      if (existingAppointments && existingAppointments.length > 0) {
+        // Update each appointment's queue position
+        for (const apt of existingAppointments) {
+          const { error: updateError } = await supabase
+            .from('appointments')
+            .update({ 
+              queue_position: (apt.queue_position || 0) + 1,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', apt.id);
+          
+          if (updateError) {
+            console.warn(`Warning: Could not increment queue position for appointment ${apt.id}:`, updateError);
+          }
+        }
       }
     } catch (error) {
       console.warn('Warning: Error incrementing queue positions:', error);

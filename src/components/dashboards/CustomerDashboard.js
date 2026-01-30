@@ -37,6 +37,12 @@ const CustomerDashboard = () => {
   const [isFetchingData, setIsFetchingData] = useState(false);
   const [isFetchingQueue, setIsFetchingQueue] = useState(false);
   const [debounceTimeout, setDebounceTimeout] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [priorityRequestModal, setPriorityRequestModal] = useState({
+    isOpen: false,
+    appointment: null
+  });
 
   useEffect(() => {
     getCurrentUser();
@@ -163,24 +169,72 @@ const CustomerDashboard = () => {
 
       // Fetch upcoming appointments with all related data in one query
       const today = new Date().toISOString().split('T')[0];
-      const { data: appointments, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select(`
-          *,
-          barber:barber_id(id, full_name, email, barber_status),
-          service:service_id(id, name, price, duration)
-        `)
-        .eq('customer_id', user.id)
-        .gte('appointment_date', today)
-        .in('status', ['scheduled', 'ongoing', 'pending'])
-        .order('appointment_date')
-        .order('queue_position', { ascending: true });
+      
+      // Try to fetch with priority request fields, fallback if they don't exist
+      let appointments, appointmentsError;
+      
+      try {
+        const result = await supabase
+          .from('appointments')
+          .select(`
+            *,
+            barber:barber_id(id, full_name, email, barber_status),
+            service:service_id(id, name, price, duration)
+          `)
+          .eq('customer_id', user.id)
+          .gte('appointment_date', today)
+          .in('status', ['scheduled', 'ongoing', 'pending', 'confirmed'])
+          .order('appointment_date')
+          .order('queue_position', { ascending: true });
+        
+        appointments = result.data;
+        appointmentsError = result.error;
+        
+        // If error is about missing columns, that's okay - fields will be undefined
+        if (appointmentsError && appointmentsError.message && 
+            appointmentsError.message.includes('column') && 
+            appointmentsError.message.includes('does not exist')) {
+          // Retry without the problematic fields (they'll be undefined)
+          const retryResult = await supabase
+            .from('appointments')
+            .select(`
+              *,
+              barber:barber_id(id, full_name, email, barber_status),
+              service:service_id(id, name, price, duration)
+            `)
+            .eq('customer_id', user.id)
+            .gte('appointment_date', today)
+            .in('status', ['scheduled', 'ongoing', 'pending', 'confirmed'])
+            .order('appointment_date')
+            .order('queue_position', { ascending: true });
+          
+          appointments = retryResult.data;
+          appointmentsError = retryResult.error;
+        }
+      } catch (err) {
+        appointmentsError = err;
+      }
 
       if (appointmentsError) throw appointmentsError;
 
       // Separate pending requests from confirmed appointments
       const confirmedAppointments = appointments?.filter(apt => apt.status !== 'pending') || [];
       const pendingAppointments = appointments?.filter(apt => apt.status === 'pending') || [];
+
+      // Debug: Log appointment details to help diagnose
+      if (confirmedAppointments.length > 0) {
+        console.log('📋 Upcoming Appointments:', confirmedAppointments.map(apt => ({
+          id: apt.id,
+          status: apt.status,
+          is_urgent: apt.is_urgent,
+          priority_request_status: apt.priority_request_status,
+          queue_position: apt.queue_position,
+          canRequestPriority: ['scheduled', 'confirmed', 'pending'].includes(apt.status) && 
+                            !apt.is_urgent && 
+                            (apt.priority_request_status === null || apt.priority_request_status === undefined || apt.priority_request_status === '') &&
+                            apt.queue_position !== null
+        })));
+      }
 
       setUpcomingAppointments(confirmedAppointments);
       setPendingRequests(pendingAppointments);
@@ -198,7 +252,7 @@ const CustomerDashboard = () => {
       await updateQueuePositions(confirmedAppointments);
 
       // Fetch user statistics in parallel
-      const [totalAppointmentsResult, completedAppointmentsResult, appointmentsByBarberResult, lastAppointmentResult] = await Promise.all([
+      const [totalAppointmentsResult, completedAppointmentsResult, appointmentsByBarberResult, lastAppointmentResult, completedOrdersResult] = await Promise.all([
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
@@ -208,34 +262,51 @@ const CustomerDashboard = () => {
           .from('appointments')
           .select('total_price, service:service_id(price), is_urgent')
           .eq('customer_id', user.id)
-          .eq('status', 'done'),
+          .eq('status', 'completed'),
         
         supabase
           .from('appointments')
           .select('barber_id, barber:barber_id(full_name)')
           .eq('customer_id', user.id)
-          .eq('status', 'done'),
+          .eq('status', 'completed'),
         
         supabase
           .from('appointments')
           .select('appointment_date')
           .eq('customer_id', user.id)
-          .eq('status', 'done')
+          .eq('status', 'completed')
           .order('appointment_date', { ascending: false })
-          .limit(1)
+          .limit(1),
+        
+        // Fetch only completed orders for the customer (picked_up status)
+        supabase
+          .from('orders')
+          .select('total_amount')
+          .eq('customer_id', user.id)
+          .eq('status', 'picked_up')
       ]);
 
       const totalAppointments = totalAppointmentsResult.count || 0;
       const completedAppointments = completedAppointmentsResult.data || [];
       const appointmentsByBarber = appointmentsByBarberResult.data || [];
       const lastAppointment = lastAppointmentResult.data?.[0];
+      const completedOrders = completedOrdersResult.data || [];
 
-      // Calculate total spent
-      const totalSpent = completedAppointments.reduce((sum, apt) => {
+      // Calculate total spent from completed appointments (status = 'completed')
+      // Includes base price + urgent fees (if applicable)
+      const appointmentSpent = completedAppointments.reduce((sum, apt) => {
         const price = apt.total_price || apt.service?.price || 0;
         const urgentFee = apt.is_urgent ? 100 : 0;
         return sum + price + urgentFee;
       }, 0);
+
+      // Calculate total spent from completed orders (status = 'picked_up')
+      const orderSpent = completedOrders.reduce((sum, order) => {
+        return sum + (order.total_amount || 0);
+      }, 0);
+
+      // Total spent = completed appointments + completed orders
+      const totalSpent = appointmentSpent + orderSpent;
 
       // Find favorite barber
       const barberCounts = {};
@@ -385,6 +456,78 @@ const CustomerDashboard = () => {
     }
   };
 
+  const openPriorityRequestModal = (appointment) => {
+    setPriorityRequestModal({
+      isOpen: true,
+      appointment: appointment
+    });
+  };
+
+  const closePriorityRequestModal = () => {
+    setPriorityRequestModal({
+      isOpen: false,
+      appointment: null
+    });
+  };
+
+  const handleRequestPriority = async (appointmentId) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          priority_request_status: 'pending',
+          priority_requested_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', appointmentId);
+
+      if (error) throw error;
+
+      // Send notification to managers
+      try {
+        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const appointment = upcomingAppointments.find(apt => apt.id === appointmentId);
+        
+        // Get all managers
+        const { data: managers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('role', 'manager');
+
+        if (managers && managers.length > 0) {
+          await Promise.all(managers.map(manager => 
+            centralizedNotificationService.createNotification({
+              userId: manager.id,
+              title: 'Priority Request',
+              message: `${user.user_metadata?.full_name || user.email} has requested priority for an appointment.`,
+              type: 'priority_request',
+              category: 'queue_update',
+              priority: 'high',
+              channels: ['app', 'push'],
+              data: {
+                appointment_id: appointmentId,
+                customer_name: user.user_metadata?.full_name || user.email,
+                barber_name: appointment?.barber?.full_name
+              },
+              appointmentId: appointmentId
+            })
+          ));
+        }
+      } catch (notifError) {
+        console.warn('Failed to send priority request notification:', notifError);
+      }
+
+      setSuccess('Priority request submitted! Manager will review and notify you.');
+      setTimeout(() => setSuccess(''), 5000);
+      closePriorityRequestModal();
+      fetchCustomerData();
+    } catch (err) {
+      console.error('Error requesting priority:', err);
+      setError('Failed to submit priority request. Please try again.');
+      setTimeout(() => setError(''), 5000);
+    }
+  };
+
   const handleCancelAppointment = async (appointmentId) => {
     if (!window.confirm('Are you sure you want to cancel this appointment?')) {
       return;
@@ -448,18 +591,27 @@ const CustomerDashboard = () => {
         }
       }
 
-      // Create notification for barber
+      // Create notification for barber using centralized service (prevents duplicates)
       if (appointment) {
-        await supabase.from('notifications').insert({
-          user_id: appointment.barber_id,
-          title: 'Appointment Cancelled',
-          message: `${user.user_metadata?.full_name || user.email} has cancelled their appointment.`,
-          type: 'appointment_cancelled',
-          data: {
-            appointment_id: appointmentId,
-            customer_name: user.user_metadata?.full_name || user.email
-          }
-        });
+        try {
+          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          await centralizedNotificationService.createNotification({
+            userId: appointment.barber_id,
+            title: 'Appointment Cancelled',
+            message: `${user.user_metadata?.full_name || user.email} has cancelled their appointment.`,
+            type: 'appointment',
+            category: 'status_update',
+            priority: 'normal',
+            channels: ['app', 'push'],
+            appointmentId: appointmentId,
+            data: {
+              customer_name: user.user_metadata?.full_name || user.email,
+              cancelled_by: 'customer'
+            }
+          });
+        } catch (notifError) {
+          console.warn('Failed to send cancellation notification to barber:', notifError);
+        }
       }
 
       await supabase.from('system_logs').insert({
@@ -561,32 +713,46 @@ const CustomerDashboard = () => {
         </div>
       </div>
 
+      {/* Success/Error Messages */}
+      {success && (
+        <div className="alert alert-success alert-dismissible fade show" role="alert">
+          {success}
+          <button type="button" className="btn-close" onClick={() => setSuccess('')}></button>
+        </div>
+      )}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show" role="alert">
+          {error}
+          <button type="button" className="btn-close" onClick={() => setError('')}></button>
+        </div>
+      )}
+
       {/* Customer Welcome Header */}
       <div className="row mb-4">
         <div className="col">
-          <div className="customer-welcome-header p-4 rounded shadow-sm d-flex align-items-center">
+          <div className="customer-welcome-header rounded shadow-sm d-flex align-items-center" style={{ padding: 'clamp(1rem, 3vw, 1.5rem)' }}>
             <div>
               <div className="d-flex align-items-center mb-2">
                 <img 
                   src={logoImage} 
                   alt="Raf & Rok" 
                   className="dashboard-logo me-3" 
-                  height="40"
                   style={{
+                    height: 'clamp(30px, 5vw, 40px)',
                     backgroundColor: '#ffffff',
                     padding: '3px',
                     borderRadius: '5px'
                   }}
                 />
-                <h1 className="h3 mb-0 text-white">Welcome back!</h1>
+                <h1 className="mb-0 text-white" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>Welcome back!</h1>
               </div>
-              <p className="text-light mb-0">
+              <p className="text-light mb-0" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}>
                 <i className="bi bi-calendar3 me-2"></i>
                 Your appointments and queue status
               </p>
             </div>
             <div className="ms-auto text-end text-light">
-              <div className="h4 mb-0">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+              <div className="mb-0" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1.25rem)', fontWeight: '600' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
               <div className="text-light d-flex align-items-center justify-content-end">
                 <div className="form-check form-switch">
                   <input
@@ -596,7 +762,7 @@ const CustomerDashboard = () => {
                     checked={realTimeUpdates}
                     onChange={(e) => setRealTimeUpdates(e.target.checked)}
                   />
-                  <label className="form-check-label text-light" htmlFor="realTimeToggle">
+                  <label className="form-check-label text-light" htmlFor="realTimeToggle" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)' }}>
                     <i className="bi bi-broadcast me-1"></i>
                     Live Updates
                   </label>
@@ -608,158 +774,138 @@ const CustomerDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="row mb-4">
-        <div className="col-md-3 mb-3">
+      <div className="quick-actions-container mb-4">
+        <div className="quick-actions-grid">
           <Link 
             to="/book" 
-            className={`card quick-action-card shadow-sm h-100 text-decoration-none ${animateActions ? 'action-card-animated' : ''}`}
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.1s' }}
           >
-            <div className="card-body text-center">
-              <div className="quick-action-icon primary-action mb-3">
-                <i className="bi bi-calendar-plus"></i>
-              </div>
-              <h5 className="card-title">Book Appointment</h5>
-              <p className="card-text text-muted">Schedule your next visit</p>
+            <div className="quick-action-icon-wrapper primary-action">
+              <i className="bi bi-calendar-plus"></i>
             </div>
+            <span className="quick-action-name">Book</span>
+            <span className="quick-action-description d-none d-md-block">Schedule your next visit</span>
           </Link>
-        </div>
-        
-        <div className="col-md-3 mb-3">
+          
           <Link 
             to="/haircut-recommender" 
-            className={`card quick-action-card shadow-sm h-100 text-decoration-none ${animateActions ? 'action-card-animated' : ''}`}
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.2s' }}
           >
-            <div className="card-body text-center">
-              <div className="quick-action-icon success-action mb-3">
-                <i className="bi bi-magic"></i>
-              </div>
-              <h5 className="card-title">Style Recommender</h5>
-              <p className="card-text text-muted">Get personalized suggestions</p>
+            <div className="quick-action-icon-wrapper success-action">
+              <i className="bi bi-magic"></i>
             </div>
+            <span className="quick-action-name">Style</span>
+            <span className="quick-action-description d-none d-md-block">Get personalized suggestions</span>
           </Link>
-        </div>
-        
-        <div className="col-md-3 mb-3">
+          
           <Link 
             to="/appointments" 
-            className={`card quick-action-card shadow-sm h-100 text-decoration-none ${animateActions ? 'action-card-animated' : ''}`}
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.3s' }}
           >
-            <div className="card-body text-center">
-              <div className="quick-action-icon info-action mb-3">
-                <i className="bi bi-calendar-check"></i>
-              </div>
-              <h5 className="card-title">My Appointments</h5>
-              <p className="card-text text-muted">View appointment history</p>
+            <div className="quick-action-icon-wrapper info-action">
+              <i className="bi bi-calendar-check"></i>
             </div>
+            <span className="quick-action-name">Appointments</span>
+            <span className="quick-action-description d-none d-md-block">View appointment history</span>
           </Link>
-        </div>
 
-        <div className="col-md-3 mb-3">
           <Link 
             to="/products" 
-            className={`card quick-action-card shadow-sm h-100 text-decoration-none ${animateActions ? 'action-card-animated' : ''}`}
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.4s' }}
           >
-            <div className="card-body text-center">
-              <div className="quick-action-icon warning-action mb-3">
-                <i className="bi bi-bag"></i>
-              </div>
-              <h5 className="card-title">Shop Products</h5>
-              <p className="card-text text-muted">Browse our products</p>
+            <div className="quick-action-icon-wrapper warning-action">
+              <i className="bi bi-bag"></i>
             </div>
+            <span className="quick-action-name">Shop</span>
+            <span className="quick-action-description d-none d-md-block">Browse our products</span>
           </Link>
-        </div>
-      </div>
 
-      {/* Additional Quick Actions Row */}
-      <div className="row mb-4">
-        <div className="col-md-3 mb-3">
           <Link 
             to="/orders" 
-            className={`card quick-action-card shadow-sm h-100 text-decoration-none ${animateActions ? 'action-card-animated' : ''}`}
+            className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.5s' }}
           >
-            <div className="card-body text-center">
-              <div className="quick-action-icon success-action mb-3">
-                <i className="bi bi-bag-check"></i>
-              </div>
-              <h5 className="card-title">My Orders</h5>
-              <p className="card-text text-muted">Track your product orders</p>
+            <div className="quick-action-icon-wrapper success-action">
+              <i className="bi bi-bag-check"></i>
             </div>
+            <span className="quick-action-name">Orders</span>
+            <span className="quick-action-description d-none d-md-block">Track your product orders</span>
           </Link>
         </div>
-
       </div>
 
-      {/* Stats Cards */}
-      <div className="row mb-4">
-        <div className="col-md-3 mb-3">
+      {/* Stats Cards - 2x2 Grid */}
+      <div className="row mb-4 g-3">
+        <div className="col-6 col-md-6 mb-3">
           <div 
             className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.1s' }}
           >
-            <div className="card-body d-flex align-items-center">
+            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
               <div>
-                <h6 className="card-title mb-1">Total Visits</h6>
-                <h2 className="mb-0">{userStats.totalAppointments}</h2>
+                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Total Visits</h6>
+                <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{userStats.totalAppointments}</h2>
               </div>
-              <div className="ms-auto card-icon">
+              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
                 <i className="bi bi-calendar-check"></i>
               </div>
             </div>
           </div>
         </div>
         
-        <div className="col-md-3 mb-3">
+        <div className="col-6 col-md-6 mb-3">
           <div 
             className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.2s' }}
           >
-            <div className="card-body d-flex align-items-center">
+            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
               <div>
-                <h6 className="card-title mb-1">Total Spent</h6>
-                <h2 className="mb-0"><span className="currency-amount-large">₱{userStats.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h2>
+                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Total Spent</h6>
+                <h2 className="mb-0" style={{ fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 'bold', lineHeight: '1.2' }}>
+                  <span className="currency-amount-large">₱{userStats.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </h2>
               </div>
-              <div className="ms-auto card-icon">
+              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
                 <i className="bi bi-wallet2"></i>
               </div>
             </div>
           </div>
         </div>
         
-        <div className="col-md-3 mb-3">
+        <div className="col-6 col-md-6 mb-3">
           <div 
             className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.3s' }}
           >
-            <div className="card-body d-flex align-items-center">
+            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
               <div>
-                <h6 className="card-title mb-1">Upcoming</h6>
-                <h2 className="mb-0">{userStats.upcomingCount}</h2>
+                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Upcoming</h6>
+                <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{userStats.upcomingCount}</h2>
               </div>
-              <div className="ms-auto card-icon">
+              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
                 <i className="bi bi-clock"></i>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="col-md-3 mb-3">
+        <div className="col-6 col-md-6 mb-3">
           <div 
             className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.4s' }}
           >
-            <div className="card-body d-flex align-items-center">
+            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
               <div>
-                <h6 className="card-title mb-1">Favorite Barber</h6>
-                <h2 className="mb-0" style={{ fontSize: '1.2rem' }}>
+                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Favorite Barber</h6>
+                <h2 className="mb-0" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1.2rem)', fontWeight: 'bold', lineHeight: '1.2' }}>
                   {userStats.favoriteBarber?.full_name || 'None yet'}
                 </h2>
               </div>
-              <div className="ms-auto card-icon">
+              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
                 <i className="bi bi-star"></i>
               </div>
             </div>
@@ -874,15 +1020,67 @@ const CustomerDashboard = () => {
                             </div>
                           )}
 
-                          {appointment.status === 'scheduled' && (
-                            <div className="d-flex gap-2">
-                              <Link
-                                to={`/book?rebook=${appointment.id}`}
-                                className="btn btn-sm btn-outline-primary"
-                                title="Reschedule"
+                          {/* Priority Request Status */}
+                          {appointment.priority_request_status === 'pending' && (
+                            <div className="alert alert-warning py-2 mb-2">
+                              <small>
+                                <i className="bi bi-clock-history me-1"></i>
+                                Priority request pending manager approval
+                              </small>
+                            </div>
+                          )}
+                          {appointment.priority_request_status === 'approved' && !appointment.is_urgent && (
+                            <div className="alert alert-info py-2 mb-2">
+                              <small>
+                                <i className="bi bi-check-circle me-1"></i>
+                                Priority approved! Fee will be applied.
+                              </small>
+                            </div>
+                          )}
+                          {appointment.priority_request_status === 'rejected' && (
+                            <div className="alert alert-secondary py-2 mb-2">
+                              <small>
+                                <i className="bi bi-x-circle me-1"></i>
+                                Priority request was declined
+                              </small>
+                            </div>
+                          )}
+
+                          {/* Debug info - remove after testing */}
+                          {process.env.NODE_ENV === 'development' && (
+                            <div className="alert alert-light py-1 mb-2" style={{fontSize: '0.7rem'}}>
+                              <small>
+                                Debug: status={appointment.status}, 
+                                is_urgent={String(appointment.is_urgent)}, 
+                                priority_request_status={appointment.priority_request_status || 'null'}, 
+                                queue_position={appointment.queue_position}
+                              </small>
+                            </div>
+                          )}
+
+                          {/* Action Buttons */}
+                          <div className="d-flex gap-2">
+                            {/* Show Request Priority button if:
+                                - Status is scheduled, confirmed, or pending (not ongoing or cancelled)
+                                - Not already urgent
+                                - No pending/approved/rejected priority request exists
+                                - Has a queue position (is in queue) */}
+                            {['scheduled', 'confirmed', 'pending'].includes(appointment.status) && 
+                             !appointment.is_urgent && 
+                             (appointment.priority_request_status === null || 
+                              appointment.priority_request_status === undefined ||
+                              appointment.priority_request_status === '') &&
+                             appointment.queue_position !== null && (
+                              <button
+                                className="btn btn-sm btn-warning"
+                                onClick={() => openPriorityRequestModal(appointment)}
+                                title="Request Priority (₱100 fee if approved)"
                               >
-                                <i className="bi bi-arrow-repeat"></i>
-                              </Link>
+                                <i className="bi bi-lightning-fill me-1"></i>
+                                Request Priority
+                              </button>
+                            )}
+                            {['scheduled', 'confirmed', 'pending'].includes(appointment.status) && (
                               <button
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleCancelAppointment(appointment.id)}
@@ -890,8 +1088,8 @@ const CustomerDashboard = () => {
                               >
                                 <i className="bi bi-x-circle"></i>
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -957,6 +1155,111 @@ const CustomerDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Priority Request Confirmation Modal */}
+      {priorityRequestModal.isOpen && priorityRequestModal.appointment && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-warning text-dark">
+                <h5 className="modal-title">
+                  <i className="bi bi-lightning-fill me-2"></i>
+                  Request Priority Service
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={closePriorityRequestModal}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-info mb-3">
+                  <i className="bi bi-info-circle me-2"></i>
+                  <strong>Priority service</strong> moves your appointment to the front of the queue. A ₱100 fee will be applied if approved by the manager.
+                </div>
+
+                <div className="card border-0 bg-light mb-3">
+                  <div className="card-body">
+                    <h6 className="card-title mb-3">Appointment Details</h6>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <small className="text-muted d-block">Service</small>
+                        <strong>{getServicesDisplay(priorityRequestModal.appointment)}</strong>
+                      </div>
+                      <div className="col-6">
+                        <small className="text-muted d-block">Barber</small>
+                        <strong>{priorityRequestModal.appointment.barber?.full_name}</strong>
+                      </div>
+                      <div className="col-6">
+                        <small className="text-muted d-block">Date</small>
+                        <strong>{new Date(priorityRequestModal.appointment.appointment_date).toLocaleDateString()}</strong>
+                      </div>
+                      <div className="col-6">
+                        <small className="text-muted d-block">Current Position</small>
+                        <strong>#{priorityRequestModal.appointment.queue_position}</strong>
+                      </div>
+                      <div className="col-12">
+                        <small className="text-muted d-block">Current Price</small>
+                        <strong className="text-success">₱{getTotalPrice(priorityRequestModal.appointment)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card border-warning mb-3">
+                  <div className="card-body">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 className="mb-1">Priority Fee</h6>
+                        <small className="text-muted">Applied if approved</small>
+                      </div>
+                      <div className="text-end">
+                        <h5 className="mb-0 text-warning">+₱100.00</h5>
+                      </div>
+                    </div>
+                    <hr />
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 className="mb-0">Total (if approved)</h6>
+                      </div>
+                      <div className="text-end">
+                        <h5 className="mb-0 text-success">
+                          ₱{getTotalPrice(priorityRequestModal.appointment) + 100}
+                        </h5>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="alert alert-warning mb-0">
+                  <small>
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> Your request will be reviewed by a manager. You will be notified once a decision is made.
+                  </small>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closePriorityRequestModal}
+                >
+                  <i className="bi bi-x-circle me-1"></i>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-warning"
+                  onClick={() => handleRequestPriority(priorityRequestModal.appointment.id)}
+                >
+                  <i className="bi bi-lightning-fill me-1"></i>
+                  Submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -26,7 +26,10 @@ const IntegratedShop = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [priceRange, setPriceRange] = useState('all');
+  const [stockStatus, setStockStatus] = useState('all');
   const [sortBy, setSortBy] = useState('name');
+  const [showFilters, setShowFilters] = useState(false);
   const [orderLoading, setOrderLoading] = useState(false);
   const [orderError, setOrderError] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -37,7 +40,7 @@ const IntegratedShop = () => {
   
   // Pickup details form
   const [pickupDetails, setPickupDetails] = useState({
-    pickupDate: '',
+    pickupDate: new Date().toISOString().split('T')[0], // Auto-fill with today's date
     pickupTime: '',
     notes: '',
     customerName: '',
@@ -51,12 +54,20 @@ const IntegratedShop = () => {
   }, [user]);
 
   const autoFillCustomerDetails = () => {
+    const today = new Date().toISOString().split('T')[0];
     if (user) {
       setPickupDetails(prev => ({
         ...prev,
+        pickupDate: prev.pickupDate || today, // Set today's date if not already set
         customerName: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
         customerEmail: user.email || '',
         customerPhone: user.user_metadata?.phone || ''
+      }));
+    } else {
+      // Set today's date even if user is not logged in
+      setPickupDetails(prev => ({
+        ...prev,
+        pickupDate: prev.pickupDate || today
       }));
     }
   };
@@ -224,7 +235,48 @@ const IntegratedShop = () => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    
+    // Price range filter
+    let matchesPrice = true;
+    if (priceRange !== 'all') {
+      const price = parseFloat(product.price);
+      switch (priceRange) {
+        case 'under-500':
+          matchesPrice = price < 500;
+          break;
+        case '500-1000':
+          matchesPrice = price >= 500 && price <= 1000;
+          break;
+        case '1000-2000':
+          matchesPrice = price > 1000 && price <= 2000;
+          break;
+        case 'over-2000':
+          matchesPrice = price > 2000;
+          break;
+        default:
+          matchesPrice = true;
+      }
+    }
+    
+    // Stock status filter
+    let matchesStock = true;
+    if (stockStatus !== 'all') {
+      switch (stockStatus) {
+        case 'in-stock':
+          matchesStock = product.stock_quantity > 0;
+          break;
+        case 'low-stock':
+          matchesStock = product.stock_quantity > 0 && product.stock_quantity <= 10;
+          break;
+        case 'out-of-stock':
+          matchesStock = product.stock_quantity === 0;
+          break;
+        default:
+          matchesStock = true;
+      }
+    }
+    
+    return matchesSearch && matchesCategory && matchesPrice && matchesStock;
   });
 
   const sortedProducts = [...filteredProducts].sort((a, b) => {
@@ -236,7 +288,9 @@ const IntegratedShop = () => {
       case 'price-high':
         return b.price - a.price;
       case 'newest':
-        return new Date(b.created_at) - new Date(a.created_at);
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      case 'oldest':
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
       default:
         return 0;
     }
@@ -258,46 +312,223 @@ const IntegratedShop = () => {
               </h4>
             </div>
             <div className="card-body">
-              {/* Search and Filters */}
-              <div className="row mb-4">
-                <div className="col-md-6">
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <i className="bi bi-search"></i>
+              {/* Search Bar */}
+              <div className="row mb-3">
+                <div className="col-12">
+                  <div className="input-group input-group-lg">
+                    <span className="input-group-text bg-white">
+                      <i className="bi bi-search text-muted"></i>
                     </span>
                     <input
                       type="text"
-                      className="form-control"
-                      placeholder="Search products..."
+                      className="form-control border-start-0"
+                      placeholder="Search products by name or description..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
+                    {searchTerm && (
+                      <button
+                        className="btn btn-outline-secondary border-start-0"
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                        aria-label="Clear search"
+                      >
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="col-md-3">
-                  <select
-                    className="form-select"
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+              </div>
+
+              {/* Filter Toggle Button (Mobile) */}
+              <div className="row mb-3 d-md-none">
+                <div className="col-12">
+                  <button
+                    className="btn btn-outline-primary w-100"
+                    type="button"
+                    onClick={() => setShowFilters(!showFilters)}
                   >
-                    <option value="all">All Categories</option>
-                    <option value="Hair Care">Hair Care</option>
-                    <option value="Styling">Styling</option>
-                    <option value="Tools">Tools</option>
-                    <option value="Beard Care">Beard Care</option>
-                  </select>
+                    <i className={`bi bi-funnel${showFilters ? '-fill' : ''} me-2`}></i>
+                    {showFilters ? 'Hide Filters' : 'Show Filters'}
+                    {(selectedCategory !== 'all' || priceRange !== 'all' || stockStatus !== 'all') && (
+                      <span className="badge bg-primary ms-2">
+                        {[selectedCategory !== 'all' ? 1 : 0, priceRange !== 'all' ? 1 : 0, stockStatus !== 'all' ? 1 : 0].reduce((a, b) => a + b, 0)}
+                      </span>
+                    )}
+                  </button>
                 </div>
-                <div className="col-md-3">
-                  <select
-                    className="form-select"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                  >
-                    <option value="name">Sort by Name</option>
-                    <option value="price-low">Price: Low to High</option>
-                    <option value="price-high">Price: High to Low</option>
-                    <option value="newest">Newest First</option>
-                  </select>
+              </div>
+
+              {/* Filters Section */}
+              <div className={`row g-3 mb-4 ${showFilters ? 'd-block' : 'd-none'} d-md-block`}>
+                <div className="col-12">
+                  <div className="card border-0 bg-light">
+                    <div className="card-body">
+                      <div className="row g-3">
+                        {/* Category Filter */}
+                        <div className="col-12 col-md-6 col-lg-3">
+                          <label className="form-label fw-semibold small text-muted mb-1">
+                            <i className="bi bi-tags me-1"></i>
+                            Category
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                          >
+                            <option value="all">All Categories</option>
+                            <option value="Hair Care">Hair Care</option>
+                            <option value="Styling">Styling</option>
+                            <option value="Tools">Tools</option>
+                            <option value="Beard Care">Beard Care</option>
+                          </select>
+                        </div>
+
+                        {/* Price Range Filter */}
+                        <div className="col-12 col-md-6 col-lg-3">
+                          <label className="form-label fw-semibold small text-muted mb-1">
+                            <i className="bi bi-currency-dollar me-1"></i>
+                            Price Range
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={priceRange}
+                            onChange={(e) => setPriceRange(e.target.value)}
+                          >
+                            <option value="all">All Prices</option>
+                            <option value="under-500">Under ₱500</option>
+                            <option value="500-1000">₱500 - ₱1,000</option>
+                            <option value="1000-2000">₱1,000 - ₱2,000</option>
+                            <option value="over-2000">Over ₱2,000</option>
+                          </select>
+                        </div>
+
+                        {/* Stock Status Filter */}
+                        <div className="col-12 col-md-6 col-lg-3">
+                          <label className="form-label fw-semibold small text-muted mb-1">
+                            <i className="bi bi-box-seam me-1"></i>
+                            Stock Status
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={stockStatus}
+                            onChange={(e) => setStockStatus(e.target.value)}
+                          >
+                            <option value="all">All Products</option>
+                            <option value="in-stock">In Stock</option>
+                            <option value="low-stock">Low Stock (≤10)</option>
+                            <option value="out-of-stock">Out of Stock</option>
+                          </select>
+                        </div>
+
+                        {/* Sort By */}
+                        <div className="col-12 col-md-6 col-lg-3">
+                          <label className="form-label fw-semibold small text-muted mb-1">
+                            <i className="bi bi-sort-down me-1"></i>
+                            Sort By
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                          >
+                            <option value="name">Name (A-Z)</option>
+                            <option value="price-low">Price: Low to High</option>
+                            <option value="price-high">Price: High to Low</option>
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Active Filters Summary */}
+                      {(selectedCategory !== 'all' || priceRange !== 'all' || stockStatus !== 'all' || searchTerm) && (
+                        <div className="row mt-3">
+                          <div className="col-12">
+                            <div className="d-flex flex-wrap align-items-center gap-2 small">
+                              <span className="text-muted">Active filters:</span>
+                              {selectedCategory !== 'all' && (
+                                <span className="badge bg-primary">
+                                  Category: {selectedCategory}
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-white ms-1"
+                                    style={{ fontSize: '0.5em' }}
+                                    onClick={() => setSelectedCategory('all')}
+                                    aria-label="Remove filter"
+                                  ></button>
+                                </span>
+                              )}
+                              {priceRange !== 'all' && (
+                                <span className="badge bg-success">
+                                  {priceRange === 'under-500' ? 'Under ₱500' :
+                                   priceRange === '500-1000' ? '₱500-₱1,000' :
+                                   priceRange === '1000-2000' ? '₱1,000-₱2,000' :
+                                   'Over ₱2,000'}
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-white ms-1"
+                                    style={{ fontSize: '0.5em' }}
+                                    onClick={() => setPriceRange('all')}
+                                    aria-label="Remove filter"
+                                  ></button>
+                                </span>
+                              )}
+                              {stockStatus !== 'all' && (
+                                <span className="badge bg-warning text-dark">
+                                  {stockStatus === 'in-stock' ? 'In Stock' :
+                                   stockStatus === 'low-stock' ? 'Low Stock' :
+                                   'Out of Stock'}
+                                  <button
+                                    type="button"
+                                    className="btn-close ms-1"
+                                    style={{ fontSize: '0.5em' }}
+                                    onClick={() => setStockStatus('all')}
+                                    aria-label="Remove filter"
+                                  ></button>
+                                </span>
+                              )}
+                              {searchTerm && (
+                                <span className="badge bg-secondary">
+                                  Search: "{searchTerm}"
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-white ms-1"
+                                    style={{ fontSize: '0.5em' }}
+                                    onClick={() => setSearchTerm('')}
+                                    aria-label="Clear search"
+                                  ></button>
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => {
+                                  setSelectedCategory('all');
+                                  setPriceRange('all');
+                                  setStockStatus('all');
+                                  setSearchTerm('');
+                                }}
+                              >
+                                <i className="bi bi-x-circle me-1"></i>
+                                Clear All
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Results Count */}
+              <div className="row mb-3">
+                <div className="col-12">
+                  <p className="text-muted small mb-0">
+                    <i className="bi bi-grid me-1"></i>
+                    Showing <strong>{sortedProducts.length}</strong> of <strong>{products.length}</strong> products
+                  </p>
                 </div>
               </div>
 
@@ -348,15 +579,15 @@ const IntegratedShop = () => {
                           <p className="card-text text-muted flex-grow-1">
                             {product.description}
                           </p>
-                          <div className="mb-3">
-                            <span className="h5 text-primary">
-                              {formatPrice(product.price)}
-                            </span>
+                          <div className="mb-3 d-flex justify-content-between align-items-center">
                             {product.category && (
-                              <span className="badge bg-secondary ms-2">
+                              <span className="badge bg-secondary">
                                 {product.category}
                               </span>
                             )}
+                            <span className="h5 text-primary ms-auto">
+                              {formatPrice(product.price)}
+                            </span>
                           </div>
                           <div className="d-flex gap-2">
                             <button
@@ -620,7 +851,6 @@ const IntegratedShop = () => {
                           <option value="14:00">2:00 PM</option>
                           <option value="15:00">3:00 PM</option>
                           <option value="16:00">4:00 PM</option>
-                          <option value="17:00">5:00 PM</option>
                         </select>
                       </div>
                     </div>
@@ -635,7 +865,8 @@ const IntegratedShop = () => {
                           className="form-control"
                           name="customerName"
                           value={pickupDetails.customerName}
-                          onChange={handleInputChange}
+                          readOnly
+                          style={{ backgroundColor: '#e9ecef', cursor: 'not-allowed' }}
                           required
                         />
                       </div>
@@ -656,13 +887,15 @@ const IntegratedShop = () => {
                   </div>
 
                   <div className="mb-3">
-                    <label className="form-label">Email (Optional)</label>
+                    <label className="form-label">Email *</label>
                     <input
                       type="email"
                       className="form-control"
                       name="customerEmail"
                       value={pickupDetails.customerEmail}
-                      onChange={handleInputChange}
+                      readOnly
+                      style={{ backgroundColor: '#e9ecef', cursor: 'not-allowed' }}
+                      required
                     />
                   </div>
 

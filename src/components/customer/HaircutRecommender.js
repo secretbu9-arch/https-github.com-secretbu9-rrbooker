@@ -168,6 +168,9 @@ const HaircutRecommender = () => {
   const [selectedModalImage, setSelectedModalImage] = useState(null);
   const [selectedModalTitle, setSelectedModalTitle] = useState('');
   const [selectedFaceShapeFilter, setSelectedFaceShapeFilter] = useState('all');
+  const [selectedRecommendation, setSelectedRecommendation] = useState(null);
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+  const [cameraAspectRatio, setCameraAspectRatio] = useState('9 / 16');
 
   const videoRef = useRef(null);
   const cameraCanvasRef = useRef(null);
@@ -243,6 +246,14 @@ const HaircutRecommender = () => {
   // Keep refs in sync for live camera overlay loop
   useEffect(() => { faceShapeRef.current = faceShape; }, [faceShape]);
   useEffect(() => { hoveredShapeRef.current = hoveredShape; }, [hoveredShape]);
+
+  // Reset selected recommendation when recommendations are cleared
+  useEffect(() => {
+    if (recommendations.length === 0) {
+      setSelectedRecommendation(null);
+      setShowDetailsPanel(false);
+    }
+  }, [recommendations]);
 
   const fetchPreviousRecommendations = async () => {
     try {
@@ -378,20 +389,35 @@ const HaircutRecommender = () => {
   const startCamera = async () => {
     try {
       setError('');
-      // Camera constraints for 9:16 aspect ratio
+      // Camera constraints
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const constraints = { 
-        video: { 
-          facingMode: 'user', 
-          width: { ideal: isMobile ? 720 : 1080 }, 
-          height: { ideal: isMobile ? 1280 : 1920 },
-          aspectRatio: { ideal: 9/16 },
-          frameRate: { ideal: isMobile ? 15 : 30 }
-        } 
-      };
+      // On mobile (Android APK / iOS PWA), avoid forcing aspect/size which can cause a zoomed/cropped feed.
+      // Let the OS choose the native preview size; we will letterbox via CSS if needed.
+      const constraints = isMobile
+        ? {
+            video: {
+              facingMode: 'user'
+            }
+          }
+        : {
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1080 },
+              height: { ideal: 1920 },
+              aspectRatio: { ideal: 9 / 16 },
+              frameRate: { ideal: 30 }
+            }
+          };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // On mobile APKs, the camera feed aspect ratio can differ from our desired 9:16 box.
+        // Track the real stream aspect ratio so we can avoid CSS cropping/“zoomed” previews.
+        videoRef.current.onloadedmetadata = () => {
+          const w = videoRef.current?.videoWidth;
+          const h = videoRef.current?.videoHeight;
+          if (w && h) setCameraAspectRatio(`${w} / ${h}`);
+        };
         streamRef.current = stream;
         setIsCameraReady(true);
         startCameraOverlayLoop();
@@ -421,6 +447,7 @@ const HaircutRecommender = () => {
     if (videoRef.current) videoRef.current.srcObject = null;
     setIsCameraReady(false);
     clearCameraOverlay();
+    setCameraAspectRatio('9 / 16');
   };
 
   const clearCameraOverlay = () => {
@@ -467,8 +494,8 @@ const HaircutRecommender = () => {
         const scaleY = (maxHeight - spacing) / originalHeight;
         const maxFitScale = Math.min(scaleX, scaleY); // Maximum scale that fits
         
-        // Fixed scale for camera - always 0.6x
-        const scaleFactor = 0.6;
+        // Mobile: use full fitted size; Desktop: keep reduced size for better framing
+        const scaleFactor = isMobile ? maxFitScale : 0.4;
         
         // Debug logging
         console.log(`Camera overlay - ${shape}:`, {
@@ -1054,8 +1081,29 @@ const HaircutRecommender = () => {
 
                     {activeTab === 'camera' && (
                       <div className="camera-container">
-                         <div ref={cameraContainerRef} className="position-relative mb-3 w-100" style={{ aspectRatio: '9 / 16' }}>
-                          <video ref={videoRef} autoPlay playsInline muted className="position-absolute top-0 start-0 w-100 h-100 rounded" style={{ objectFit: 'cover', transform: 'scaleX(-1)' }} />
+                         <div
+                          ref={cameraContainerRef}
+                          className="position-relative mb-3 w-100"
+                          style={{
+                            // On Android APKs, forcing 9:16 can cause the WebView/camera pipeline to crop (looks like zoom).
+                            // Use the actual stream aspect ratio on mobile to show the full frame.
+                            aspectRatio: isMobile ? cameraAspectRatio : '9 / 16',
+                            backgroundColor: '#000'
+                          }}
+                        >
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="position-absolute top-0 start-0 w-100 h-100 rounded"
+                            style={{
+                              // Android APK (WebView) often provides a non-9:16 camera feed; "cover" crops it (looks zoomed).
+                              // "contain" preserves the full frame (no crop/zoom), with letterboxing if needed.
+                              objectFit: isMobile ? 'contain' : 'cover',
+                              transform: 'scaleX(-1)'
+                            }}
+                          />
                           {/* Live face-shape guide overlay */}
                           <canvas ref={cameraOverlayRef} className="position-absolute top-0 start-0 w-100 h-100" style={{ pointerEvents: 'none', transform: 'scaleX(-1)' }} />
                         </div>
@@ -1120,162 +1168,214 @@ const HaircutRecommender = () => {
                     {faceShape && recommendations.length > 0 ? (
                       <div>
                         <h5 className="mb-3"><i className="bi bi-scissors me-2"></i>Recommended Haircuts</h5>
-                         <div className="recommendations-list">
-                           {recommendations.map((rec, index) => (
-                             <div key={index} className="card mb-4 border-0 shadow-lg" style={{ borderRadius: '15px', overflow: 'hidden' }}>
-                               <div className="card-body p-0">
-                                 <div className="row g-0">
-                                   {/* Image on the left */}
-                                   <div className="col-4 col-md-4">
-                                     <div className="haircut-image-container h-100">
-                                       <img 
-                                         src={rec.image} 
-                                         alt={rec.name}
-                                         className="img-fluid w-100 h-100"
-                                         style={{ 
-                                           width: '80px',
-                                           height: '80px',
-                                           objectFit: 'cover',
-                                           borderRadius: '8px',
-                                           cursor: 'pointer',
-                                           transition: 'transform 0.2s ease'
-                                         }}
-                                         onClick={() => openImageModal(rec.image, rec.name)}
-                                         onMouseEnter={(e) => {
-                                           e.target.style.transform = 'scale(1.05)';
-                                         }}
-                                         onMouseLeave={(e) => {
-                                           e.target.style.transform = 'scale(1)';
-                                         }}
-                                         onError={(e) => {
-                                           e.target.style.display = 'none';
-                                           e.target.nextSibling.style.display = 'flex';
-                                         }}
-                                       />
-                                       <div 
-                                         className="d-none align-items-center justify-content-center h-100"
-                                         style={{ 
-                                           width: '80px',
-                                           height: '80px',
-                                           backgroundColor: '#f8f9fa',
-                                           color: '#6c757d',
-                                           borderRadius: '8px'
-                                         }}
-                                       >
-                                         <div className="text-center">
-                                           <i className="bi bi-scissors display-4 text-primary"></i>
-                                           <div className="fw-bold text-dark mt-2">{rec.name}</div>
-                                         </div>
-                                       </div>
-                                       {/* Ranking badge */}
-                                       <div className="position-absolute top-0 start-0 m-2">
-                                         <span className="badge bg-primary rounded-pill">
-                                           #{index + 1}
-                                         </span>
-                                       </div>
-                                     </div>
-                                   </div>
-                                   {/* Details on the right */}
-                                   <div className="col-8 col-md-8">
-                                     <div className={`${isMobile ? 'p-2' : 'p-4'} h-100 d-flex flex-column`}>
-                                       <div className="d-flex align-items-start justify-content-between mb-2">
-                                         <h5 className="fw-bold text-dark mb-0">{rec.name}</h5>
-                                         {index === 0 && (
-                                           <span className="badge bg-success">
-                                             <i className="bi bi-star-fill me-1"></i>
-                                             Perfect Match
-                                           </span>
-                                         )}
-                                       </div>
-                                       <p className="text-muted mb-3 lh-base">{rec.description}</p>
-                                       <div className="row g-2 mb-3">
-                                         <div className="col-6">
-                                           <div className="d-flex align-items-center">
-                                             <i className="bi bi-tools text-warning me-2"></i>
-                                             <span className="small fw-medium">Difficulty:</span>
-                                           </div>
-                                           <div className="mt-1">
-                                             <span className={`badge ${rec.difficulty === 'Low' ? 'bg-success' : rec.difficulty === 'Medium' ? 'bg-warning' : 'bg-danger'} small`}>
-                                               {rec.difficulty}
-                                             </span>
-                                           </div>
-                                         </div>
-                                         <div className="col-6">
-                                           <div className="d-flex align-items-center">
-                                             <i className="bi bi-clock text-info me-2"></i>
-                                             <span className="small fw-medium">Maintenance:</span>
-                                           </div>
-                                           <div className="mt-1">
-                                             <span className={`badge ${rec.maintenance === 'Low' ? 'bg-success' : rec.maintenance === 'Medium' ? 'bg-warning' : 'bg-danger'} small`}>
-                                               {rec.maintenance}
-                                             </span>
-                                           </div>
-                                         </div>
-                                       </div>
-                                       <div className="mb-3">
-                                         <div className="small fw-medium mb-2">
-                                           <i className="bi bi-tags me-1"></i>
-                                           Style Tags:
-                                         </div>
-                                         <div className="d-flex flex-wrap gap-1">
-                                           {rec.tags.map((tag, tagIndex) => (
-                                             <span key={tagIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 small">
-                                               {tag}
-                                             </span>
-                                           ))}
-                                         </div>
-                                       </div>
-                                       <div className="mt-auto">
-                                         <Link 
-                                           to="/book" 
-                                           className="btn btn-primary rounded-pill w-100"
-                                           style={{
-                                             background: 'linear-gradient(45deg, #007bff, #0056b3)',
-                                             border: 'none',
-                                             boxShadow: '0 4px 8px rgba(0,123,255,0.3)',
-                                             transition: 'all 0.3s ease'
-                                           }}
-                                           onMouseEnter={(e) => {
-                                             e.target.style.transform = 'translateY(-2px)';
-                                             e.target.style.boxShadow = '0 6px 12px rgba(0,123,255,0.4)';
-                                           }}
-                                           onMouseLeave={(e) => {
-                                             e.target.style.transform = 'translateY(0)';
-                                             e.target.style.boxShadow = '0 4px 8px rgba(0,123,255,0.3)';
-                                           }}
-                                           onClick={() => {
-                                             // Save haircut style to localStorage for booking
-                                             const haircutStyle = {
-                                               name: rec.name,
-                                               description: rec.description,
-                                               difficulty: rec.difficulty,
-                                               maintenance: rec.maintenance,
-                                               tags: rec.tags,
-                                               image: rec.image,
-                                               faceShape: faceShape,
-                                               timestamp: new Date().toISOString(),
-                                               // Formatted note for booking
-                                               bookingNote: `HAIRCUT RECOMMENDATION:
+                        <div className="recommendations-list">
+                          {recommendations.map((rec, index) => (
+                            <div 
+                              key={index} 
+                              className="card recommendation-card mb-3"
+                              style={{ 
+                                transition: 'all 0.3s ease', 
+                                borderRadius: '15px', 
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: '2px solid #e9ecef'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isMobile) {
+                                  e.currentTarget.style.transform = 'translateY(-4px)';
+                                  e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.15)';
+                                  e.currentTarget.style.borderColor = '#007bff';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isMobile) {
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                  e.currentTarget.style.borderColor = '#e9ecef';
+                                }
+                              }}
+                              onTouchStart={(e) => {
+                                if (isMobile) {
+                                  e.currentTarget.style.transform = 'scale(0.98)';
+                                  e.currentTarget.style.opacity = '0.9';
+                                }
+                              }}
+                              onTouchEnd={(e) => {
+                                if (isMobile) {
+                                  setTimeout(() => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.opacity = '1';
+                                  }, 150);
+                                }
+                              }}
+                            >
+                              <div className="card-body p-0">
+                                <div className="row g-0">
+                                  {/* Square Image on the left */}
+                                  <div className="col-4 col-md-3" style={{ paddingTop: '8px', paddingBottom: '8px' }}>
+                                    <div 
+                                      className="recommendation-image-container"
+                                      style={{
+                                        width: '100%',
+                                        aspectRatio: '1 / 1',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '15px',
+                                        marginTop: '4px'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openImageModal(rec.image, rec.name);
+                                      }}
+                                    >
+                                      <img 
+                                        src={rec.image} 
+                                        alt={rec.name}
+                                        className="img-fluid"
+                                        style={{ 
+                                          width: '100%',
+                                          height: '100%',
+                                          objectFit: 'cover',
+                                          cursor: 'pointer',
+                                          transition: 'transform 0.3s ease',
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          if (!isMobile) {
+                                            e.target.style.transform = 'scale(1.1)';
+                                          }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          if (!isMobile) {
+                                            e.target.style.transform = 'scale(1)';
+                                          }
+                                        }}
+                                        onTouchStart={(e) => {
+                                          if (isMobile) {
+                                            e.target.style.transform = 'scale(1.05)';
+                                          }
+                                        }}
+                                        onTouchEnd={(e) => {
+                                          if (isMobile) {
+                                            e.target.style.transform = 'scale(1)';
+                                          }
+                                        }}
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          if (e.target.nextSibling) {
+                                            e.target.nextSibling.style.display = 'flex';
+                                          }
+                                        }}
+                                      />
+                                      <div 
+                                        className="d-none"
+                                        style={{ 
+                                          position: 'absolute',
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          bottom: 0,
+                                          width: '100%',
+                                          height: '100%',
+                                          backgroundColor: '#f8f9fa',
+                                          color: '#6c757d',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center'
+                                        }}
+                                      >
+                                        <div className="text-center">
+                                          <i className="bi bi-scissors display-4 text-primary"></i>
+                                          <div className="fw-bold text-dark mt-2 small">{rec.name}</div>
+                                        </div>
+                                      </div>
+                                      {/* Ranking badge */}
+                                      <div className="position-absolute top-0 start-0 m-2" style={{ zIndex: 1 }}>
+                                        <span className={`badge rounded-pill ${index === 0 ? 'bg-success' : index === 1 ? 'bg-warning' : 'bg-secondary'}`}>
+                                          #{index + 1}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {/* Details on the right */}
+                                  <div className="col-8 col-md-9">
+                                    <div className={`p-3 h-100 d-flex flex-column ${isMobile ? 'p-2' : ''}`}>
+                                      <div className="d-flex align-items-start justify-content-between mb-2">
+                                        <h6 className="fw-bold text-dark mb-0">{rec.name}</h6>
+                                        {index === 0 && (
+                                          <span className="badge bg-success small">
+                                            <i className="bi bi-star-fill me-1"></i>
+                                            Best
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-muted small mb-3 flex-grow-1">{rec.description}</p>
+                                      <div className="mt-auto">
+                                        <Link 
+                                          to="/book" 
+                                          className="btn btn-primary btn-sm w-100 rounded-pill"
+                                          style={{
+                                            background: 'linear-gradient(45deg, #007bff, #0056b3)',
+                                            border: 'none',
+                                            boxShadow: '0 2px 4px rgba(0,123,255,0.3)',
+                                            transition: 'all 0.3s ease'
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            if (!isMobile) {
+                                              e.currentTarget.style.transform = 'translateY(-2px)';
+                                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,123,255,0.4)';
+                                            }
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            if (!isMobile) {
+                                              e.currentTarget.style.transform = 'translateY(0)';
+                                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,123,255,0.3)';
+                                            }
+                                          }}
+                                          onTouchStart={(e) => {
+                                            if (isMobile) {
+                                              e.currentTarget.style.transform = 'scale(0.95)';
+                                            }
+                                          }}
+                                          onTouchEnd={(e) => {
+                                            if (isMobile) {
+                                              e.currentTarget.style.transform = 'scale(1)';
+                                            }
+                                          }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const haircutStyle = {
+                                              name: rec.name,
+                                              description: rec.description,
+                                              difficulty: rec.difficulty,
+                                              maintenance: rec.maintenance,
+                                              tags: rec.tags,
+                                              image: rec.image,
+                                              faceShape: faceShape,
+                                              timestamp: new Date().toISOString(),
+                                              bookingNote: `HAIRCUT RECOMMENDATION:
 Style: ${rec.name}
 Description: ${rec.description}
 Face Shape: ${faceShape}`
-                                             };
-                                             localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
-                                             // Also save directly to special request for easy access
-                                             localStorage.setItem('specialRequest', haircutStyle.bookingNote);
-                                           }}
-                                         >
-                                           <i className="bi bi-calendar-plus me-2"></i>
-                                           Book This Haircut
-                                         </Link>
-                                       </div>
-                                     </div>
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                           ))}
-                         </div>
+                                            };
+                                            localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
+                                            localStorage.setItem('specialRequest', haircutStyle.bookingNote);
+                                          }}
+                                        >
+                                          <i className="bi bi-calendar-plus me-2"></i>
+                                          Book This Haircut
+                                        </Link>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       <div className="text-center py-5">
@@ -1286,6 +1386,116 @@ Face Shape: ${faceShape}`
                     )}
                   </div>
                 </div>
+
+                {/* Details Panel - Desktop Sidebar */}
+                {showDetailsPanel && selectedRecommendation && !isMobile && (
+                  <div className="col-12 col-lg-4">
+                    <div className="card shadow-lg sticky-top" style={{ top: '20px', borderRadius: '15px' }}>
+                      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h6 className="mb-0">
+                          <i className="bi bi-info-circle me-2"></i>
+                          Haircut Details
+                        </h6>
+                        <button 
+                          className="btn btn-sm btn-light"
+                          onClick={() => {
+                            setShowDetailsPanel(false);
+                            setSelectedRecommendation(null);
+                          }}
+                        >
+                          <i className="bi bi-x-lg"></i>
+                        </button>
+                      </div>
+                      <div className="card-body">
+                        <div className="text-center mb-3">
+                          <img 
+                            src={selectedRecommendation.image} 
+                            alt={selectedRecommendation.name}
+                            className="img-fluid rounded"
+                            style={{ 
+                              maxHeight: '250px',
+                              width: '100%',
+                              objectFit: 'cover',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => openImageModal(selectedRecommendation.image, selectedRecommendation.name)}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <h5 className="fw-bold mb-3">{selectedRecommendation.name}</h5>
+                        <p className="text-muted mb-4">{selectedRecommendation.description}</p>
+                        
+                        <div className="row g-3 mb-4">
+                          <div className="col-6">
+                            <div className="text-center p-3 bg-light rounded">
+                              <i className="bi bi-tools text-warning fs-4 d-block mb-2"></i>
+                              <div className="small fw-medium text-muted mb-1">Difficulty</div>
+                              <span className={`badge ${selectedRecommendation.difficulty === 'Low' ? 'bg-success' : selectedRecommendation.difficulty === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
+                                {selectedRecommendation.difficulty}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="col-6">
+                            <div className="text-center p-3 bg-light rounded">
+                              <i className="bi bi-clock text-info fs-4 d-block mb-2"></i>
+                              <div className="small fw-medium text-muted mb-1">Maintenance</div>
+                              <span className={`badge ${selectedRecommendation.maintenance === 'Low' ? 'bg-success' : selectedRecommendation.maintenance === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
+                                {selectedRecommendation.maintenance}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="small fw-medium mb-2">
+                            <i className="bi bi-tags me-1"></i>
+                            Style Tags
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {selectedRecommendation.tags.map((tag, tagIndex) => (
+                              <span key={tagIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <Link 
+                          to="/book" 
+                          className="btn btn-primary w-100 rounded-pill"
+                          style={{
+                            background: 'linear-gradient(45deg, #007bff, #0056b3)',
+                            border: 'none',
+                            boxShadow: '0 4px 8px rgba(0,123,255,0.3)'
+                          }}
+                          onClick={() => {
+                            const haircutStyle = {
+                              name: selectedRecommendation.name,
+                              description: selectedRecommendation.description,
+                              difficulty: selectedRecommendation.difficulty,
+                              maintenance: selectedRecommendation.maintenance,
+                              tags: selectedRecommendation.tags,
+                              image: selectedRecommendation.image,
+                              faceShape: faceShape,
+                              timestamp: new Date().toISOString(),
+                              bookingNote: `HAIRCUT RECOMMENDATION:
+Style: ${selectedRecommendation.name}
+Description: ${selectedRecommendation.description}
+Face Shape: ${faceShape}`
+                            };
+                            localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
+                            localStorage.setItem('specialRequest', haircutStyle.bookingNote);
+                          }}
+                        >
+                          <i className="bi bi-calendar-plus me-2"></i>
+                          Book This Haircut
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1388,6 +1598,147 @@ Face Shape: ${prev.faceShape}`
           </div>
          </div>
        </div>
+
+       {/* Details Panel Modal - Mobile */}
+       {showDetailsPanel && selectedRecommendation && isMobile && (
+         <div 
+           className="modal show d-block" 
+           style={{ 
+             position: 'fixed',
+             top: 0,
+             left: 0,
+             right: 0,
+             bottom: 0,
+             backgroundColor: 'rgba(0,0,0,0.5)',
+             zIndex: 1050
+           }}
+           onClick={() => {
+             setShowDetailsPanel(false);
+             setSelectedRecommendation(null);
+           }}
+         >
+           <div 
+             className="modal-dialog"
+             style={{
+               position: 'fixed',
+               bottom: 0,
+               left: 0,
+               right: 0,
+               margin: 0,
+               maxWidth: '100%'
+             }}
+             onClick={(e) => e.stopPropagation()}
+           >
+             <div className="modal-content" style={{ borderTopLeftRadius: '20px', borderTopRightRadius: '20px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+               <div className="modal-header bg-primary text-white d-flex justify-content-between align-items-center">
+                 <h6 className="mb-0">
+                   <i className="bi bi-info-circle me-2"></i>
+                   Haircut Details
+                 </h6>
+                 <button 
+                   type="button"
+                   className="btn-close btn-close-white"
+                   onClick={() => {
+                     setShowDetailsPanel(false);
+                     setSelectedRecommendation(null);
+                   }}
+                   aria-label="Close"
+                 ></button>
+               </div>
+               <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                 <div className="text-center mb-3">
+                   <img 
+                     src={selectedRecommendation.image} 
+                     alt={selectedRecommendation.name}
+                     className="img-fluid rounded"
+                     style={{ 
+                       maxHeight: '200px',
+                       width: '100%',
+                       objectFit: 'cover',
+                       cursor: 'pointer'
+                     }}
+                     onClick={() => {
+                       setShowDetailsPanel(false);
+                       openImageModal(selectedRecommendation.image, selectedRecommendation.name);
+                     }}
+                     onError={(e) => {
+                       e.target.style.display = 'none';
+                     }}
+                   />
+                 </div>
+                 <h5 className="fw-bold mb-3">{selectedRecommendation.name}</h5>
+                 <p className="text-muted mb-4">{selectedRecommendation.description}</p>
+                 
+                 <div className="row g-3 mb-4">
+                   <div className="col-6">
+                     <div className="text-center p-3 bg-light rounded">
+                       <i className="bi bi-tools text-warning fs-4 d-block mb-2"></i>
+                       <div className="small fw-medium text-muted mb-1">Difficulty</div>
+                       <span className={`badge ${selectedRecommendation.difficulty === 'Low' ? 'bg-success' : selectedRecommendation.difficulty === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
+                         {selectedRecommendation.difficulty}
+                       </span>
+                     </div>
+                   </div>
+                   <div className="col-6">
+                     <div className="text-center p-3 bg-light rounded">
+                       <i className="bi bi-clock text-info fs-4 d-block mb-2"></i>
+                       <div className="small fw-medium text-muted mb-1">Maintenance</div>
+                       <span className={`badge ${selectedRecommendation.maintenance === 'Low' ? 'bg-success' : selectedRecommendation.maintenance === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
+                         {selectedRecommendation.maintenance}
+                       </span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="mb-4">
+                   <div className="small fw-medium mb-2">
+                     <i className="bi bi-tags me-1"></i>
+                     Style Tags
+                   </div>
+                   <div className="d-flex flex-wrap gap-2">
+                     {selectedRecommendation.tags.map((tag, tagIndex) => (
+                       <span key={tagIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                         {tag}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+
+                 <Link 
+                   to="/book" 
+                   className="btn btn-primary w-100 rounded-pill"
+                   style={{
+                     background: 'linear-gradient(45deg, #007bff, #0056b3)',
+                     border: 'none',
+                     boxShadow: '0 4px 8px rgba(0,123,255,0.3)'
+                   }}
+                   onClick={() => {
+                     const haircutStyle = {
+                       name: selectedRecommendation.name,
+                       description: selectedRecommendation.description,
+                       difficulty: selectedRecommendation.difficulty,
+                       maintenance: selectedRecommendation.maintenance,
+                       tags: selectedRecommendation.tags,
+                       image: selectedRecommendation.image,
+                       faceShape: faceShape,
+                       timestamp: new Date().toISOString(),
+                       bookingNote: `HAIRCUT RECOMMENDATION:
+Style: ${selectedRecommendation.name}
+Description: ${selectedRecommendation.description}
+Face Shape: ${faceShape}`
+                     };
+                     localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
+                     localStorage.setItem('specialRequest', haircutStyle.bookingNote);
+                   }}
+                 >
+                   <i className="bi bi-calendar-plus me-2"></i>
+                   Book This Haircut
+                 </Link>
+               </div>
+             </div>
+           </div>
+         </div>
+       )}
 
        {/* Image Modal */}
        {showImageModal && (

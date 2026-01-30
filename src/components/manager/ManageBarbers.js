@@ -5,6 +5,8 @@ import { formatDate } from '../utils/helpers';
 import { isValidEmail, isValidPhone } from '../utils/validators';
 import LoadingSpinner from '../common/LoadingSpinner';
 
+const MAX_ACTIVE_BARBERS = 5;
+
 const ManageBarbers = () => {
   const [barbers, setBarbers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,7 +14,13 @@ const ManageBarbers = () => {
   const [selectedBarber, setSelectedBarber] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
+  const [barberToArchive, setBarberToArchive] = useState(null);
+  const [barberToUnarchive, setBarberToUnarchive] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewFilter, setViewFilter] = useState('active'); // 'active' or 'archived'
+  const [canUnarchive, setCanUnarchive] = useState(true);
   
   const [formData, setFormData] = useState({
     full_name: '',
@@ -48,7 +56,7 @@ const ManageBarbers = () => {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [viewFilter]);
 
   useEffect(() => {
     if (barbers.length > 0) {
@@ -61,11 +69,19 @@ const ManageBarbers = () => {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('users')
         .select('*')
-        .eq('role', 'barber')
-        .order('full_name');
+        .eq('role', 'barber');
+      
+      // Filter based on view filter
+      if (viewFilter === 'active') {
+        query = query.neq('archived', true);
+      } else if (viewFilter === 'archived') {
+        query = query.eq('archived', true);
+      }
+      
+      const { data, error } = await query.order('full_name');
       
       if (error) throw error;
       
@@ -96,7 +112,7 @@ const ManageBarbers = () => {
         
         stats[barber.id] = {
           total: barberAppointments.length,
-          completed: barberAppointments.filter(apt => apt.status === 'done').length,
+          completed: barberAppointments.filter(apt => apt.status === 'completed').length,
           upcoming: barberAppointments.filter(apt => apt.status === 'scheduled').length,
           cancelled: barberAppointments.filter(apt => apt.status === 'cancelled').length
         };
@@ -112,10 +128,38 @@ const ManageBarbers = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    // Handle phone number with +63 prefix
+    if (name === 'phone') {
+      // Remove all non-digit characters
+      let digits = value.replace(/\D/g, '');
+      
+      // If user is typing, extract only digits after +63
+      if (value.startsWith('+63')) {
+        // Get digits after +63
+        digits = value.substring(3).replace(/\D/g, '');
+      } else if (digits.startsWith('63')) {
+        // If user typed 63 first, remove it and get remaining digits
+        digits = digits.substring(2);
+      }
+      
+      // Limit to 10 digits
+      if (digits.length > 10) {
+        digits = digits.substring(0, 10);
+      }
+      
+      // Add +63 prefix if we have digits
+      const formatted = digits.length > 0 ? `+63${digits}` : '';
+      
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatted
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
     
     // Clear validation error for this field
     if (formErrors[name]) {
@@ -162,8 +206,15 @@ const ManageBarbers = () => {
       return;
     }
     
+    // Check active barber limit for new barbers
+    if (!isEditing && barbers.length >= MAX_ACTIVE_BARBERS) {
+      setError(`Maximum limit of ${MAX_ACTIVE_BARBERS} active barbers reached. Please archive an existing barber before adding a new one.`);
+      return;
+    }
+    
     try {
       setLoading(true);
+      setError(null); // Clear any previous errors
       
       if (isEditing && selectedBarber) {
         // Update existing barber
@@ -270,34 +321,134 @@ const ManageBarbers = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (barberId) => {
-    if (!window.confirm('Are you sure you want to delete this barber? This will also delete all associated appointments.')) {
+  const handleArchiveClick = (barber) => {
+    setBarberToArchive(barber);
+    setShowArchiveModal(true);
+  };
+
+  const handleArchiveConfirm = async () => {
+    if (!barberToArchive) return;
+    
+    try {
+      setLoading(true);
+      
+      // Archive user (set archived to true)
+      const { error } = await supabase
+        .from('users')
+        .update({ archived: true })
+        .eq('id', barberToArchive.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setBarbers(prev => prev.filter(barber => barber.id !== barberToArchive.id));
+      
+      // Close modal and reset state
+      setShowArchiveModal(false);
+      setBarberToArchive(null);
+      
+    } catch (error) {
+      console.error('Error archiving barber:', error);
+      setError('Failed to archive barber. Please try again.');
+      setShowArchiveModal(false);
+      setBarberToArchive(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleArchiveCancel = () => {
+    setShowArchiveModal(false);
+    setBarberToArchive(null);
+  };
+
+  const getActiveBarbersCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'barber')
+        .neq('archived', true);
+      
+      if (error) throw error;
+      
+      return count || 0;
+    } catch (error) {
+      console.error('Error fetching active barbers count:', error);
+      return 0;
+    }
+  };
+
+  const handleUnarchiveClick = async (barber) => {
+    // Check if unarchiving would exceed the limit
+    const activeCount = await getActiveBarbersCount();
+    
+    if (activeCount >= MAX_ACTIVE_BARBERS) {
+      setError(`Cannot unarchive barber. Maximum limit of ${MAX_ACTIVE_BARBERS} active barbers reached. Please archive an existing barber first.`);
+      return;
+    }
+    
+    setCanUnarchive(true);
+    setBarberToUnarchive(barber);
+    setShowUnarchiveModal(true);
+  };
+
+  const handleUnarchiveConfirm = async () => {
+    if (!barberToUnarchive) return;
+    
+    // Double-check the limit before unarchiving
+    const activeCount = await getActiveBarbersCount();
+    
+    if (activeCount >= MAX_ACTIVE_BARBERS) {
+      setCanUnarchive(false);
+      setError(`Cannot unarchive barber. Maximum limit of ${MAX_ACTIVE_BARBERS} active barbers reached. Please archive an existing barber first.`);
       return;
     }
     
     try {
       setLoading(true);
       
-      // Delete user
+      // Unarchive user (set archived to false)
       const { error } = await supabase
         .from('users')
-        .delete()
-        .eq('id', barberId);
+        .update({ archived: false })
+        .eq('id', barberToUnarchive.id);
       
       if (error) throw error;
       
-      // Update local state
-      setBarbers(prev => prev.filter(barber => barber.id !== barberId));
+      // Update local state - remove from archived list
+      setBarbers(prev => prev.filter(barber => barber.id !== barberToUnarchive.id));
+      
+      // Close modal and reset state
+      setShowUnarchiveModal(false);
+      setBarberToUnarchive(null);
+      
+      // Switch to active view to show the unarchived barber
+      setViewFilter('active');
       
     } catch (error) {
-      console.error('Error deleting barber:', error);
-      setError('Failed to delete barber. Please try again.');
+      console.error('Error unarchiving barber:', error);
+      setError('Failed to unarchive barber. Please try again.');
+      setShowUnarchiveModal(false);
+      setBarberToUnarchive(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleUnarchiveCancel = () => {
+    setShowUnarchiveModal(false);
+    setBarberToUnarchive(null);
+    setCanUnarchive(true);
+  };
+
   const handleAddNew = () => {
+    // Check if limit is reached before opening modal
+    if (barbers.length >= MAX_ACTIVE_BARBERS) {
+      setError(`Maximum limit of ${MAX_ACTIVE_BARBERS} active barbers reached. Please archive an existing barber before adding a new one.`);
+      return;
+    }
+    
     setFormData({
       full_name: '',
       email: '',
@@ -336,18 +487,67 @@ const ManageBarbers = () => {
     return <LoadingSpinner />;
   }
 
+  const activeBarbersCount = barbers.length;
+  const canAddNewBarber = activeBarbersCount < MAX_ACTIVE_BARBERS && viewFilter === 'active';
+
   return (
     <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Manage Barbers</h2>
-        <button 
-          className="btn btn-primary" 
-          onClick={handleAddNew}
-        >
-          <i className="bi bi-person-plus me-2"></i>
-          Add New Barber
-        </button>
+      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+        <div>
+          <h2 className="mb-0 fw-bold">Manage Barbers</h2>
+          {viewFilter === 'active' && (
+            <p className="text-muted mb-0">
+              Active Barbers: <strong>{activeBarbersCount} / {MAX_ACTIVE_BARBERS}</strong>
+              {!canAddNewBarber && activeBarbersCount >= MAX_ACTIVE_BARBERS && (
+                <span className="text-danger ms-2">
+                  <i className="bi bi-exclamation-triangle me-1"></i>
+                  Limit reached
+                </span>
+              )}
+            </p>
+          )}
+          {viewFilter === 'archived' && (
+            <p className="text-muted mb-0">
+              Archived Barbers: <strong>{activeBarbersCount}</strong>
+            </p>
+          )}
+        </div>
+        {viewFilter === 'active' && (
+          <button 
+            className={`btn ${canAddNewBarber ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={handleAddNew}
+            disabled={!canAddNewBarber}
+            title={!canAddNewBarber ? `Maximum of ${MAX_ACTIVE_BARBERS} active barbers allowed` : ''}
+          >
+            <i className="bi bi-person-plus me-2"></i>
+            Add New Barber
+          </button>
+        )}
       </div>
+
+      {/* View Filter Tabs */}
+      <ul className="nav nav-tabs mb-4" role="tablist">
+        <li className="nav-item" role="presentation">
+          <button
+            className={`nav-link ${viewFilter === 'active' ? 'active' : ''}`}
+            onClick={() => setViewFilter('active')}
+            type="button"
+          >
+            <i className="bi bi-people me-2"></i>
+            Active Barbers
+          </button>
+        </li>
+        <li className="nav-item" role="presentation">
+          <button
+            className={`nav-link ${viewFilter === 'archived' ? 'active' : ''}`}
+            onClick={() => setViewFilter('archived')}
+            type="button"
+          >
+            <i className="bi bi-archive me-2"></i>
+            Archived Barbers
+          </button>
+        </li>
+      </ul>
 
       {error && (
         <div className="alert alert-danger alert-dismissible fade show" role="alert">
@@ -396,7 +596,9 @@ const ManageBarbers = () => {
                 <p>
                   {searchQuery
                     ? "No barbers found matching your search."
-                    : "No barbers found. Click 'Add New Barber' to create one."}
+                    : viewFilter === 'active'
+                    ? "No active barbers found. Click 'Add New Barber' to create one."
+                    : "No archived barbers found."}
                 </p>
               </div>
             </div>
@@ -404,24 +606,43 @@ const ManageBarbers = () => {
         ) : (
           filteredBarbers.map(barber => (
             <div key={barber.id} className="col-md-6 col-lg-4 mb-4">
-              <div className="card h-100">
+              <div className={`card h-100 ${viewFilter === 'archived' ? 'border-warning' : ''}`}>
                 <div className="card-header d-flex justify-content-between align-items-center">
-                  <h5 className="card-title mb-0">{barber.full_name}</h5>
+                  <div className="d-flex align-items-center">
+                    <h5 className="card-title mb-0 me-2">{barber.full_name}</h5>
+                    {viewFilter === 'archived' && (
+                      <span className="badge bg-warning text-dark">
+                        <i className="bi bi-archive me-1"></i>
+                        Archived
+                      </span>
+                    )}
+                  </div>
                   <div className="dropdown">
                     <button className="btn btn-sm btn-outline-secondary" type="button" id={`dropdown-${barber.id}`} data-bs-toggle="dropdown" aria-expanded="false">
                       <i className="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul className="dropdown-menu dropdown-menu-end" aria-labelledby={`dropdown-${barber.id}`}>
-                      <li>
-                        <button className="dropdown-item" onClick={() => handleEdit(barber)}>
-                          <i className="bi bi-pencil me-2"></i>Edit
-                        </button>
-                      </li>
-                      <li>
-                        <button className="dropdown-item text-danger" onClick={() => handleDelete(barber.id)}>
-                          <i className="bi bi-trash me-2"></i>Delete
-                        </button>
-                      </li>
+                      {viewFilter === 'active' && (
+                        <>
+                          <li>
+                            <button className="dropdown-item" onClick={() => handleEdit(barber)}>
+                              <i className="bi bi-pencil me-2"></i>Edit
+                            </button>
+                          </li>
+                          <li>
+                            <button className="dropdown-item text-warning" onClick={() => handleArchiveClick(barber)}>
+                              <i className="bi bi-archive me-2"></i>Archive
+                            </button>
+                          </li>
+                        </>
+                      )}
+                      {viewFilter === 'archived' && (
+                        <li>
+                          <button className="dropdown-item text-success" onClick={() => handleUnarchiveClick(barber)}>
+                            <i className="bi bi-arrow-counterclockwise me-2"></i>Unarchive
+                          </button>
+                        </li>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -494,6 +715,13 @@ const ManageBarbers = () => {
                 ></button>
               </div>
               <div className="modal-body">
+                {!isEditing && !canAddNewBarber && (
+                  <div className="alert alert-warning mb-3" role="alert">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Limit Reached:</strong> You have reached the maximum limit of {MAX_ACTIVE_BARBERS} active barbers. 
+                    Please archive an existing barber before adding a new one.
+                  </div>
+                )}
                 <form onSubmit={handleSubmit}>
                   <div className="mb-3">
                     <label htmlFor="full_name" className="form-label">Full Name</label>
@@ -533,14 +761,35 @@ const ManageBarbers = () => {
                   
                   <div className="mb-3">
                     <label htmlFor="phone" className="form-label">Phone (optional)</label>
-                    <input
-                      type="tel"
-                      className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
-                      id="phone"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <img 
+                        src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png"
+                        alt="Philippines"
+                        style={{ 
+                          position: 'absolute', 
+                          left: '12px', 
+                          top: '50%', 
+                          transform: 'translateY(-50%)',
+                          width: '20px',
+                          height: '15px',
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                          objectFit: 'cover'
+                        }}
+                      />
+                      <input
+                        type="tel"
+                        className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
+                        id="phone"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="+63XXXXXXXXXX"
+                        maxLength={13}
+                        style={{ paddingLeft: '45px' }}
+                      />
+                    </div>
+                    <small className="form-text text-muted">Format: +63 followed by 10 digits</small>
                     {formErrors.phone && (
                       <div className="invalid-feedback">{formErrors.phone}</div>
                     )}
@@ -594,7 +843,7 @@ const ManageBarbers = () => {
                     <button
                       type="submit"
                       className="btn btn-primary"
-                      disabled={loading}
+                      disabled={loading || (!isEditing && !canAddNewBarber)}
                     >
                       {loading ? (
                         <>
@@ -607,6 +856,131 @@ const ManageBarbers = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Archive Confirmation Modal */}
+      {showArchiveModal && barberToArchive && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header border-0">
+                <h5 className="modal-title d-flex align-items-center">
+                  <i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                  Archive Barber
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={handleArchiveCancel}
+                  disabled={loading}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Are you sure you want to archive <strong>{barberToArchive.full_name}</strong>?
+                </p>
+                <p className="text-muted mb-0">
+                  The barber will no longer appear in the active barbers list. You can view and unarchive them from the Archived Barbers tab.
+                </p>
+              </div>
+              <div className="modal-footer border-0">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleArchiveCancel}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-warning"
+                  onClick={handleArchiveConfirm}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Archiving...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-archive me-2"></i>
+                      Archive Barber
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unarchive Confirmation Modal */}
+      {showUnarchiveModal && barberToUnarchive && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header border-0">
+                <h5 className="modal-title d-flex align-items-center">
+                  <i className="bi bi-check-circle-fill text-success me-2"></i>
+                  Unarchive Barber
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={handleUnarchiveCancel}
+                  disabled={loading}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Are you sure you want to unarchive <strong>{barberToUnarchive.full_name}</strong>?
+                </p>
+                {!canUnarchive && (
+                  <div className="alert alert-warning mt-3 mb-0" role="alert">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Limit Reached:</strong> Maximum limit of {MAX_ACTIVE_BARBERS} active barbers reached. 
+                    Please archive an existing barber before unarchiving this one.
+                  </div>
+                )}
+                {canUnarchive && (
+                  <p className="text-muted mb-0">
+                    The barber will be restored to the active barbers list and will be available for appointments again.
+                  </p>
+                )}
+              </div>
+              <div className="modal-footer border-0">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleUnarchiveCancel}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={handleUnarchiveConfirm}
+                  disabled={loading || !canUnarchive}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Unarchiving...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-arrow-counterclockwise me-2"></i>
+                      Unarchive Barber
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

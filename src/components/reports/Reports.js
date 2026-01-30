@@ -12,69 +12,13 @@ const Reports = () => {
     end: new Date().toISOString().split('T')[0]
   });
   
-  // Quick date range filters
-  const [selectedQuickFilter, setSelectedQuickFilter] = useState('today');
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [autoRefresh, setAutoRefresh] = useState(false);
   
-  // Manager deduction system
-  const [deductions, setDeductions] = useState({
-    lunch: 0,
-    supplies: 0,
-    other: 0
-  });
-
   // Export functionality
   const reportRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
-
-  // Quick date range filter functions
-  const setQuickDateRange = (filter) => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
-    switch (filter) {
-      case 'today':
-        setDateRange({ start: todayStr, end: todayStr });
-        break;
-      case 'week':
-        const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
-        setDateRange({ 
-          start: weekStart.toISOString().split('T')[0], 
-          end: todayStr 
-        });
-        break;
-      case 'month':
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        setDateRange({ 
-          start: monthStart.toISOString().split('T')[0], 
-          end: todayStr 
-        });
-        break;
-      case 'last7days':
-        const last7Days = new Date(today);
-        last7Days.setDate(today.getDate() - 7);
-        setDateRange({ 
-          start: last7Days.toISOString().split('T')[0], 
-          end: todayStr 
-        });
-        break;
-      case 'last30days':
-        const last30Days = new Date(today);
-        last30Days.setDate(today.getDate() - 30);
-        setDateRange({ 
-          start: last30Days.toISOString().split('T')[0], 
-          end: todayStr 
-        });
-        break;
-      default:
-        break;
-    }
-    setSelectedQuickFilter(filter);
-  };
 
   // Export functions
   const exportToPDF = async () => {
@@ -199,7 +143,6 @@ const Reports = () => {
     { value: 'services', label: 'Service Performance' },
     { value: 'queue', label: 'Queue Analytics' },
     { value: 'double_booking', label: 'Double Booking Insights' },
-    { value: 'real_time', label: 'Real-time Dashboard' },
     { value: 'inventory', label: 'Inventory Report' },
     { value: 'system', label: 'System Activity Logs' }
   ];
@@ -209,19 +152,6 @@ const Reports = () => {
       generateReport();
     }
   }, [reportType, dateRange]);
-
-  // Auto-refresh for real-time dashboard
-  useEffect(() => {
-    let interval;
-    if (autoRefresh && reportType === 'real_time') {
-      interval = setInterval(() => {
-        generateReport();
-      }, 30000); // Refresh every 30 seconds
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [autoRefresh, reportType]);
 
   const generateReport = async () => {
     setLoading(true);
@@ -254,9 +184,6 @@ const Reports = () => {
           break;
         case 'double_booking':
           data = await generateDoubleBookingReport();
-          break;
-        case 'real_time':
-          data = await generateRealTimeReport();
           break;
         case 'system':
           data = await generateSystemReport();
@@ -315,6 +242,8 @@ const Reports = () => {
     const revenueByService = {};
     let totalRevenue = 0;
     let totalOrderRevenue = 0;
+    let completedAppointmentsCount = 0;
+    let completedOrdersCount = 0;
 
     appointments?.forEach(apt => {
       const barberId = apt.barber_id;
@@ -322,10 +251,12 @@ const Reports = () => {
       const servicePrice = apt.service?.price || 0;
       const totalPrice = apt.total_price || servicePrice;
       
-      // Only count revenue for completed appointments
-      if (!['done', 'completed'].includes(apt.status)) {
+      // Only count revenue for completed appointments (done or completed status)
+      if (!['completed'].includes(apt.status)) {
         return;
       }
+
+      completedAppointmentsCount++;
 
       // Revenue by barber
       if (!revenueByBarber[barberId]) {
@@ -352,18 +283,19 @@ const Reports = () => {
       totalRevenue += totalPrice;
     });
 
-    // Calculate order revenue
+    // Calculate order revenue - only count completed orders (picked_up status)
     orders?.forEach(order => {
       // Only count completed orders (picked_up status)
       if (order.status === 'picked_up') {
         totalOrderRevenue += order.total_amount || 0;
+        completedOrdersCount++;
       }
     });
 
     // Daily revenue (only for completed appointments)
     const dailyRevenue = {};
     appointments?.forEach(apt => {
-      if (!['done', 'completed'].includes(apt.status)) {
+      if (!['completed'].includes(apt.status)) {
         return;
       }
       const date = apt.appointment_date;
@@ -385,10 +317,10 @@ const Reports = () => {
         totalRevenue,
         totalOrderRevenue,
         totalCombinedRevenue: totalRevenue + totalOrderRevenue,
-        totalAppointments: appointments?.length || 0,
-        totalOrders: orders?.length || 0,
-        averageTransaction: appointments?.length ? totalRevenue / appointments.length : 0,
-        averageOrderValue: orders?.length ? totalOrderRevenue / orders.length : 0,
+        totalAppointments: completedAppointmentsCount, // Only count completed appointments
+        totalOrders: completedOrdersCount, // Only count completed orders (picked_up)
+        averageTransaction: completedAppointmentsCount > 0 ? totalRevenue / completedAppointmentsCount : 0,
+        averageOrderValue: completedOrdersCount > 0 ? totalOrderRevenue / completedOrdersCount : 0,
         todayRevenue
       },
       revenueByBarber: Object.values(revenueByBarber || {}),
@@ -466,7 +398,7 @@ const Reports = () => {
         };
       }
       appointmentsByService[serviceId].total += 1;
-      if (apt.status === 'done') {
+      if (apt.status === 'completed') {
         appointmentsByService[serviceId].completed += 1;
         appointmentsByService[serviceId].revenue += apt.total_price || apt.service?.price || 0;
       }
@@ -495,7 +427,7 @@ const Reports = () => {
       dailyBreakdown[date].total += 1;
       if (apt.appointment_type === 'scheduled') dailyBreakdown[date].scheduled += 1;
       if (apt.appointment_type === 'queue') dailyBreakdown[date].queue += 1;
-      if (apt.status === 'done') dailyBreakdown[date].completed += 1;
+      if (apt.status === 'completed') dailyBreakdown[date].completed += 1;
       if (apt.status === 'cancelled') dailyBreakdown[date].cancelled += 1;
     });
 
@@ -647,7 +579,7 @@ const Reports = () => {
 
     // Queue metrics
     const totalQueueAppointments = queueAppointments?.length || 0;
-    const completedQueue = queueAppointments?.filter(apt => apt.status === 'done').length || 0;
+    const completedQueue = queueAppointments?.filter(apt => apt.status === 'completed').length || 0;
     const cancelledQueue = queueAppointments?.filter(apt => apt.status === 'cancelled').length || 0;
     const pendingQueue = queueAppointments?.filter(apt => apt.status === 'pending').length || 0;
 
@@ -723,12 +655,12 @@ const Reports = () => {
       .lte('appointment_date', dateRange.end);
 
     const totalDoubleBookings = doubleBookings?.length || 0;
-    const completedDoubleBookings = doubleBookings?.filter(apt => apt.status === 'done').length || 0;
+    const completedDoubleBookings = doubleBookings?.filter(apt => apt.status === 'completed').length || 0;
     const cancelledDoubleBookings = doubleBookings?.filter(apt => apt.status === 'cancelled').length || 0;
 
     // Revenue from double bookings
     const doubleBookingRevenue = doubleBookings?.reduce((sum, apt) => 
-      sum + (apt.status === 'done' ? (apt.total_price || apt.service?.price || 0) : 0), 0) || 0;
+      sum + (apt.status === 'completed' ? (apt.total_price || apt.service?.price || 0) : 0), 0) || 0;
 
     // Double bookings by barber
     const doubleBookingsByBarber = {};
@@ -743,7 +675,7 @@ const Reports = () => {
         };
       }
       doubleBookingsByBarber[barberId].total += 1;
-      if (apt.status === 'done') {
+      if (apt.status === 'completed') {
         doubleBookingsByBarber[barberId].completed += 1;
         doubleBookingsByBarber[barberId].revenue += apt.total_price || apt.service?.price || 0;
       }
@@ -763,7 +695,7 @@ const Reports = () => {
           };
         }
         friendBookingPatterns[friendName].bookings += 1;
-        if (apt.status === 'done') {
+        if (apt.status === 'completed') {
           friendBookingPatterns[friendName].totalSpent += apt.total_price || apt.service?.price || 0;
         }
       }
@@ -781,95 +713,6 @@ const Reports = () => {
       doubleBookingsByBarber: Object.values(doubleBookingsByBarber || {}),
       friendBookingPatterns: Object.values(friendBookingPatterns || {}),
       doubleBookings: doubleBookings || []
-    };
-  };
-
-  const generateRealTimeReport = async () => {
-    // Get current day data
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Today's appointments
-    const { data: todayAppointments } = await supabase
-      .from('appointments')
-      .select(`
-        *,
-        customer:customer_id(full_name),
-        barber:barber_id(full_name),
-        service:service_id(name, price, duration)
-      `)
-      .eq('appointment_date', today);
-
-    // Current queue status
-    const currentQueue = todayAppointments?.filter(apt => 
-      apt.appointment_type === 'queue' && 
-      ['pending', 'scheduled', 'ongoing'].includes(apt.status)
-    ) || [];
-
-    // Current scheduled appointments
-    const currentScheduled = todayAppointments?.filter(apt => 
-      apt.appointment_type === 'scheduled' && 
-      ['scheduled', 'confirmed', 'ongoing'].includes(apt.status)
-    ) || [];
-
-    // Active barbers (with appointments today)
-    const activeBarbers = {};
-    todayAppointments?.forEach(apt => {
-      const barberId = apt.barber_id;
-      if (!activeBarbers[barberId]) {
-        activeBarbers[barberId] = {
-          name: apt.barber?.full_name || 'Unknown',
-          totalAppointments: 0,
-          completed: 0,
-          ongoing: 0,
-          pending: 0,
-          revenue: 0
-        };
-      }
-      activeBarbers[barberId].totalAppointments += 1;
-      activeBarbers[barberId][apt.status] += 1;
-      if (apt.status === 'done') {
-        const totalPrice = apt.total_price || apt.service?.price || 0;
-        activeBarbers[barberId].revenue += totalPrice;
-      }
-    });
-
-    // Today's revenue
-    const todayRevenue = todayAppointments?.reduce((sum, apt) => 
-      sum + (apt.status === 'done' ? (apt.total_price || apt.service?.price || 0) : 0), 0) || 0;
-
-    // Service demand today
-    const serviceDemand = {};
-    todayAppointments?.forEach(apt => {
-      const serviceId = apt.service_id;
-      if (!serviceDemand[serviceId]) {
-        serviceDemand[serviceId] = {
-          name: apt.service?.name || 'Unknown',
-          bookings: 0,
-          revenue: 0
-        };
-      }
-      serviceDemand[serviceId].bookings += 1;
-      if (apt.status === 'done') {
-        const totalPrice = apt.total_price || apt.service?.price || 0;
-        serviceDemand[serviceId].revenue += totalPrice;
-      }
-    });
-
-    return {
-      summary: {
-        todayDate: today,
-        totalAppointmentsToday: todayAppointments?.length || 0,
-        currentQueueSize: currentQueue.length || 0,
-        currentScheduledSize: currentScheduled.length || 0,
-        todayRevenue: todayRevenue || 0,
-        activeBarbersCount: Object.keys(activeBarbers || {}).length,
-        completedToday: todayAppointments?.filter(apt => apt.status === 'done').length || 0
-      },
-      activeBarbers: Object.values(activeBarbers || {}),
-      serviceDemand: Object.values(serviceDemand || {}),
-      currentQueue: currentQueue || [],
-      currentScheduled: currentScheduled || [],
-      todayAppointments: todayAppointments || []
     };
   };
 
@@ -918,6 +761,81 @@ const Reports = () => {
           .btn-group .btn:last-child {
             margin-right: 0;
           }
+          input[type="date"] {
+            position: relative;
+            background-color: #fff;
+            border: 2px solid #dee2e6;
+            border-radius: 0.375rem;
+            transition: all 0.3s ease;
+          }
+          input[type="date"]:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            outline: none;
+          }
+          input[type="date"]:hover {
+            border-color: #adb5bd;
+          }
+          input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 0.6;
+            margin-left: 0.5rem;
+            filter: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);
+          }
+          input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+          }
+          .form-label {
+            color: #495057;
+            margin-bottom: 0.5rem;
+          }
+          .form-label i {
+            color: #0d6efd;
+          }
+          /* Excel-like table styling */
+          .report-content table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13px;
+            border: 1px solid #d0d0d0;
+          }
+          .report-content table thead {
+            background-color: #f2f2f2;
+            border-bottom: 2px solid #d0d0d0;
+          }
+          .report-content table thead th {
+            background-color: #f2f2f2;
+            border: 1px solid #d0d0d0;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #000;
+            white-space: nowrap;
+          }
+          .report-content table tbody td {
+            border: 1px solid #d0d0d0;
+            padding: 6px 10px;
+            background-color: #fff;
+          }
+          .report-content table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+          .report-content table tbody tr:nth-child(even) td {
+            background-color: #f9f9f9;
+          }
+          .report-content table tbody tr:hover {
+            background-color: #e8f4f8;
+          }
+          .report-content table tbody tr:hover td {
+            background-color: #e8f4f8;
+          }
+          .report-content table tbody tr:first-child td {
+            border-top: 1px solid #d0d0d0;
+          }
+          .report-content .table-responsive {
+            border: 1px solid #d0d0d0;
+            overflow-x: auto;
+          }
         `}
       </style>
       <div className="card">
@@ -927,20 +845,6 @@ const Reports = () => {
               <h3 className="mb-0">Reports & Analytics</h3>
             </div>
             <div className="col-md-4 text-end">
-              {reportType === 'real_time' && (
-                <div className="form-check form-switch d-inline-block me-3">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="autoRefresh"
-                    checked={autoRefresh}
-                    onChange={(e) => setAutoRefresh(e.target.checked)}
-                  />
-                  <label className="form-check-label" htmlFor="autoRefresh">
-                    Auto-refresh
-                  </label>
-                </div>
-              )}
               {reportData && (
                 <div className="btn-group" role="group">
                   <button 
@@ -968,7 +872,10 @@ const Reports = () => {
         <div className="card-body">
           <div className="row mb-4">
             <div className="col-md-4">
-              <label className="form-label">Report Type</label>
+              <label className="form-label fw-bold">
+                <i className="bi bi-graph-up me-2"></i>
+                Report Type
+              </label>
               <select
                 className="form-select"
                 value={reportType}
@@ -983,76 +890,84 @@ const Reports = () => {
             </div>
             
             <div className="col-md-4">
-              <label className="form-label">Start Date</label>
-              <input
-                type="date"
-                className="form-control"
-                value={dateRange.start}
-                onChange={(e) => {
-                  setDateRange(prev => ({ ...prev, start: e.target.value }));
-                  setSelectedQuickFilter('custom');
-                }}
-              />
+              <label className="form-label fw-bold">
+                <i className="bi bi-calendar-event me-2"></i>
+                Start Date
+              </label>
+              <div className="position-relative">
+                <input
+                  type="date"
+                  className="form-control"
+                  value={dateRange.start}
+                  onChange={(e) => {
+                    setDateRange(prev => ({ ...prev, start: e.target.value }));
+                  }}
+                  max={dateRange.end}
+                  style={{
+                    paddingLeft: '2.5rem',
+                    fontSize: '1rem',
+                    cursor: 'pointer'
+                  }}
+                />
+                <i className="bi bi-calendar3 position-absolute" 
+                   style={{
+                     left: '0.75rem',
+                     top: '50%',
+                     transform: 'translateY(-50%)',
+                     color: '#6c757d',
+                     pointerEvents: 'none'
+                   }}></i>
+              </div>
             </div>
             
             <div className="col-md-4">
-              <label className="form-label">End Date</label>
-              <input
-                type="date"
-                className="form-control"
-                value={dateRange.end}
-                onChange={(e) => {
-                  setDateRange(prev => ({ ...prev, end: e.target.value }));
-                  setSelectedQuickFilter('custom');
-                }}
-              />
+              <label className="form-label fw-bold">
+                <i className="bi bi-calendar-check me-2"></i>
+                End Date
+              </label>
+              <div className="position-relative">
+                <input
+                  type="date"
+                  className="form-control"
+                  value={dateRange.end}
+                  onChange={(e) => {
+                    setDateRange(prev => ({ ...prev, end: e.target.value }));
+                  }}
+                  min={dateRange.start}
+                  style={{
+                    paddingLeft: '2.5rem',
+                    fontSize: '1rem',
+                    cursor: 'pointer'
+                  }}
+                />
+                <i className="bi bi-calendar3 position-absolute" 
+                   style={{
+                     left: '0.75rem',
+                     top: '50%',
+                     transform: 'translateY(-50%)',
+                     color: '#6c757d',
+                     pointerEvents: 'none'
+                   }}></i>
+              </div>
             </div>
           </div>
-
-          {/* Quick Date Range Filters */}
+          
+          {/* Date Range Display */}
           <div className="row mb-3">
             <div className="col-12">
-              <div className="btn-group" role="group">
-                <button
-                  type="button"
-                  className={`btn ${selectedQuickFilter === 'today' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setQuickDateRange('today')}
-                >
-                  <i className="bi bi-calendar-day me-1"></i>
-                  Today
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${selectedQuickFilter === 'week' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setQuickDateRange('week')}
-                >
-                  <i className="bi bi-calendar-week me-1"></i>
-                  This Week
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${selectedQuickFilter === 'month' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setQuickDateRange('month')}
-                >
-                  <i className="bi bi-calendar-month me-1"></i>
-                  This Month
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${selectedQuickFilter === 'last7days' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setQuickDateRange('last7days')}
-                >
-                  <i className="bi bi-calendar-range me-1"></i>
-                  Last 7 Days
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${selectedQuickFilter === 'last30days' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setQuickDateRange('last30days')}
-                >
-                  <i className="bi bi-calendar-range me-1"></i>
-                  Last 30 Days
-                </button>
+              <div className="alert alert-info d-flex align-items-center mb-0" role="alert">
+                <i className="bi bi-info-circle me-2"></i>
+                <span>
+                  <strong>Selected Date Range:</strong> {new Date(dateRange.start).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })} - {new Date(dateRange.end).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </span>
               </div>
             </div>
           </div>
@@ -1073,14 +988,13 @@ const Reports = () => {
           ) : reportData ? (
             <div ref={reportRef} className="report-content">
               {/* Render report based on type */}
-              {reportType === 'revenue' && <RevenueReportView data={reportData} deductions={deductions} setDeductions={setDeductions} />}
+              {reportType === 'revenue' && <RevenueReportView data={reportData} />}
               {reportType === 'orders' && <OrderReports dateRange={dateRange} />}
               {reportType === 'appointments' && <AppointmentsReportView data={reportData} />}
               {reportType === 'customers' && <CustomerReportView data={reportData} />}
               {reportType === 'services' && <ServiceReportView data={reportData} />}
               {reportType === 'queue' && <QueueReportView data={reportData} />}
               {reportType === 'double_booking' && <DoubleBookingReportView data={reportData} />}
-              {reportType === 'real_time' && <RealTimeReportView data={reportData} />}
               {reportType === 'inventory' && <InventoryReportView data={reportData} />}
               {reportType === 'system' && <SystemReportView data={reportData} />}
             </div>
@@ -1100,151 +1014,55 @@ const Reports = () => {
 };
 
 // Individual report view components
-const RevenueReportView = ({ data, deductions, setDeductions }) => (
+const RevenueReportView = ({ data }) => (
   <div>
-    {/* Manager Deduction System */}
+    {/* Revenue Summary Table */}
     <div className="row mb-4">
       <div className="col-12">
-        <div className="card">
-          <div className="card-header">
-            <h5 className="mb-0">
-              <i className="bi bi-calculator me-2"></i>
-              Daily Deductions Manager
-            </h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              <div className="col-md-4">
-                <label className="form-label">Lunch Expenses</label>
-                <div className="input-group">
-                  <span className="input-group-text">₱</span>
-                  <input 
-                    type="number" 
-                    className="form-control"
-                    value={deductions.lunch || ''}
-                    onChange={(e) => setDeductions({...deductions, lunch: parseFloat(e.target.value) || 0})}
-                    placeholder="Enter amount"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Supplies</label>
-                <div className="input-group">
-                  <span className="input-group-text">₱</span>
-                  <input 
-                    type="number" 
-                    className="form-control"
-                    value={deductions.supplies || ''}
-                    onChange={(e) => setDeductions({...deductions, supplies: parseFloat(e.target.value) || 0})}
-                    placeholder="Enter amount"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Other Expenses</label>
-                <div className="input-group">
-                  <span className="input-group-text">₱</span>
-                  <input 
-                    type="number" 
-                    className="form-control"
-                    value={deductions.other || ''}
-                    onChange={(e) => setDeductions({...deductions, other: parseFloat(e.target.value) || 0})}
-                    placeholder="Enter amount"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Revenue Summary with Deductions */}
-    <div className="row mb-4">
-      <div className="col-md-2">
-        <div className="card bg-success text-white">
-          <div className="card-body">
-            <h6>Service Revenue</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-2">
-        <div className="card bg-info text-white">
-          <div className="card-body">
-            <h6>Product Revenue</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.totalOrderRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-2">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Revenue</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.totalCombinedRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-2">
-        <div className="card bg-secondary text-white">
-          <div className="card-body">
-            <h6>Today's Revenue</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-2">
-        <div className="card bg-warning text-white">
-          <div className="card-body">
-            <h6>Total Deductions</h6>
-            <h3><span className="currency-amount-large">₱{(deductions.lunch + deductions.supplies + deductions.other).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-2">
-        <div className="card bg-dark text-white">
-          <div className="card-body">
-            <h6>Net Sales</h6>
-            <h3><span className="currency-amount-large">₱{((data.summary.totalCombinedRevenue || 0) - (deductions.lunch + deductions.supplies + deductions.other)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div className="row mb-4">
-      <div className="col-md-3">
-        <div className="card bg-info text-white">
-          <div className="card-body">
-            <h6>Total Appointments</h6>
-            <h3>{data.summary.totalAppointments}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Orders</h6>
-            <h3>{data.summary.totalOrders}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-warning text-white">
-          <div className="card-body">
-            <h6>Avg. Service Value</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.averageTransaction || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-success text-white">
-          <div className="card-body">
-            <h6>Avg. Order Value</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.averageOrderValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
+        <h5>Revenue Summary</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Service Revenue</strong></td>
+                <td className="currency-table-cell">₱{(data.summary.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td><strong>Product Revenue</strong></td>
+                <td className="currency-table-cell">₱{(data.summary.totalOrderRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td><strong>Total Revenue</strong></td>
+                <td className="currency-table-cell"><strong>₱{(data.summary.totalCombinedRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Today's Revenue</strong></td>
+                <td className="currency-table-cell">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td><strong>Total Appointments</strong></td>
+                <td>{data.summary.totalAppointments}</td>
+              </tr>
+              <tr>
+                <td><strong>Total Orders</strong></td>
+                <td>{data.summary.totalOrders}</td>
+              </tr>
+              <tr>
+                <td><strong>Average Service Value</strong></td>
+                <td className="currency-table-cell">₱{(data.summary.averageTransaction || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td><strong>Average Order Value</strong></td>
+                <td className="currency-table-cell">₱{(data.summary.averageOrderValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1312,77 +1130,67 @@ const AppointmentsReportView = ({ data }) => {
 
   return (
     <div>
-      {/* Summary Cards */}
+      {/* Summary Table */}
       <div className="row mb-4">
-        <div className="col-md-3">
-          <div className="card bg-primary text-white">
-            <div className="card-body">
-              <h6>Total Appointments</h6>
-              <h3>{summary.total || 0}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-success text-white">
-            <div className="card-body">
-              <h6>Completed</h6>
-              <h3>{statusBreakdown.done || 0}</h3>
-              <small>{(summary.total || 0) > 0 ? (((statusBreakdown.done || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-warning text-white">
-            <div className="card-body">
-              <h6>Scheduled</h6>
-              <h3>{statusBreakdown.scheduled || 0}</h3>
-              <small>{(summary.total || 0) > 0 ? (((statusBreakdown.scheduled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-danger text-white">
-            <div className="card-body">
-              <h6>Cancelled</h6>
-              <h3>{statusBreakdown.cancelled || 0}</h3>
-              <small>{(summary.total || 0) > 0 ? (((statusBreakdown.cancelled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</small>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Additional Metrics */}
-      <div className="row mb-4">
-        <div className="col-md-3">
-          <div className="card bg-info text-white">
-            <div className="card-body">
-              <h6>Queue Appointments</h6>
-              <h3>{summary.queueAppointments || 0}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-secondary text-white">
-            <div className="card-body">
-              <h6>Scheduled Appointments</h6>
-              <h3>{summary.scheduledAppointments || 0}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-dark text-white">
-            <div className="card-body">
-              <h6>Walk-in Appointments</h6>
-              <h3>{summary.walkInAppointments || 0}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-light text-dark">
-            <div className="card-body">
-              <h6>Double Bookings</h6>
-              <h3>{summary.doubleBookings || 0}</h3>
-            </div>
+        <div className="col-12">
+          <h5>Appointments Summary</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Count</th>
+                  <th>Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Total Appointments</strong></td>
+                  <td><strong>{summary.total || 0}</strong></td>
+                  <td>100%</td>
+                </tr>
+                <tr>
+                  <td>Completed</td>
+                  <td>{statusBreakdown.done || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.done || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Scheduled</td>
+                  <td>{statusBreakdown.scheduled || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.scheduled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Ongoing</td>
+                  <td>{statusBreakdown.ongoing || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.ongoing || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Cancelled</td>
+                  <td>{statusBreakdown.cancelled || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.cancelled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Queue Appointments</td>
+                  <td>{summary.queueAppointments || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((summary.queueAppointments || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Scheduled Appointments</td>
+                  <td>{summary.scheduledAppointments || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((summary.scheduledAppointments || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Walk-in Appointments</td>
+                  <td>{summary.walkInAppointments || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((summary.walkInAppointments || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+                <tr>
+                  <td>Double Bookings</td>
+                  <td>{summary.doubleBookings || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((summary.doubleBookings || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1390,52 +1198,39 @@ const AppointmentsReportView = ({ data }) => {
     {/* Appointments by Barber */}
     <div className="row mb-4">
       <div className="col-12">
-        <div className="card">
-          <div className="card-header">
-            <h5 className="mb-0">
-              <i className="bi bi-person-badge me-2"></i>
-              Appointments by Barber
-            </h5>
-          </div>
-          <div className="card-body">
-            <div className="table-responsive">
-              <table className="table table-hover">
-                <thead>
-                  <tr>
-                    <th>Barber</th>
-                    <th>Total</th>
-                    <th>Scheduled</th>
-                    <th>Queue</th>
-                    <th>Ongoing</th>
-                    <th>Done</th>
-                    <th>Cancelled</th>
-                    <th>Completion Rate</th>
+        <h5>Appointments by Barber</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Barber</th>
+                <th>Total</th>
+                <th>Scheduled</th>
+                <th>Queue</th>
+                <th>Ongoing</th>
+                <th>Done</th>
+                <th>Cancelled</th>
+                <th>Completion Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appointmentsByBarber.map((barber, index) => {
+                const barberStatusBreakdown = barber.statusBreakdown || { scheduled: 0, ongoing: 0, done: 0, cancelled: 0 };
+                return (
+                  <tr key={index}>
+                    <td><strong>{barber.name || 'Unknown'}</strong></td>
+                    <td>{barber.total || 0}</td>
+                    <td>{barberStatusBreakdown.scheduled || 0}</td>
+                    <td>{barber.queueAppointments || 0}</td>
+                    <td>{barberStatusBreakdown.ongoing || 0}</td>
+                    <td>{barberStatusBreakdown.done || 0}</td>
+                    <td>{barberStatusBreakdown.cancelled || 0}</td>
+                    <td>{(barber.total || 0) > 0 ? (((barberStatusBreakdown.done || 0) / (barber.total || 1)) * 100).toFixed(1) : 0}%</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {appointmentsByBarber.map((barber, index) => {
-                    const barberStatusBreakdown = barber.statusBreakdown || { scheduled: 0, ongoing: 0, done: 0, cancelled: 0 };
-                    return (
-                      <tr key={index}>
-                        <td><strong>{barber.name || 'Unknown'}</strong></td>
-                        <td><span className="badge bg-primary">{barber.total || 0}</span></td>
-                        <td><span className="badge bg-warning">{barberStatusBreakdown.scheduled || 0}</span></td>
-                        <td><span className="badge bg-info">{barber.queueAppointments || 0}</span></td>
-                        <td><span className="badge bg-secondary">{barberStatusBreakdown.ongoing || 0}</span></td>
-                        <td><span className="badge bg-success">{barberStatusBreakdown.done || 0}</span></td>
-                        <td><span className="badge bg-danger">{barberStatusBreakdown.cancelled || 0}</span></td>
-                        <td>
-                          <span className={`badge ${(barber.total || 0) > 0 && ((barberStatusBreakdown.done || 0) / (barber.total || 1)) >= 0.8 ? 'bg-success' : 'bg-warning'}`}>
-                            {(barber.total || 0) > 0 ? (((barberStatusBreakdown.done || 0) / (barber.total || 1)) * 100).toFixed(1) : 0}%
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1443,39 +1238,30 @@ const AppointmentsReportView = ({ data }) => {
     {/* Appointments by Service */}
     <div className="row mb-4">
       <div className="col-12">
-        <div className="card">
-          <div className="card-header">
-            <h5 className="mb-0">
-              <i className="bi bi-scissors me-2"></i>
-              Appointments by Service
-            </h5>
-          </div>
-          <div className="card-body">
-            <div className="table-responsive">
-              <table className="table table-hover">
-                <thead>
-                  <tr>
-                    <th>Service</th>
-                    <th>Total Bookings</th>
-                    <th>Completed</th>
-                    <th>Average Duration</th>
-                    <th>Revenue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appointmentsByService.map((service, index) => (
-                    <tr key={index}>
-                      <td><strong>{service.name || 'Unknown'}</strong></td>
-                      <td><span className="badge bg-primary">{service.total || 0}</span></td>
-                      <td><span className="badge bg-success">{service.completed || 0}</span></td>
-                      <td>{service.averageDuration || 0} min</td>
-                      <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <h5>Appointments by Service</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Total Bookings</th>
+                <th>Completed</th>
+                <th>Average Duration</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appointmentsByService.map((service, index) => (
+                <tr key={index}>
+                  <td><strong>{service.name || 'Unknown'}</strong></td>
+                  <td>{service.total || 0}</td>
+                  <td>{service.completed || 0}</td>
+                  <td>{service.averageDuration || 0} min</td>
+                  <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1483,41 +1269,32 @@ const AppointmentsReportView = ({ data }) => {
     {/* Daily Breakdown */}
     <div className="row mb-4">
       <div className="col-12">
-        <div className="card">
-          <div className="card-header">
-            <h5 className="mb-0">
-              <i className="bi bi-calendar-week me-2"></i>
-              Daily Appointment Breakdown
-            </h5>
-          </div>
-          <div className="card-body">
-            <div className="table-responsive">
-              <table className="table table-hover">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Total</th>
-                    <th>Scheduled</th>
-                    <th>Queue</th>
-                    <th>Completed</th>
-                    <th>Cancelled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dailyBreakdown.map((day, index) => (
-                    <tr key={index}>
-                      <td><strong>{day.date ? new Date(day.date).toLocaleDateString() : 'Unknown Date'}</strong></td>
-                      <td><span className="badge bg-primary">{day.total || 0}</span></td>
-                      <td><span className="badge bg-warning">{day.scheduled || 0}</span></td>
-                      <td><span className="badge bg-info">{day.queue || 0}</span></td>
-                      <td><span className="badge bg-success">{day.completed || 0}</span></td>
-                      <td><span className="badge bg-danger">{day.cancelled || 0}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <h5>Daily Appointment Breakdown</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Total</th>
+                <th>Scheduled</th>
+                <th>Queue</th>
+                <th>Completed</th>
+                <th>Cancelled</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailyBreakdown.map((day, index) => (
+                <tr key={index}>
+                  <td><strong>{day.date ? new Date(day.date).toLocaleDateString() : 'Unknown Date'}</strong></td>
+                  <td>{day.total || 0}</td>
+                  <td>{day.scheduled || 0}</td>
+                  <td>{day.queue || 0}</td>
+                  <td>{day.completed || 0}</td>
+                  <td>{day.cancelled || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1528,28 +1305,31 @@ const AppointmentsReportView = ({ data }) => {
 const CustomerReportView = ({ data }) => (
   <div>
     <div className="row mb-4">
-      <div className="col-md-4">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Customers</h6>
-            <h3>{data.summary.totalCustomers}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-4">
-        <div className="card bg-success text-white">
-          <div className="card-body">
-            <h6>New Customers</h6>
-            <h3>{data.summary.newCustomers}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-4">
-        <div className="card bg-info text-white">
-          <div className="card-body">
-            <h6>Repeat Customers</h6>
-            <h3>{data.summary.repeatCustomers}</h3>
-          </div>
+      <div className="col-12">
+        <h5>Customer Summary</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Total Customers</strong></td>
+                <td><strong>{data.summary.totalCustomers}</strong></td>
+              </tr>
+              <tr>
+                <td>New Customers</td>
+                <td>{data.summary.newCustomers}</td>
+              </tr>
+              <tr>
+                <td>Repeat Customers</td>
+                <td>{data.summary.repeatCustomers}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1570,7 +1350,7 @@ const CustomerReportView = ({ data }) => (
             <tr key={customer.id}>
               <td>{customer.full_name}</td>
               <td>{customer.appointments}</td>
-                  <td className="currency-table-cell">₱{(customer.totalSpent || 0).toFixed(2)}</td>
+              <td className="currency-table-cell">₱{(customer.totalSpent || 0).toFixed(2)}</td>
               <td>{customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : 'Never'}</td>
             </tr>
           ))}
@@ -1583,22 +1363,30 @@ const CustomerReportView = ({ data }) => (
 const ServiceReportView = ({ data }) => (
   <div>
     <div className="row mb-4">
-      <div className="col-md-6">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Most Popular Service</h6>
-            <h3>{data.mostPopular?.name || 'N/A'}</h3>
-            <p className="mb-0">{data.mostPopular?.bookings || 0} bookings</p>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-6">
-        <div className="card bg-success text-white">
-          <div className="card-body">
-            <h6>Highest Revenue Service</h6>
-            <h3>{data.mostRevenue?.name || 'N/A'}</h3>
-            <p className="mb-0"><span className="currency-amount">₱{(data.mostRevenue?.revenue || 0).toFixed(2)}</span></p>
-          </div>
+      <div className="col-12">
+        <h5>Service Highlights</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Service</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Most Popular Service</strong></td>
+                <td>{data.mostPopular?.name || 'N/A'}</td>
+                <td>{data.mostPopular?.bookings || 0} bookings</td>
+              </tr>
+              <tr>
+                <td><strong>Highest Revenue Service</strong></td>
+                <td>{data.mostRevenue?.name || 'N/A'}</td>
+                <td className="currency-table-cell">₱{(data.mostRevenue?.revenue || 0).toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1618,9 +1406,9 @@ const ServiceReportView = ({ data }) => (
           {(data.servicePerformance || []).map((service) => (
             <tr key={service.id}>
               <td>{service.name}</td>
-                  <td className="currency-table-cell">₱{(service.price || 0).toFixed(2)}</td>
+              <td className="currency-table-cell">₱{(service.price || 0).toFixed(2)}</td>
               <td>{service.bookings}</td>
-              <td>₱{(service.revenue || 0).toFixed(2)}</td>
+              <td className="currency-table-cell">₱{(service.revenue || 0).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
@@ -1632,28 +1420,31 @@ const ServiceReportView = ({ data }) => (
 const InventoryReportView = ({ data }) => (
   <div>
     <div className="row mb-4">
-      <div className="col-md-4">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Products</h6>
-            <h3>{data.summary.totalProducts}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-4">
-        <div className="card bg-warning text-white">
-          <div className="card-body">
-            <h6>Needs Restock</h6>
-            <h3>{data.summary.needsRestock}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-4">
-        <div className="card bg-danger text-white">
-          <div className="card-body">
-            <h6>Low Stock</h6>
-            <h3>{data.summary.lowStock}</h3>
-          </div>
+      <div className="col-12">
+        <h5>Inventory Summary</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Total Products</strong></td>
+                <td><strong>{data.summary.totalProducts}</strong></td>
+              </tr>
+              <tr>
+                <td>Needs Restock</td>
+                <td>{data.summary.needsRestock}</td>
+              </tr>
+              <tr>
+                <td>Low Stock</td>
+                <td>{data.summary.lowStock}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1675,11 +1466,7 @@ const InventoryReportView = ({ data }) => (
                 <tr key={product.id}>
                   <td>{product.name}</td>
                   <td>{product.stock_quantity}</td>
-                  <td>
-                    <span className={`badge bg-${product.stock_quantity < 5 ? 'danger' : 'warning'}`}>
-                      {product.stock_quantity < 5 ? 'Critical' : 'Low Stock'}
-                    </span>
-                  </td>
+                  <td>{product.stock_quantity < 5 ? 'Critical' : 'Low Stock'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1717,20 +1504,27 @@ const InventoryReportView = ({ data }) => (
 const SystemReportView = ({ data }) => (
   <div>
     <div className="row mb-4">
-      <div className="col-md-6">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Logs</h6>
-            <h3>{data.summary.totalLogs}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-6">
-        <div className="card bg-danger text-white">
-          <div className="card-body">
-            <h6>Failed Login Attempts</h6>
-            <h3>{data.summary.failedLogins}</h3>
-          </div>
+      <div className="col-12">
+        <h5>System Summary</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Total Logs</strong></td>
+                <td><strong>{data.summary.totalLogs}</strong></td>
+              </tr>
+              <tr>
+                <td>Failed Login Attempts</td>
+                <td>{data.summary.failedLogins}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1789,63 +1583,43 @@ const SystemReportView = ({ data }) => (
 const QueueReportView = ({ data }) => (
   <div>
     <div className="row mb-4">
-      <div className="col-md-3">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Queue Appointments</h6>
-            <h3>{data.summary.totalQueueAppointments}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-success text-white">
-          <div className="card-body">
-            <h6>Completed</h6>
-            <h3>{data.summary.completedQueue}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-warning text-white">
-          <div className="card-body">
-            <h6>Pending</h6>
-            <h3>{data.summary.pendingQueue}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-info text-white">
-          <div className="card-body">
-            <h6>Avg Wait Time</h6>
-            <h3>{data.summary.averageWaitTime || 0} min</h3>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div className="row mb-4">
-      <div className="col-md-6">
-        <div className="card">
-          <div className="card-body">
-            <h5>Completion Rate</h5>
-            <div className="progress mb-2">
-              <div 
-                className="progress-bar bg-success" 
-                style={{ width: `${data.summary.completionRate || 0}%` }}
-              ></div>
-            </div>
-            <p className="mb-0">{(data.summary.completionRate || 0).toFixed(1)}% completion rate</p>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-6">
-        <div className="card">
-          <div className="card-body">
-            <h5>Queue Performance</h5>
-            <p className="mb-1"><strong>Completed:</strong> {data.summary.completedQueue}</p>
-            <p className="mb-1"><strong>Cancelled:</strong> {data.summary.cancelledQueue}</p>
-            <p className="mb-0"><strong>Pending:</strong> {data.summary.pendingQueue}</p>
-          </div>
+      <div className="col-12">
+        <h5>Queue Summary</h5>
+        <div className="table-responsive">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Total Queue Appointments</strong></td>
+                <td><strong>{data.summary.totalQueueAppointments}</strong></td>
+              </tr>
+              <tr>
+                <td>Completed</td>
+                <td>{data.summary.completedQueue}</td>
+              </tr>
+              <tr>
+                <td>Cancelled</td>
+                <td>{data.summary.cancelledQueue}</td>
+              </tr>
+              <tr>
+                <td>Pending</td>
+                <td>{data.summary.pendingQueue}</td>
+              </tr>
+              <tr>
+                <td>Average Wait Time</td>
+                <td>{data.summary.averageWaitTime || 0} min</td>
+              </tr>
+              <tr>
+                <td>Completion Rate</td>
+                <td>{(data.summary.completionRate || 0).toFixed(1)}%</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1871,7 +1645,7 @@ const QueueReportView = ({ data }) => (
               <td>{barber.completed}</td>
               <td>{barber.cancelled}</td>
               <td>{barber.pending}</td>
-                  <td>{Math.round(barber.averageWaitTime || 0)} min</td>
+              <td>{Math.round(barber.averageWaitTime || 0)} min</td>
             </tr>
           ))}
         </tbody>
@@ -1889,36 +1663,43 @@ const DoubleBookingReportView = ({ data }) => {
   return (
     <div>
       <div className="row mb-4">
-        <div className="col-md-3">
-          <div className="card bg-info text-white">
-            <div className="card-body">
-              <h6>Total Friend Bookings</h6>
-              <h3>{summary.totalDoubleBookings || 0}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-success text-white">
-            <div className="card-body">
-              <h6>Completed</h6>
-              <h3>{summary.completedDoubleBookings || 0}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-primary text-white">
-            <div className="card-body">
-              <h6>Revenue from Friends</h6>
-              <h3><span className="currency-amount-large">₱{(summary.doubleBookingRevenue || 0).toFixed(2)}</span></h3>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card bg-warning text-white">
-            <div className="card-body">
-              <h6>Avg Revenue/Booking</h6>
-              <h3><span className="currency-amount-large">₱{(summary.averageRevenuePerBooking || 0).toFixed(2)}</span></h3>
-            </div>
+        <div className="col-12">
+          <h5>Double Booking Summary</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Total Friend Bookings</strong></td>
+                  <td><strong>{summary.totalDoubleBookings || 0}</strong></td>
+                </tr>
+                <tr>
+                  <td>Completed</td>
+                  <td>{summary.completedDoubleBookings || 0}</td>
+                </tr>
+                <tr>
+                  <td>Cancelled</td>
+                  <td>{summary.cancelledDoubleBookings || 0}</td>
+                </tr>
+                <tr>
+                  <td>Revenue from Friends</td>
+                  <td className="currency-table-cell">₱{(summary.doubleBookingRevenue || 0).toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Average Revenue per Booking</td>
+                  <td className="currency-table-cell">₱{(summary.averageRevenuePerBooking || 0).toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Completion Rate</td>
+                  <td>{(summary.completionRate || 0).toFixed(1)}%</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1979,172 +1760,5 @@ const DoubleBookingReportView = ({ data }) => {
   </div>
   );
 };
-
-const RealTimeReportView = ({ data }) => (
-  <div>
-    <div className="alert alert-info">
-      <h5 className="alert-heading">
-        <i className="bi bi-clock me-2"></i>
-        Real-time Dashboard - {data.summary.todayDate}
-      </h5>
-      <p className="mb-0">Live data for today's operations</p>
-    </div>
-
-    <div className="row mb-4">
-      <div className="col-md-3">
-        <div className="card bg-primary text-white">
-          <div className="card-body">
-            <h6>Total Today</h6>
-            <h3>{data.summary.totalAppointmentsToday}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-success text-white">
-          <div className="card-body">
-            <h6>Completed</h6>
-            <h3>{data.summary.completedToday}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-warning text-white">
-          <div className="card-body">
-            <h6>Current Queue</h6>
-            <h3>{data.summary.currentQueueSize}</h3>
-          </div>
-        </div>
-      </div>
-      <div className="col-md-3">
-        <div className="card bg-info text-white">
-          <div className="card-body">
-            <h6>Today's Revenue</h6>
-            <h3><span className="currency-amount-large">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></h3>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div className="row">
-      <div className="col-md-6">
-        <h5>Active Barbers Today</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Barber</th>
-                <th>Total</th>
-                <th>Completed</th>
-                <th>Ongoing</th>
-                <th>Pending</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.activeBarbers || []).map((barber, index) => (
-                <tr key={index}>
-                  <td>{barber.name}</td>
-                  <td>{barber.totalAppointments}</td>
-                  <td>{barber.completed}</td>
-                  <td>{barber.ongoing}</td>
-                  <td>{barber.pending}</td>
-                  <td className="currency-table-cell">₱{(barber.revenue || 0).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="col-md-6">
-        <h5>Service Demand Today</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Service</th>
-                <th>Bookings</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.serviceDemand || []).map((service, index) => (
-                <tr key={index}>
-                  <td>{service.name}</td>
-                  <td>{service.bookings}</td>
-                  <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div className="row mt-4">
-      <div className="col-md-6">
-        <h5>Current Queue Status</h5>
-        <div className="table-responsive">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Barber</th>
-                <th>Service</th>
-                <th>Status</th>
-                <th>Position</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.currentQueue || []).slice(0, 10).map((appointment, index) => (
-                <tr key={index}>
-                  <td>{appointment.customer?.full_name || 'Unknown'}</td>
-                  <td>{appointment.barber?.full_name || 'Unknown'}</td>
-                  <td>{appointment.service?.name || 'Unknown'}</td>
-                  <td>
-                    <span className={`badge bg-${appointment.status === 'ongoing' ? 'success' : 'warning'}`}>
-                      {appointment.status}
-                    </span>
-                  </td>
-                  <td>#{appointment.queue_position || 'N/A'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="col-md-6">
-        <h5>Current Scheduled Appointments</h5>
-        <div className="table-responsive">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Barber</th>
-                <th>Time</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.currentScheduled || []).slice(0, 10).map((appointment, index) => (
-                <tr key={index}>
-                  <td>{appointment.customer?.full_name || 'Unknown'}</td>
-                  <td>{appointment.barber?.full_name || 'Unknown'}</td>
-                  <td>{appointment.appointment_time || 'N/A'}</td>
-                  <td>
-                    <span className={`badge bg-${appointment.status === 'ongoing' ? 'success' : 'primary'}`}>
-                      {appointment.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-);
 
 export default Reports;

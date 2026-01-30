@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { apiService } from '../../services/ApiService';
 // REMOVED: PushService import - use only CentralizedNotificationService
-import { formatDate, formatTime, getStatusColor } from '../utils/helpers';
+import { formatDate, formatTime, getStatusColor, parseAddOnsData, mapLegacyAddonIds } from '../utils/helpers';
 import { APPOINTMENT_STATUS } from '../utils/constants';
 import LoadingSpinner from '../common/LoadingSpinner';
 import SearchAndFilter from '../common/SearchAndFilter';
@@ -29,6 +29,8 @@ const ManageAppointments = () => {
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [showAppointmentProductModal, setShowAppointmentProductModal] = useState(false);
   const [selectedAppointmentForProduct, setSelectedAppointmentForProduct] = useState(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusUpdateData, setStatusUpdateData] = useState({ appointmentId: null, newStatus: null });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -38,12 +40,76 @@ const ManageAppointments = () => {
   const [realTimeUpdates, setRealTimeUpdates] = useState(false);
   const [efficiencyMetrics, setEfficiencyMetrics] = useState({});
   
+  // Allowed statuses for ManageAppointments: Only Pending, Confirmed, Ongoing, Completed, Cancelled
+  const ALLOWED_STATUSES = [
+    APPOINTMENT_STATUS.PENDING,
+    APPOINTMENT_STATUS.CONFIRMED,
+    APPOINTMENT_STATUS.ONGOING,
+    APPOINTMENT_STATUS.COMPLETED,
+    APPOINTMENT_STATUS.CANCELLED
+  ];
+  
+  const normalizeStatus = (status) => {
+    const value = status?.toLowerCase();
+    switch (value) {
+      case 'done':
+        return APPOINTMENT_STATUS.COMPLETED;
+      case 'cancel':
+        return APPOINTMENT_STATUS.CANCELLED;
+      case 'scheduled':
+        return APPOINTMENT_STATUS.CONFIRMED;
+      default:
+        return value;
+    }
+  };
+
+  const normalizeAppointmentRecord = (appointment = {}) => ({
+    ...appointment,
+    status: normalizeStatus(appointment.status)
+  });
+
+  const getDatabaseStatusOptions = (status) => {
+    const canonical = normalizeStatus(status);
+    // Only allow these 5 statuses: pending, confirmed, ongoing, completed, cancelled
+    const allowedStatuses = [
+      APPOINTMENT_STATUS.PENDING,
+      APPOINTMENT_STATUS.CONFIRMED,
+      APPOINTMENT_STATUS.ONGOING,
+      APPOINTMENT_STATUS.COMPLETED,
+      APPOINTMENT_STATUS.CANCELLED
+    ];
+    
+    // If the canonical status is in the allowed list, use it directly
+    if (allowedStatuses.includes(canonical)) {
+      return [canonical];
+    }
+    
+    // For any other status, return empty array (will be caught by validation)
+    return [];
+  };
+
+  const buildStatusUpdatePayload = (dbStatus, canonicalStatus) => {
+    const payload = {
+      status: dbStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    if ([APPOINTMENT_STATUS.COMPLETED, APPOINTMENT_STATUS.CANCELLED].includes(canonicalStatus)) {
+      payload.queue_position = null;
+    } else if (canonicalStatus === APPOINTMENT_STATUS.ONGOING) {
+      payload.queue_position = 0;
+    }
+
+    return payload;
+  };
+
   const [filters, setFilters] = useState({
     status: '',
     barber_id: '',
     date_range: 'today',
     search: '',
-    double_booking_only: false
+    double_booking_only: false,
+    add_on_id: ''
   });
   
   const [formData, setFormData] = useState({
@@ -52,6 +118,9 @@ const ManageAppointments = () => {
     service_id: '',
     appointment_date: '',
     appointment_time: '',
+    appointment_type: 'queue',
+    queue_position: '',
+    priority_level: 'normal',
     notes: '',
     status: ''
   });
@@ -63,7 +132,7 @@ const ManageAppointments = () => {
     barber_id: '',
     service_id: '',
     add_ons_data: [],
-    appointment_date: '',
+    appointment_date: new Date().toISOString().split('T')[0], // Default to today
     appointment_time: '',
     notes: '',
     priority_level: 'normal',
@@ -71,11 +140,11 @@ const ManageAppointments = () => {
     primary_customer_id: ''
   });
 
-  // Walk-in unified slot system (like customer booking)
-  const [walkInUnifiedSlots, setWalkInUnifiedSlots] = useState([]);
-  const [walkInAlternativeBarbers, setWalkInAlternativeBarbers] = useState([]);
-  const [walkInShowAlternatives, setWalkInShowAlternatives] = useState(false);
-  const [walkInLoadingSlots, setWalkInLoadingSlots] = useState(false);
+  // Walk-in unified slot system (like customer booking) - REMOVED: Not needed for queue-based walk-ins
+  // const [walkInUnifiedSlots, setWalkInUnifiedSlots] = useState([]);
+  // const [walkInAlternativeBarbers, setWalkInAlternativeBarbers] = useState([]);
+  // const [walkInShowAlternatives, setWalkInShowAlternatives] = useState(false);
+  // const [walkInLoadingSlots, setWalkInLoadingSlots] = useState(false);
   
   const [formErrors, setFormErrors] = useState({});
 
@@ -120,12 +189,28 @@ const ManageAppointments = () => {
     }
   }, [formData.barber_id, formData.appointment_date]);
 
-  // Fetch unified slots for walk-in appointments (like customer booking)
+  // Fetch customers when component mounts
   useEffect(() => {
-    if (walkInFormData.barber_id && walkInFormData.appointment_date && walkInFormData.service_id) {
-      loadWalkInUnifiedSlots();
-    }
-  }, [walkInFormData.barber_id, walkInFormData.appointment_date, walkInFormData.service_id, walkInFormData.add_ons_data]);
+    const fetchCustomers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .eq('role', 'customer')
+          .order('full_name');
+        
+        if (error) {
+          console.error('Error fetching customers:', error);
+        } else {
+          setCustomers(data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+      }
+    };
+    
+    fetchCustomers();
+  }, []);
 
   const fetchInitialData = async () => {
     try {
@@ -200,7 +285,12 @@ const ManageAppointments = () => {
       .eq('is_active', true)
       .order('name');
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching add-ons:', error);
+      throw error;
+    }
+    
+    console.log('Fetched add-ons:', data);
     return data || [];
   };
 
@@ -230,7 +320,7 @@ const ManageAppointments = () => {
           service:service_id(id, name, price, duration, description)
         `)
         .order('appointment_date', { ascending: false })
-        .order('appointment_time', { ascending: false });
+        .order('appointment_time', { ascending: true });
       
       // Apply status filter
       if (filters.status) {
@@ -292,7 +382,8 @@ const ManageAppointments = () => {
         console.log('❌ No double booking appointments found in current data');
       }
       
-      setAppointments(data || []);
+      const normalizedAppointments = (data || []).map(normalizeAppointmentRecord);
+      setAppointments(normalizedAppointments);
       
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -310,7 +401,7 @@ const ManageAppointments = () => {
         .select('appointment_time, service:service_id(duration)')
         .eq('barber_id', formData.barber_id)
         .eq('appointment_date', formData.appointment_date)
-        .in('status', ['scheduled', 'ongoing']);
+        .in('status', ['confirmed', 'ongoing']);
 
       if (error) throw error;
 
@@ -359,7 +450,8 @@ const ManageAppointments = () => {
     }
   };
 
-  // Load unified slots for walk-in appointments (same as customer booking)
+  // Load unified slots for walk-in appointments (same as customer booking) - REMOVED: Not needed for queue-based walk-ins
+  /*
   const loadWalkInUnifiedSlots = async () => {
     try {
       setWalkInLoadingSlots(true);
@@ -442,7 +534,7 @@ const ManageAppointments = () => {
           .select('appointment_time, total_duration, appointment_type, status')
           .eq('barber_id', barber.id)
           .eq('appointment_date', walkInFormData.appointment_date)
-          .in('status', ['scheduled', 'confirmed', 'ongoing', 'pending']);
+          .in('status', ['confirmed', 'ongoing', 'pending']);
         
         if (error) {
           console.error('Error fetching appointments for barber:', barber.id, error);
@@ -474,6 +566,7 @@ const ManageAppointments = () => {
       setWalkInAlternativeBarbers([]);
     }
   };
+  */
 
   // Calculate available slots with duration (helper function)
   const calculateAvailableSlotsWithDuration = (appointments, serviceDuration) => {
@@ -586,12 +679,18 @@ const ManageAppointments = () => {
       errors.appointment_date = 'Date is required';
     }
     
-    if (!formData.appointment_time) {
-      errors.appointment_time = 'Time is required';
+    // Only require time if it's a scheduled appointment
+    if (formData.appointment_type === 'scheduled' && !formData.appointment_time) {
+      errors.appointment_time = 'Time is required for scheduled appointments';
     }
+    
+    // Only require queue position if it's a queue appointment and user wants to set it manually
+    // (It's optional - can be auto-assigned)
     
     if (!formData.status) {
       errors.status = 'Status is required';
+    } else if (!ALLOWED_STATUSES.includes(formData.status)) {
+      errors.status = `Status must be one of: ${ALLOWED_STATUSES.join(', ')}`;
     }
     
     setFormErrors(errors);
@@ -612,11 +711,25 @@ const ManageAppointments = () => {
         barber_id: formData.barber_id,
         service_id: formData.service_id,
         appointment_date: formData.appointment_date,
-        appointment_time: formData.appointment_time,
+        appointment_time: formData.appointment_time || null,
+        appointment_type: formData.appointment_type || 'queue',
+        queue_position: formData.appointment_type === 'queue' ? (formData.queue_position || null) : null,
+        priority_level: formData.appointment_type === 'queue' ? (formData.priority_level || 'normal') : null,
         notes: formData.notes,
         status: formData.status,
         updated_at: new Date().toISOString()
       };
+      
+      // If switching to scheduled, clear queue position
+      if (formData.appointment_type === 'scheduled') {
+        updates.queue_position = null;
+        updates.priority_level = null;
+      }
+      
+      // If switching to queue, clear appointment time
+      if (formData.appointment_type === 'queue') {
+        updates.appointment_time = null;
+      }
       
       // Update appointment
       const { data, error } = await supabase
@@ -635,7 +748,7 @@ const ManageAppointments = () => {
       
       // Update local state
       setAppointments(prev => 
-        prev.map(apt => apt.id === selectedAppointment.id ? data : apt)
+        prev.map(apt => apt.id === selectedAppointment.id ? normalizeAppointmentRecord(data) : apt)
       );
       
       // Create notification using centralized service (handles both database and push)
@@ -671,64 +784,156 @@ const ManageAppointments = () => {
     }
   };
 
-  const handleStatusChange = async (appointmentId, status) => {
+  const handleStatusChange = (appointmentId, status) => {
+    // Show modal for status update
+    setStatusUpdateData({ appointmentId, newStatus: status });
+    setShowStatusModal(true);
+  };
+
+  const confirmStatusUpdate = async () => {
+    const { appointmentId, newStatus } = statusUpdateData;
+    const canonicalStatus = normalizeStatus(newStatus);
+    
     try {
       setLoading(true);
       
-      const { data, error } = await supabase
-        .from('appointments')
-        .update({ 
-          status,
-          updated_at: new Date().toISOString(),
-          // Update queue position when status changes
-          queue_position: status === 'done' || status === 'cancelled' ? null : 
-                      status === 'ongoing' ? 0 : undefined  // 0 for ongoing (currently being served)
-        })
-        .eq('id', appointmentId)
-        .select(`
-          *,
-          customer:customer_id(id, full_name, email, phone),
-          barber:barber_id(id, full_name, email, phone),
-          service:service_id(id, name, price, duration, description)
-        `)
-        .single();
+      // Validate that only allowed statuses can be set
+      if (!ALLOWED_STATUSES.includes(canonicalStatus)) {
+        setError(`Invalid status. Only allowed statuses are: ${ALLOWED_STATUSES.join(', ')}`);
+        setLoading(false);
+        return;
+      }
       
-      if (error) throw error;
-      
+      const statusOptions = getDatabaseStatusOptions(canonicalStatus);
+      let updatedAppointment = null;
+      let lastError = null;
+
+      for (const dbStatus of statusOptions) {
+        console.log('Attempting appointment status update', { appointmentId, dbStatus, canonicalStatus });
+        const payload = buildStatusUpdatePayload(dbStatus, canonicalStatus);
+        const { data, error } = await supabase
+          .from('appointments')
+          .update(payload)
+          .eq('id', appointmentId)
+          .select(`
+            *,
+            customer:customer_id(id, full_name, email, phone),
+            barber:barber_id(id, full_name, email, phone),
+            service:service_id(id, name, price, duration, description)
+          `)
+          .single();
+
+        if (!error) {
+          updatedAppointment = normalizeAppointmentRecord(data);
+          break;
+        }
+
+        lastError = error;
+        
+        // Log the full error for debugging
+        console.error('Status update error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          status: error.status,
+          dbStatus,
+          canonicalStatus
+        });
+
+        // Handle constraint violations and other database errors
+        // Database should only accept: pending, confirmed, ongoing, completed, cancelled
+        const isConstraintError = error.code === '23514' || 
+                                  error.code === 'PGRST116' || 
+                                  error.code === '23505' ||
+                                  (error.status === 400);
+        
+        if (isConstraintError) {
+          console.warn('Status update failed, may need database constraint update', {
+            appointmentId,
+            attemptedStatus: dbStatus,
+            canonicalStatus,
+            error: error.message,
+            errorCode: error.code
+          });
+          
+          // No fallback needed - database should only accept the 5 allowed statuses
+          // If update fails, it means the database constraint needs to be updated
+          
+          // Continue to next option if available
+          if (statusOptions.length > 1) {
+            continue;
+          }
+        }
+
+        // For other errors, throw immediately
+        if (error.code !== '23514' && error.code !== 'PGRST116') {
+          console.error('Non-constraint error during status update:', error);
+          throw error;
+        }
+      }
+
+      if (!updatedAppointment) {
+        throw lastError || new Error('Failed to update appointment status.');
+      }
+
       // Update local state
       setAppointments(prev => 
-        prev.map(apt => apt.id === appointmentId ? data : apt)
+        prev.map(apt => apt.id === appointmentId ? updatedAppointment : apt)
       );
-      
-      // Push notification is now handled by CentralizedNotificationService
 
-      // Barber notification is now handled by CentralizedNotificationService
-      
+      if (selectedAppointment?.id === appointmentId) {
+        setSelectedAppointment(updatedAppointment);
+      }
+
       // Create notification using centralized service (ONLY way to create notifications)
       const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
       
       // Notify customer
       await centralizedNotificationService.createAppointmentStatusNotification({
-        userId: data.customer_id,
+        userId: updatedAppointment.customer_id,
         appointmentId: appointmentId,
-        status: status,
+        status: canonicalStatus,
         changedBy: 'manager'
       });
       
       // Notify barber
       await centralizedNotificationService.createAppointmentStatusNotification({
-        userId: data.barber_id,
+        userId: updatedAppointment.barber_id,
         appointmentId: appointmentId,
-        status: status,
+        status: canonicalStatus,
         changedBy: 'manager'
       });
       
+      // Close modal on success
+      setShowStatusModal(false);
+      setStatusUpdateData({ appointmentId: null, newStatus: null });
+      
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      setError('Failed to update appointment status. Please try again.');
+      
+      // Provide more detailed error message
+      let errorMessage = 'Failed to update appointment status.';
+      
+      if (error.message) {
+        errorMessage += ` ${error.message}`;
+      }
+      
+      if (error.code === '23514' || error.code === 'PGRST116') {
+        errorMessage += ' The database may not support this status value. Please contact support.';
+      } else if (error.code === '400' || error.status === 400) {
+        errorMessage += ' Invalid request. The status value may not be allowed by the database.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const closeStatusModal = () => {
+    setShowStatusModal(false);
+    setStatusUpdateData({ appointmentId: null, newStatus: null });
   };
 
   const handleViewDetails = (appointment) => {
@@ -743,7 +948,10 @@ const ManageAppointments = () => {
       barber_id: appointment.barber_id,
       service_id: appointment.service_id,
       appointment_date: appointment.appointment_date,
-      appointment_time: appointment.appointment_time,
+      appointment_time: appointment.appointment_time || '',
+      appointment_type: appointment.appointment_type || 'queue',
+      queue_position: appointment.queue_position || '',
+      priority_level: appointment.priority_level || 'normal',
       notes: appointment.notes || '',
       status: appointment.status
     });
@@ -763,6 +971,9 @@ const ManageAppointments = () => {
       service_id: '',
       appointment_date: '',
       appointment_time: '',
+      appointment_type: 'queue',
+      queue_position: '',
+      priority_level: 'normal',
       notes: '',
       status: ''
     });
@@ -794,7 +1005,8 @@ const ManageAppointments = () => {
     }));
   };
 
-  // Handle unified slot selection (same as customer booking)
+  // Handle unified slot selection (same as customer booking) - REMOVED: Not needed for queue-based walk-ins
+  /*
   const handleWalkInUnifiedSlotSelect = (slot) => {
     console.log('🎯 Selected unified slot for walk-in:', slot);
     
@@ -816,7 +1028,7 @@ const ManageAppointments = () => {
     }));
   };
 
-  // Handle alternative barber selection for walk-in
+  // Handle alternative barber selection for walk-in - REMOVED: Not needed for queue-based walk-ins
   const handleWalkInAlternativeBarberSelect = (barberId) => {
     console.log('🎯 Selected alternative barber for walk-in:', barberId);
     setWalkInFormData(prev => ({
@@ -829,6 +1041,7 @@ const ManageAppointments = () => {
       loadWalkInUnifiedSlots();
     }
   };
+  */
 
   const validateWalkInForm = () => {
     const errors = {};
@@ -870,77 +1083,135 @@ const ManageAppointments = () => {
       console.log('🚀 Starting walk-in appointment creation...');
       console.log('📋 Form data:', walkInFormData);
       
-      // Check if customer exists, if not create one
-      let customerId = walkInFormData.primary_customer_id;
+      // Check if customer exists, if not create a minimal customer record for walk-ins
+      let customerId = walkInFormData.primary_customer_id || null;
       
+      // Try to find existing customer by email if provided
       if (!customerId && walkInFormData.customer_email) {
         console.log('🔍 Checking for existing customer by email...');
-        // Try to find existing customer by email
-        const { data: existingCustomer, error: customerSearchError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', walkInFormData.customer_email)
-          .eq('role', 'customer')
-          .single();
-        
-        if (customerSearchError && customerSearchError.code !== 'PGRST116') {
-          console.error('❌ Error searching for customer:', customerSearchError);
-          throw new Error(`Customer search failed: ${customerSearchError.message}`);
-        }
-        
-        if (existingCustomer) {
-          customerId = existingCustomer.id;
-          console.log('✅ Found existing customer:', customerId);
-        } else {
-          console.log('👤 Creating new customer...');
-          // Create new customer
-          const { data: newCustomer, error: customerError } = await supabase
+        try {
+          const { data: existingCustomer, error: customerSearchError } = await supabase
             .from('users')
-            .insert([{
-              email: walkInFormData.customer_email,
-              full_name: walkInFormData.customer_name,
-              phone: walkInFormData.customer_phone || '',
-              role: 'customer'
-            }])
-            .select()
-            .single();
+            .select('id')
+            .eq('email', walkInFormData.customer_email)
+            .eq('role', 'customer')
+            .maybeSingle();
           
-          if (customerError) {
-            console.error('❌ Error creating customer:', customerError);
-            throw new Error(`Customer creation failed: ${customerError.message}`);
+          if (customerSearchError) {
+            console.error('❌ Error searching for customer:', customerSearchError);
+          } else if (existingCustomer) {
+            customerId = existingCustomer.id;
+            console.log('✅ Found existing customer:', customerId);
           }
-          customerId = newCustomer.id;
-          console.log('✅ Created new customer:', customerId);
+        } catch (error) {
+          console.error('❌ Error in customer search:', error);
         }
       }
       
-      // Ensure we have a customer ID; if still none, create a minimal customer using provided name/phone
-      if (!customerId) {
-        console.log('👤 Creating minimal customer...');
-        const { data: newMinimalCustomer, error: minimalErr } = await supabase
-          .from('users')
-          .insert([{
-            email: walkInFormData.customer_email || null,
-            full_name: walkInFormData.customer_name,
-            phone: walkInFormData.customer_phone || '',
-            role: 'customer'
-          }])
-          .select('id')
-          .single();
-        
-        if (minimalErr) {
-          console.error('❌ Error creating minimal customer:', minimalErr);
-          throw new Error(`Minimal customer creation failed: ${minimalErr.message}`);
+      // If no customer found, create a minimal customer record for walk-ins
+      // Since customer_id is NOT NULL, we need to create a customer record
+      if (!customerId || customerId === '') {
+        console.log('👤 Creating minimal customer record for walk-in...');
+        try {
+          // Generate a unique email for walk-in customer
+          const walkInEmail = walkInFormData.customer_email || 
+            `walkin-${Date.now()}-${Math.random().toString(36).substring(7)}@walkin.local`;
+          
+          // Generate a random password (won't be used, but required for signUp)
+          const randomPassword = Math.random().toString(36).substring(2, 15) + 
+            Math.random().toString(36).substring(2, 15) + 
+            Math.random().toString(36).substring(2, 15) + 'A1!'; // Add complexity for password requirements
+          
+          // Create auth user first (required for foreign key constraint)
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: walkInEmail,
+            password: randomPassword,
+            options: {
+              data: {
+                full_name: walkInFormData.customer_name,
+                role: 'customer',
+                phone: walkInFormData.customer_phone || '',
+                is_walk_in: true
+              }
+            }
+          });
+          
+          if (authError) {
+            console.error('❌ Error creating auth user for walk-in:', authError);
+            // If email already exists, try to find the user
+            if (authError.message?.includes('already registered') || authError.code === '23505') {
+              console.log('🔄 Email already exists, searching for user...');
+              const { data: existingUser } = await supabase
+                .from('users')
+                .select('id')
+                .eq('email', walkInEmail)
+                .maybeSingle();
+              
+              if (existingUser) {
+                customerId = existingUser.id;
+                console.log('✅ Found existing user:', customerId);
+              } else {
+                throw new Error(`Failed to create walk-in customer: ${authError.message}`);
+              }
+            } else {
+              throw new Error(`Failed to create walk-in customer: ${authError.message}`);
+            }
+          } else if (authData?.user) {
+            // Create user record in users table
+            const { data: userRecord, error: userError } = await supabase
+              .from('users')
+              .upsert([{
+                id: authData.user.id,
+                email: walkInEmail,
+                full_name: walkInFormData.customer_name,
+                phone: walkInFormData.customer_phone || null,
+                role: 'customer'
+              }], {
+                onConflict: 'id'
+              })
+              .select('id')
+              .single();
+            
+            if (userError) {
+              console.error('❌ Error creating user record:', userError);
+              // If user already exists, use the existing ID
+              if (userError.code === '23505') {
+                const { data: existingUser } = await supabase
+                  .from('users')
+                  .select('id')
+                  .eq('email', walkInEmail)
+                  .maybeSingle();
+                
+                if (existingUser) {
+                  customerId = existingUser.id;
+                  console.log('✅ Using existing user record:', customerId);
+                } else {
+                  throw new Error(`Failed to create user record: ${userError.message}`);
+                }
+              } else {
+                throw new Error(`Failed to create user record: ${userError.message}`);
+              }
+            } else {
+              customerId = userRecord.id;
+              console.log('✅ Created walk-in customer record:', customerId);
+            }
+          } else {
+            throw new Error('Auth user creation failed - no user returned');
+          }
+        } catch (error) {
+          console.error('❌ Error creating walk-in customer:', error);
+          throw new Error(`Failed to create walk-in customer: ${error.message}`);
         }
-        customerId = newMinimalCustomer.id;
-        console.log('✅ Created minimal customer:', customerId);
       }
+      
+      // Ensure customerId is not null or empty string
+      if (!customerId || customerId === '') {
+        throw new Error('Customer ID is required but could not be created or found');
+      }
+      
+      console.log('👤 Walk-in customer ID:', customerId);
 
       // Validate required data before proceeding
-      if (!customerId) {
-        throw new Error('Customer ID is required but not available');
-      }
-      
       if (!walkInFormData.barber_id) {
         throw new Error('Barber ID is required');
       }
@@ -952,6 +1223,8 @@ const ManageAppointments = () => {
       if (!walkInFormData.appointment_date) {
         throw new Error('Appointment date is required');
       }
+      
+      // Note: customerId can be null for walk-ins without accounts
 
       console.log('📅 Creating walk-in appointment with Advanced Hybrid Queue System...');
       console.log('👤 Customer ID:', customerId);
@@ -997,13 +1270,13 @@ const ManageAppointments = () => {
         [APPOINTMENT_FIELDS.SERVICES_DATA]: [walkInFormData.service_id], // Single service for walk-in
         [APPOINTMENT_FIELDS.ADD_ONS_DATA]: walkInFormData.add_ons_data || [], // Include selected add-ons
         [APPOINTMENT_FIELDS.APPOINTMENT_DATE]: walkInFormData.appointment_date,
-        [APPOINTMENT_FIELDS.APPOINTMENT_TIME]: null, // Walk-in appointments are always queue type
+        [APPOINTMENT_FIELDS.APPOINTMENT_TIME]: null, // Walk-in appointments are always queue type, no time needed
         [APPOINTMENT_FIELDS.APPOINTMENT_TYPE]: 'queue', // Walk-in is always queue
         [APPOINTMENT_FIELDS.PRIORITY_LEVEL]: walkInFormData.priority_level || PRIORITY_LEVELS.NORMAL,
         [APPOINTMENT_FIELDS.STATUS]: BOOKING_STATUS.PENDING, // Start as pending like regular booking
         [APPOINTMENT_FIELDS.TOTAL_PRICE]: serviceData.price + addOnsPrice,
         [APPOINTMENT_FIELDS.TOTAL_DURATION]: serviceData.duration + addOnsDuration,
-        [APPOINTMENT_FIELDS.NOTES]: walkInFormData.notes || '',
+        [APPOINTMENT_FIELDS.NOTES]: walkInFormData.notes || `Walk-in customer: ${walkInFormData.customer_name}${walkInFormData.customer_phone ? ` (${walkInFormData.customer_phone})` : ''}${walkInFormData.customer_email ? ` - ${walkInFormData.customer_email}` : ''}`,
         [APPOINTMENT_FIELDS.IS_URGENT]: walkInFormData.priority_level === PRIORITY_LEVELS.URGENT,
         [APPOINTMENT_FIELDS.BOOK_FOR_FRIEND]: false, // Walk-in is for the customer themselves
         // Walk-in specific fields
@@ -1045,33 +1318,32 @@ const ManageAppointments = () => {
       const data = createdAppointment || { id: result.appointment_id };
       
       // Update local state
-      setAppointments(prev => [data, ...prev]);
+      setAppointments(prev => [normalizeAppointmentRecord(data), ...prev]);
       
-      // Create notification for barber
+      // Create notification for barber using CentralizedNotificationService to prevent duplicates
       console.log('📢 Creating notification for barber...');
-      const notificationData = {
-        user_id: walkInFormData.barber_id,
-        title: 'Walk-in Appointment Added',
-        message: `Manager has added a walk-in appointment for ${walkInFormData.customer_name}. ${result.position ? `Queue position: #${result.position}` : ''} ${result.estimated_time ? `Est. time: ${result.estimated_time}` : ''}`,
-        type: 'walk_in_appointment',
-        data: {
-          appointment_id: result.appointment_id,
-          customer_name: walkInFormData.customer_name,
-          queue_position: result.position,
-          estimated_time: result.estimated_time,
-          priority_level: walkInFormData.priority_level
-        }
-      };
-      
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert([notificationData]);
-      
-      if (notificationError) {
+      try {
+        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        await centralizedNotificationService.createNotification({
+          userId: walkInFormData.barber_id,
+          title: 'Walk-in Appointment Added',
+          message: `Manager has added a walk-in appointment for ${walkInFormData.customer_name}. ${result.position ? `Queue position: #${result.position}` : ''} ${result.estimated_time ? `Est. time: ${result.estimated_time}` : ''}`,
+          type: 'walk_in_appointment',
+          category: 'appointment_update',
+          priority: 'high',
+          channels: ['app', 'push'],
+          appointmentId: result.appointment_id,
+          data: {
+            customer_name: walkInFormData.customer_name,
+            queue_position: result.position,
+            estimated_time: result.estimated_time,
+            priority_level: walkInFormData.priority_level
+          }
+        });
+        console.log('✅ Notification created successfully');
+      } catch (notificationError) {
         console.error('⚠️ Error creating notification:', notificationError);
         // Don't throw error for notification failure
-      } else {
-        console.log('✅ Notification created successfully');
       }
       
       // Show success message with position and estimated time
@@ -1102,12 +1374,12 @@ const ManageAppointments = () => {
       customer_email: '',
       barber_id: '',
       service_id: '',
-      appointment_date: '',
+      add_ons_data: [],
+      appointment_date: new Date().toISOString().split('T')[0], // Reset to today
       appointment_time: '',
       notes: '',
       priority_level: 'normal',
       is_walk_in: true,
-      is_double_booking: false,
       primary_customer_id: ''
     });
     setFormErrors({});
@@ -1151,9 +1423,9 @@ const ManageAppointments = () => {
       )}
 
       {/* Action Buttons */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
         <div>
-          <h2 className="mb-0">Manage Appointments</h2>
+          <h2 className="mb-0 fw-bold">Manage Appointments</h2>
           <small className="text-muted">View and manage all appointments</small>
         </div>
         <div className="d-flex gap-2">
@@ -1174,32 +1446,36 @@ const ManageAppointments = () => {
         initialFilters={filters}
       />
 
-      {/* Double Booking Filter */}
-      <div className="card mb-3">
-        <div className="card-body py-2">
-          <div className="d-flex align-items-center gap-3">
-            <div className="form-check">
-              <input
-                className="form-check-input"
-                type="checkbox"
-                id="doubleBookingFilter"
-                checked={filters.double_booking_only}
-                onChange={(e) => setFilters(prev => ({
-                  ...prev,
-                  double_booking_only: e.target.checked
-                }))}
-              />
-              <label className="form-check-label fw-medium" htmlFor="doubleBookingFilter">
-                <i className="bi bi-people me-2 text-info"></i>
-                Show only "Book a Friend" appointments
-              </label>
+      {/* Filters Row */}
+      <div className="row mb-3">
+        <div className="col-md-12">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body py-2">
+              <div className="d-flex align-items-center gap-3">
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="doubleBookingFilter"
+                    checked={filters.double_booking_only}
+                    onChange={(e) => setFilters(prev => ({
+                      ...prev,
+                      double_booking_only: e.target.checked
+                    }))}
+                  />
+                  <label className="form-check-label fw-medium" htmlFor="doubleBookingFilter">
+                    <i className="bi bi-people me-2 text-info"></i>
+                    Show only "Book a Friend" appointments
+                  </label>
+                </div>
+                {filters.double_booking_only && (
+                  <span className="badge bg-info bg-opacity-20 text-info">
+                    <i className="bi bi-funnel me-1"></i>
+                    Filtering friend bookings
+                  </span>
+                )}
+              </div>
             </div>
-            {filters.double_booking_only && (
-              <span className="badge bg-info bg-opacity-20 text-info">
-                <i className="bi bi-funnel me-1"></i>
-                Filtering friend bookings
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -1226,6 +1502,7 @@ const ManageAppointments = () => {
                     </th>
                     <th>Barber</th>
                     <th>Service</th>
+                    <th className="text-center">Queue #</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -1235,11 +1512,17 @@ const ManageAppointments = () => {
                     .filter(appointment => {
                       // Apply double booking filter
                       if (filters.double_booking_only) {
-                        return appointment.is_double_booking === true;
+                        if (!appointment.is_double_booking) return false;
                       }
+                      
+                      // Apply add-on filter
                       return true;
                     })
-                    .map((appointment) => (
+                    .map((appointment) => {
+                      const canonicalStatus = normalizeStatus(appointment.status) || appointment.status;
+                      const displayStatus = canonicalStatus || appointment.status || '';
+
+                      return (
                     <tr key={appointment.id}>
                       <td>
                         {formatDate(appointment.appointment_date)} <br />
@@ -1307,10 +1590,75 @@ const ManageAppointments = () => {
                       <td>
                         {appointment.service?.name || 'Unknown'} <br />
                         <small className="text-muted">{appointment.service?.duration} min</small>
+                        {(() => {
+                          if (!appointment.add_ons_data) return null;
+                          
+                          const addOnIds = parseAddOnsData(appointment.add_ons_data);
+                          
+                          if (!addOnIds || addOnIds.length === 0) return null;
+                          if (!addOns || addOns.length === 0) return null;
+                          
+                          // Fetch full add-on data using UUIDs from database
+                          const appointmentAddOns = addOnIds.map(addonId => {
+                            // First, try to find by original ID (in case it's already a UUID)
+                            let addon = addOns.find(a => a.id === addonId);
+                            
+                            // If not found, map legacy ID to UUID and try again
+                            if (!addon) {
+                              const mappedIds = mapLegacyAddonIds([addonId], addOns);
+                              if (mappedIds.length > 0 && mappedIds[0]) {
+                                addon = addOns.find(a => a.id === mappedIds[0]);
+                              }
+                            }
+                            
+                            // If found, return full addon data from database
+                            if (addon) {
+                              return {
+                                name: addon.name,
+                                price: addon.price,
+                                duration: addon.duration,
+                                id: addon.id
+                              };
+                            }
+                            
+                            // If not found, skip it
+                            return null;
+                          }).filter(Boolean);
+                          
+                          if (appointmentAddOns.length > 0) {
+                            return (
+                              <div className="mt-2">
+                                <small className="text-muted d-block mb-1">
+                                  <i className="bi bi-plus-circle me-1"></i>
+                                  <strong>Add-ons:</strong>
+                                </small>
+                                {appointmentAddOns.map((addon, index) => (
+                                  <span key={index} className="badge bg-secondary me-1 mb-1">
+                                    {addon.name} {addon.price > 0 && `(₱${addon.price})`}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
+                      </td>
+                      <td className="text-center">
+                        {appointment.queue_position !== null && appointment.queue_position !== undefined ? (
+                          <div className="d-flex justify-content-center align-items-center">
+                            <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" 
+                                 style={{width: '40px', height: '40px', fontSize: '16px'}}>
+                              {appointment.queue_position}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted small">-</span>
+                        )}
                       </td>
                       <td>
-                        <span className={`badge bg-${getStatusColor(appointment.status)}`}>
-                          {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                        <span className={`badge bg-${getStatusColor(displayStatus)}`}>
+                          {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
                         </span>
                         {appointment.is_double_booking && (
                           <span className="badge bg-info ms-1">
@@ -1335,16 +1683,11 @@ const ManageAppointments = () => {
                                 <i className="bi bi-pencil me-2"></i>Edit
                               </button>
                             </li>
-                            <li>
-                              <button className="dropdown-item" onClick={() => handleAppointmentProductPurchase(appointment)}>
-                                <i className="bi bi-cart-plus me-2"></i>Buy Products
-                              </button>
-                            </li>
                             <li><hr className="dropdown-divider" /></li>
                             <li className="dropdown-header">Change Status</li>
-                            {Object.values(APPOINTMENT_STATUS).map(status => (
+                            {ALLOWED_STATUSES.map(status => (
                               <li key={status}>
-                                {status !== appointment.status && (
+                                {status !== displayStatus && (
                                   <button 
                                     className="dropdown-item"
                                     onClick={() => handleStatusChange(appointment.id, status)}
@@ -1359,7 +1702,8 @@ const ManageAppointments = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -1370,97 +1714,295 @@ const ManageAppointments = () => {
       {/* Details Modal */}
       {showDetailsModal && selectedAppointment && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Appointment Details</h5>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content shadow-lg">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-calendar-check me-2"></i>
+                  Appointment Details
+                </h5>
                 <button 
                   type="button" 
-                  className="btn-close" 
+                  className="btn-close btn-close-white" 
                   onClick={closeDetailsModal}
                 ></button>
               </div>
-              <div className="modal-body">
-                <div className="mb-3 pb-3 border-bottom">
-                  <span className={`badge bg-${getStatusColor(selectedAppointment.status)} mb-2`}>
-                    {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
-                  </span>
-                  <h5>
-                    {formatDate(selectedAppointment.appointment_date)} at {formatTime(selectedAppointment.appointment_time)}
-                  </h5>
-                </div>
-                
-                <div className="row mb-3">
-                  <div className="col-md-6">
-                    <h6>Customer</h6>
-                    <p className="mb-0">{selectedAppointment.customer?.full_name}</p>
-                    <p className="mb-0">{selectedAppointment.customer?.email}</p>
-                    <p className="mb-0">{selectedAppointment.customer?.phone}</p>
-                    
-                    {/* Double Booking Information */}
-                    {selectedAppointment.is_double_booking && selectedAppointment.double_booking_data && (
-                      <div className="mt-3 p-3 bg-info bg-opacity-10 border border-info rounded">
-                        <h6 className="text-light mb-2">
-                          <i className="bi bi-people me-2 text-info"></i>
-                          Double Booking Details
-                        </h6>
-                        <p className="mb-1 text-dark">
-                          <strong>Service For:</strong> {selectedAppointment.double_booking_data.friend_name || 'Friend'}
-                        </p>
-                        {selectedAppointment.double_booking_data.friend_phone && (
-                          <p className="mb-1 text-dark">
-                            <strong>Contact Number:</strong> {selectedAppointment.double_booking_data.friend_phone}
-                          </p>
-                        )}
-                        <p className="mb-1 text-dark">
-                          <strong>Booked By:</strong> {selectedAppointment.double_booking_data.booked_by || 'Customer'}
-                        </p>
-                        {selectedAppointment.customer?.phone && selectedAppointment.customer.phone !== 'No phone' && (
-                          <p className="mb-0 text-dark">
-                            <strong>Contact Number of Booked Person:</strong> {selectedAppointment.customer.phone}
-                          </p>
-                        )}
+              <div className="modal-body p-4">
+                {/* Header Section with Status and Queue */}
+                <div className="mb-4 pb-3 border-bottom">
+                  <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    {selectedAppointment.queue_position !== null && selectedAppointment.queue_position !== undefined && (
+                      <div className="rounded-circle bg-info text-white d-flex align-items-center justify-content-center fw-bold" 
+                           style={{width: '50px', height: '50px', fontSize: '20px'}}>
+                        {selectedAppointment.queue_position}
                       </div>
                     )}
+                    <span className={`badge bg-${getStatusColor(selectedAppointment.status)} fs-6 px-3 py-2`}>
+                      <i className={`bi bi-${selectedAppointment.status === 'ongoing' ? 'scissors' : selectedAppointment.status === 'completed' ? 'check-circle-fill' : selectedAppointment.status === 'cancelled' ? 'x-circle-fill' : selectedAppointment.status === 'confirmed' ? 'check-circle' : 'clock-fill'} me-2`}></i>
+                      {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
+                    </span>
+                    {selectedAppointment.is_urgent && (
+                      <span className="badge bg-warning text-dark fs-6 px-3 py-2">
+                        <i className="bi bi-lightning-fill me-1"></i>
+                        Urgent
+                      </span>
+                    )}
+                    {selectedAppointment.is_double_booking && (
+                      <span className="badge bg-info fs-6 px-3 py-2">
+                        <i className="bi bi-people me-1"></i>
+                        Double Booking
+                      </span>
+                    )}
                   </div>
-                  <div className="col-md-6">
-                    <h6>Barber</h6>
-                    <p className="mb-0">{selectedAppointment.barber?.full_name}</p>
-                    <p className="mb-0">{selectedAppointment.barber?.email}</p>
+                  <div className="d-flex align-items-center mb-2">
+                    <i className="bi bi-calendar3 me-2 text-primary fs-5"></i>
+                    <h4 className="mb-0">{formatDate(selectedAppointment.appointment_date)}</h4>
+                  </div>
+                  {selectedAppointment.appointment_time && (
+                    <div className="d-flex align-items-center">
+                      <i className="bi bi-clock me-2 text-muted"></i>
+                      <span className="text-muted">{formatTime(selectedAppointment.appointment_time)}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="row mb-4">
+                  <div className="col-md-6 mb-3">
+                    <div className="card border-0 bg-light h-100">
+                      <div className="card-body">
+                        <h6 className="card-title text-primary mb-3">
+                          <i className="bi bi-person-fill me-2"></i>
+                          Customer Information
+                        </h6>
+                        <div className="mb-2">
+                          <strong className="text-muted small d-block">Name</strong>
+                          <span className="fs-6">{selectedAppointment.customer?.full_name || 'Unknown'}</span>
+                        </div>
+                        <div className="mb-2">
+                          <strong className="text-muted small d-block">Email</strong>
+                          <span className="fs-6">{selectedAppointment.customer?.email || 'N/A'}</span>
+                        </div>
+                        <div className="mb-0">
+                          <strong className="text-muted small d-block">Phone</strong>
+                          <span className="fs-6">
+                            <i className="bi bi-telephone me-1"></i>
+                            {selectedAppointment.customer?.phone || 'N/A'}
+                          </span>
+                        </div>
+                        
+                        {/* Double Booking Information */}
+                        {selectedAppointment.is_double_booking && selectedAppointment.double_booking_data && (
+                          <div className="mt-3 pt-3 border-top">
+                            <h6 className="text-info mb-2">
+                              <i className="bi bi-people me-2"></i>
+                              Double Booking Details
+                            </h6>
+                            <div className="small">
+                              <div className="mb-2">
+                                <strong>Service For:</strong> {selectedAppointment.double_booking_data.friend_name || 'Friend'}
+                              </div>
+                              {selectedAppointment.double_booking_data.friend_phone && (
+                                <div className="mb-2">
+                                  <strong>Contact Number:</strong> {selectedAppointment.double_booking_data.friend_phone}
+                                </div>
+                              )}
+                              <div className="mb-2">
+                                <strong>Booked By:</strong> {selectedAppointment.double_booking_data.booked_by || 'Customer'}
+                              </div>
+                              {selectedAppointment.customer?.phone && selectedAppointment.customer.phone !== 'No phone' && (
+                                <div className="mb-0">
+                                  <strong>Contact Number of Booked Person:</strong> {selectedAppointment.customer.phone}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <div className="card border-0 bg-light h-100">
+                      <div className="card-body">
+                        <h6 className="card-title text-primary mb-3">
+                          <i className="bi bi-scissors me-2"></i>
+                          Barber Information
+                        </h6>
+                        <div className="mb-2">
+                          <strong className="text-muted small d-block">Name</strong>
+                          <span className="fs-6">{selectedAppointment.barber?.full_name || 'Unknown'}</span>
+                        </div>
+                        <div className="mb-2">
+                          <strong className="text-muted small d-block">Email</strong>
+                          <span className="fs-6">{selectedAppointment.barber?.email || 'N/A'}</span>
+                        </div>
+                        {selectedAppointment.barber?.phone && (
+                          <div className="mb-0">
+                            <strong className="text-muted small d-block">Phone</strong>
+                            <span className="fs-6">
+                              <i className="bi bi-telephone me-1"></i>
+                              {selectedAppointment.barber.phone}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 
-                <div className="mb-3">
-                  <h6>Service</h6>
-                  <p className="mb-0">{selectedAppointment.service?.name}</p>
-                  <p className="mb-0">Duration: {selectedAppointment.service?.duration} minutes</p>
-                  <p className="mb-0">Price: ₱{selectedAppointment.service?.price}</p>
+                <div className="card border-0 bg-light mb-4">
+                  <div className="card-body">
+                    <h6 className="card-title text-primary mb-3">
+                      <i className="bi bi-list-check me-2"></i>
+                      Services & Add-ons
+                    </h6>
+                    
+                    {/* Main Service */}
+                    <div className="mb-3 p-3 bg-white rounded border">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <strong className="d-block fs-6">{selectedAppointment.service?.name || 'Unknown'}</strong>
+                          <small className="text-muted">
+                            <i className="bi bi-clock me-1"></i>
+                            {selectedAppointment.service?.duration || 0} min
+                          </small>
+                        </div>
+                        <div className="text-end">
+                          <span className="fs-6 fw-bold text-success">₱{selectedAppointment.service?.price || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Add-ons */}
+                    {(() => {
+                      if (!selectedAppointment.add_ons_data) return null;
+                      
+                      const addOnIds = parseAddOnsData(selectedAppointment.add_ons_data);
+                      
+                      if (!addOnIds || addOnIds.length === 0) return null;
+                      if (!addOns || addOns.length === 0) return null;
+                      
+                      const appointmentAddOns = addOnIds.map(addonId => {
+                        let addon = addOns.find(a => a.id === addonId);
+                        
+                        if (!addon) {
+                          const mappedIds = mapLegacyAddonIds([addonId], addOns);
+                          if (mappedIds.length > 0 && mappedIds[0]) {
+                            addon = addOns.find(a => a.id === mappedIds[0]);
+                          }
+                        }
+                        
+                        if (addon) {
+                          return {
+                            name: addon.name,
+                            price: addon.price,
+                            duration: addon.duration,
+                            id: addon.id
+                          };
+                        }
+                        
+                        return null;
+                      }).filter(Boolean);
+                      
+                      if (appointmentAddOns.length > 0) {
+                        return (
+                          <>
+                            <div className="mb-3">
+                              <small className="text-muted fw-bold d-block mb-2">Add-ons:</small>
+                              <div className="row g-2">
+                                {appointmentAddOns.map((addon, index) => (
+                                  <div key={index} className="col-md-6">
+                                    <div className="d-flex justify-content-between align-items-center p-2 bg-white rounded border">
+                                      <div>
+                                        <strong className="d-block small">{addon.name}</strong>
+                                        {addon.duration > 0 && (
+                                          <small className="text-muted">
+                                            <i className="bi bi-clock me-1"></i>
+                                            {addon.duration} min
+                                          </small>
+                                        )}
+                                      </div>
+                                      <div className="text-end">
+                                        <span className="fw-bold text-success small">₱{addon.price || 0}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        );
+                      }
+                      
+                      return null;
+                    })()}
+                    
+                    {/* Total */}
+                    <div className="pt-3 border-top">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <strong className="fs-6">Total Duration</strong>
+                          <div className="text-muted small">
+                            <i className="bi bi-clock me-1"></i>
+                            {(() => {
+                              const serviceDuration = selectedAppointment.service?.duration || 0;
+                              let addOnDuration = 0;
+                              
+                              if (selectedAppointment.add_ons_data) {
+                                const addOnIds = parseAddOnsData(selectedAppointment.add_ons_data);
+                                if (addOnIds && addOnIds.length > 0 && addOns && addOns.length > 0) {
+                                  addOnDuration = addOnIds.map(addonId => {
+                                    let addon = addOns.find(a => a.id === addonId);
+                                    if (!addon) {
+                                      const mappedIds = mapLegacyAddonIds([addonId], addOns);
+                                      if (mappedIds.length > 0 && mappedIds[0]) {
+                                        addon = addOns.find(a => a.id === mappedIds[0]);
+                                      }
+                                    }
+                                    return addon?.duration || 0;
+                                  }).reduce((sum, duration) => sum + duration, 0);
+                                }
+                              }
+                              
+                              return serviceDuration + addOnDuration;
+                            })()} minutes
+                          </div>
+                        </div>
+                        <div className="text-end">
+                          <strong className="text-muted small d-block mb-1">Total Price</strong>
+                          <span className="fs-4 fw-bold text-success">
+                            ₱{selectedAppointment.total_price || selectedAppointment.service?.price || 0}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 {selectedAppointment.notes && (
-                  <div className="mb-3">
-                    <h6>Notes</h6>
-                    <p className="mb-0">{selectedAppointment.notes}</p>
+                  <div className="card border-0 bg-light mb-4">
+                    <div className="card-body">
+                      <h6 className="card-title text-primary mb-3">
+                        <i className="bi bi-sticky me-2"></i>
+                        Notes
+                      </h6>
+                      <p className="mb-0">{selectedAppointment.notes}</p>
+                    </div>
                   </div>
                 )}
                 
-                <div className="mb-3">
-                  <h6>System Info</h6>
-                  <p className="mb-0">Created: {formatDate(selectedAppointment.created_at, { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}</p>
-                  <p className="mb-0">Last Updated: {formatDate(selectedAppointment.updated_at, { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}</p>
-                </div>
+                {selectedAppointment.priority_level && (
+                  <div className="card border-0 bg-light">
+                    <div className="card-body">
+                      <h6 className="card-title text-primary mb-3">
+                        <i className="bi bi-flag me-2"></i>
+                        Priority Level
+                      </h6>
+                      <span className={`badge bg-${selectedAppointment.priority_level === 'urgent' ? 'danger' : 'info'} fs-6 px-3 py-2`}>
+                        {selectedAppointment.priority_level.charAt(0).toUpperCase() + selectedAppointment.priority_level.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button 
@@ -1489,165 +2031,286 @@ const ManageAppointments = () => {
       {/* Edit Modal */}
       {showEditModal && selectedAppointment && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Edit Appointment</h5>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content shadow-lg">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-pencil-square me-2"></i>
+                  Edit Appointment
+                </h5>
                 <button 
                   type="button" 
-                  className="btn-close" 
+                  className="btn-close btn-close-white" 
                   onClick={closeEditModal}
                 ></button>
               </div>
-              <div className="modal-body">
+              <div className="modal-body p-4">
                 <form onSubmit={handleSubmit}>
-                  <div className="mb-3">
-                    <label htmlFor="customer" className="form-label">Customer</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="customer"
-                      value={selectedAppointment.customer?.full_name}
-                      disabled
-                    />
-                    <div className="form-text">Customer cannot be changed</div>
-                  </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="barber_id" className="form-label">Barber</label>
-                    <select
-                      className={`form-select ${formErrors.barber_id ? 'is-invalid' : ''}`}
-                      id="barber_id"
-                      name="barber_id"
-                      value={formData.barber_id}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="">Select Barber</option>
-                      {barbers.map((barber) => (
-                        <option key={barber.id} value={barber.id}>
-                          {barber.full_name}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.barber_id && (
-                      <div className="invalid-feedback">{formErrors.barber_id}</div>
-                    )}
-                  </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="service_id" className="form-label">Service</label>
-                    <select
-                      className={`form-select ${formErrors.service_id ? 'is-invalid' : ''}`}
-                      id="service_id"
-                      name="service_id"
-                      value={formData.service_id}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="">Select Service</option>
-                      {services.map((service) => (
-                        <option key={service.id} value={service.id}>
-                          {service.name} - ₱{service.price} ({service.duration} min)
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.service_id && (
-                      <div className="invalid-feedback">{formErrors.service_id}</div>
-                    )}
-                  </div>
-                  
-                  <div className="row mb-3">
-                    <div className="col-md-6">
-                      <label htmlFor="appointment_date" className="form-label">Date</label>
-                      <input
-                        type="date"
-                        className={`form-control ${formErrors.appointment_date ? 'is-invalid' : ''}`}
-                        id="appointment_date"
-                        name="appointment_date"
-                        value={formData.appointment_date}
-                        onChange={handleChange}
-                        required
-                      />
-                      {formErrors.appointment_date && (
-                        <div className="invalid-feedback">{formErrors.appointment_date}</div>
-                      )}
+                  {/* Customer Info - Read Only */}
+                  <div className="card border-0 bg-light mb-4">
+                    <div className="card-body">
+                      <h6 className="card-title text-primary mb-3">
+                        <i className="bi bi-person-fill me-2"></i>
+                        Customer Information
+                      </h6>
+                      <div className="row">
+                        <div className="col-md-6">
+                          <strong className="text-muted small d-block">Name</strong>
+                          <span className="fs-6">{selectedAppointment.customer?.full_name || 'Unknown'}</span>
+                        </div>
+                        <div className="col-md-6">
+                          <strong className="text-muted small d-block">Phone</strong>
+                          <span className="fs-6">{selectedAppointment.customer?.phone || 'N/A'}</span>
+                        </div>
+                      </div>
+                      <div className="form-text mt-2">
+                        <i className="bi bi-info-circle me-1"></i>
+                        Customer information cannot be changed
+                      </div>
                     </div>
-                    
-                    <div className="col-md-6">
-                      <label htmlFor="appointment_time" className="form-label">Time</label>
+                  </div>
+
+                  {/* Barber Selection */}
+                  <div className="card border-0 bg-light mb-4">
+                    <div className="card-body">
+                      <h6 className="card-title text-primary mb-3">
+                        <i className="bi bi-scissors me-2"></i>
+                        Barber Selection
+                      </h6>
                       <select
-                        className={`form-select ${formErrors.appointment_time ? 'is-invalid' : ''}`}
-                        id="appointment_time"
-                        name="appointment_time"
-                        value={formData.appointment_time}
+                        className={`form-select form-select-lg ${formErrors.barber_id ? 'is-invalid' : ''}`}
+                        id="barber_id"
+                        name="barber_id"
+                        value={formData.barber_id}
                         onChange={handleChange}
                         required
-                        disabled={!formData.barber_id || !formData.appointment_date}
                       >
-                        <option value="">Select Time</option>
-                        {availableSlots.map((time) => (
-                          <option key={time} value={time}>
-                            {formatTime(time)}
+                        <option value="">Select Barber</option>
+                        {barbers.map((barber) => (
+                          <option key={barber.id} value={barber.id}>
+                            {barber.full_name}
                           </option>
                         ))}
                       </select>
-                      {formErrors.appointment_time && (
-                        <div className="invalid-feedback">{formErrors.appointment_time}</div>
+                      {formErrors.barber_id && (
+                        <div className="invalid-feedback">{formErrors.barber_id}</div>
                       )}
-                      {formData.barber_id && formData.appointment_date && availableSlots.length === 0 && (
-                        <div className="form-text text-danger">
-                          No available slots for this date. Please try another date.
+                    </div>
+                  </div>
+
+                  {/* Service Selection */}
+                  <div className="card border-0 bg-light mb-4">
+                    <div className="card-body">
+                      <h6 className="card-title text-primary mb-3">
+                        <i className="bi bi-list-check me-2"></i>
+                        Service Selection
+                      </h6>
+                      <select
+                        className={`form-select form-select-lg ${formErrors.service_id ? 'is-invalid' : ''}`}
+                        id="service_id"
+                        name="service_id"
+                        value={formData.service_id}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="">Select Service</option>
+                        {services.map((service) => (
+                          <option key={service.id} value={service.id}>
+                            {service.name} - ₱{service.price} ({service.duration} min)
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.service_id && (
+                        <div className="invalid-feedback">{formErrors.service_id}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Appointment Type & Date */}
+                  <div className="card border-0 bg-light mb-4">
+                    <div className="card-body">
+                      <h6 className="card-title text-primary mb-3">
+                        <i className="bi bi-calendar3 me-2"></i>
+                        Appointment Details
+                      </h6>
+                      
+                      <div className="row mb-3">
+                        <div className="col-md-6">
+                          <label htmlFor="appointment_type" className="form-label fw-bold">Appointment Type</label>
+                          <select
+                            className="form-select form-select-lg"
+                            id="appointment_type"
+                            name="appointment_type"
+                            value={formData.appointment_type || selectedAppointment.appointment_type || 'queue'}
+                            onChange={handleChange}
+                          >
+                            <option value="queue">Queue</option>
+                            <option value="scheduled">Scheduled</option>
+                          </select>
+                          <div className="form-text">
+                            <i className="bi bi-info-circle me-1"></i>
+                            Queue: No specific time, position-based. Scheduled: Specific time slot.
+                          </div>
+                        </div>
+                        
+                        <div className="col-md-6">
+                          <label htmlFor="appointment_date" className="form-label fw-bold">Date</label>
+                          <input
+                            type="date"
+                            className={`form-control form-control-lg ${formErrors.appointment_date ? 'is-invalid' : ''}`}
+                            id="appointment_date"
+                            name="appointment_date"
+                            value={formData.appointment_date}
+                            onChange={handleChange}
+                            required
+                          />
+                          {formErrors.appointment_date && (
+                            <div className="invalid-feedback">{formErrors.appointment_date}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Queue Position or Time Slot */}
+                      {(formData.appointment_type || selectedAppointment.appointment_type) === 'queue' ? (
+                        <div className="row">
+                          <div className="col-md-6">
+                            <label htmlFor="queue_position" className="form-label fw-bold">
+                              <i className="bi bi-123 me-2"></i>
+                              Queue Position
+                            </label>
+                            <input
+                              type="number"
+                              className="form-control form-control-lg"
+                              id="queue_position"
+                              name="queue_position"
+                              min="1"
+                              value={formData.queue_position || selectedAppointment.queue_position || ''}
+                              onChange={handleChange}
+                              placeholder="Enter queue position"
+                            />
+                            <div className="form-text">
+                              Lower number = higher priority. Leave empty for auto-assignment.
+                            </div>
+                          </div>
+                          <div className="col-md-6">
+                            <label htmlFor="priority_level" className="form-label fw-bold">
+                              <i className="bi bi-flag me-2"></i>
+                              Priority Level
+                            </label>
+                            <select
+                              className="form-select form-select-lg"
+                              id="priority_level"
+                              name="priority_level"
+                              value={formData.priority_level || selectedAppointment.priority_level || 'normal'}
+                              onChange={handleChange}
+                            >
+                              <option value="normal">Normal</option>
+                              <option value="urgent">Urgent</option>
+                            </select>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="row">
+                          <div className="col-md-12">
+                            <label htmlFor="appointment_time" className="form-label fw-bold">
+                              <i className="bi bi-clock me-2"></i>
+                              Time Slot
+                            </label>
+                            <select
+                              className={`form-select form-select-lg ${formErrors.appointment_time ? 'is-invalid' : ''}`}
+                              id="appointment_time"
+                              name="appointment_time"
+                              value={formData.appointment_time || ''}
+                              onChange={handleChange}
+                              disabled={!formData.barber_id || !formData.appointment_date}
+                            >
+                              <option value="">Select Time</option>
+                              {availableSlots.map((time) => (
+                                <option key={time} value={time}>
+                                  {formatTime(time)}
+                                </option>
+                              ))}
+                            </select>
+                            {formErrors.appointment_time && (
+                              <div className="invalid-feedback">{formErrors.appointment_time}</div>
+                            )}
+                            {formData.barber_id && formData.appointment_date && availableSlots.length === 0 && (
+                              <div className="form-text text-danger">
+                                <i className="bi bi-exclamation-triangle me-1"></i>
+                                No available slots for this date. Please try another date.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="status" className="form-label">Status</label>
-                    <select
-                      className={`form-select ${formErrors.status ? 'is-invalid' : ''}`}
-                      id="status"
-                      name="status"
-                      value={formData.status}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="">Select Status</option>
-                      {Object.values(APPOINTMENT_STATUS).map((status) => (
-                        <option key={status} value={status}>
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.status && (
-                      <div className="invalid-feedback">{formErrors.status}</div>
-                    )}
+
+                  {/* Status & Notes */}
+                  <div className="row mb-4">
+                    <div className="col-md-6">
+                      <div className="card border-0 bg-light h-100">
+                        <div className="card-body">
+                          <h6 className="card-title text-primary mb-3">
+                            <i className="bi bi-check-circle me-2"></i>
+                            Status
+                          </h6>
+                          <select
+                            className={`form-select form-select-lg ${formErrors.status ? 'is-invalid' : ''}`}
+                            id="status"
+                            name="status"
+                            value={formData.status}
+                            onChange={handleChange}
+                            required
+                          >
+                            <option value="">Select Status</option>
+                            {ALLOWED_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {status.charAt(0).toUpperCase() + status.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                          {formErrors.status && (
+                            <div className="invalid-feedback">{formErrors.status}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <div className="card border-0 bg-light h-100">
+                        <div className="card-body">
+                          <h6 className="card-title text-primary mb-3">
+                            <i className="bi bi-sticky me-2"></i>
+                            Notes
+                          </h6>
+                          <textarea
+                            className="form-control"
+                            id="notes"
+                            name="notes"
+                            value={formData.notes}
+                            onChange={handleChange}
+                            rows="4"
+                            placeholder="Add any special notes or instructions..."
+                          ></textarea>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="mb-3">
-                    <label htmlFor="notes" className="form-label">Notes</label>
-                    <textarea
-                      className="form-control"
-                      id="notes"
-                      name="notes"
-                      value={formData.notes}
-                      onChange={handleChange}
-                      rows="3"
-                    ></textarea>
-                  </div>
-                  
-                  <div className="d-flex justify-content-end gap-2">
+                  {/* Action Buttons */}
+                  <div className="d-flex justify-content-end gap-3">
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className="btn btn-lg btn-outline-secondary"
                       onClick={closeEditModal}
                     >
+                      <i className="bi bi-x-circle me-2"></i>
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="btn btn-primary"
+                      className="btn btn-lg btn-primary"
                       disabled={loading}
                     >
                       {loading ? (
@@ -1656,7 +2319,10 @@ const ManageAppointments = () => {
                           Saving...
                         </>
                       ) : (
-                        'Save Changes'
+                        <>
+                          <i className="bi bi-check-circle me-2"></i>
+                          Save Changes
+                        </>
                       )}
                     </button>
                   </div>
@@ -1669,8 +2335,8 @@ const ManageAppointments = () => {
 
       {/* Walk-in Appointment Modal */}
       {showWalkInModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg" style={{ zIndex: 1051 }}>
             <div className="modal-content">
               <div className="modal-header bg-success text-white">
                 <h5 className="modal-title">
@@ -2042,9 +2708,7 @@ const ManageAppointments = () => {
                         onChange={handleWalkInChange}
                       >
                         <option value="normal">Normal</option>
-                        <option value="high">High</option>
                         <option value="urgent">Urgent</option>
-                        <option value="low">Low</option>
                       </select>
                       <div className="form-text">
                         <i className="bi bi-info-circle me-1"></i>
@@ -2069,120 +2733,8 @@ const ManageAppointments = () => {
                       )}
                     </div>
                     
-                    {/* Enhanced Unified Slot System (like customer booking) */}
-                    {walkInFormData.barber_id && walkInFormData.appointment_date && walkInFormData.service_id && (
-                      <div className="col-12 mb-3">
-                        <div className="d-flex align-items-center justify-content-between mb-3">
-                          <h6 className="mb-0">
-                            <i className="bi bi-magic me-2"></i>
-                            Enhanced Slot System
-                            <span className="badge bg-success ms-2">NEW</span>
-                          </h6>
-                          {walkInLoadingSlots && (
-                            <div className="spinner-border spinner-border-sm text-primary" role="status">
-                              <span className="visually-hidden">Loading...</span>
-                            </div>
-                      )}
-                    </div>
-                        
-                        {walkInUnifiedSlots.length > 0 ? (
-                          <div className="alert alert-info">
-                            <h6 className="alert-heading">
-                              <i className="bi bi-magic me-2"></i>
-                              Smart Slot Management
-                            </h6>
-                            <p className="mb-3">Real-time availability with intelligent recommendations.</p>
-                            
-                            <div className="row g-2">
-                              {walkInUnifiedSlots.map((slot, index) => (
-                                <div key={index} className="col-3 col-md-2 col-lg-2">
-                                  <button
-                                    type="button"
-                                    className={`btn w-100 ${
-                                      slot.type === 'available' && slot.canBook
-                                        ? walkInFormData.appointment_time === slot.time
-                                          ? 'btn-primary'
-                                          : 'btn-outline-success'
-                                        : slot.type === 'scheduled'
-                                        ? 'btn-outline-secondary'
-                                        : slot.type === 'queue'
-                                        ? 'btn-outline-warning'
-                                        : slot.type === 'lunch'
-                                        ? 'btn-outline-dark'
-                                        : 'btn-outline-danger'
-                                    }`}
-                                    onClick={() => slot.canBook && handleWalkInUnifiedSlotSelect(slot)}
-                                    disabled={!slot.canBook}
-                                    title={slot.reason || (slot.canBook ? 'Click to select' : 'Not available')}
-                                  >
-                                    <div className="small fw-bold">
-                                      {convertTo12Hour(slot.time)}
-                                    </div>
-                                    <div className="small">
-                                      {slot.type === 'available' && 'Available'}
-                                      {slot.type === 'scheduled' && 'Booked'}
-                                      {slot.type === 'queue' && `Queue #${slot.queuePosition || 'X'}`}
-                                      {slot.type === 'lunch' && 'Lunch'}
-                                      {slot.type === 'full' && 'Full'}
-                                    </div>
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : !walkInLoadingSlots && (
-                          <div className="text-center py-2">
-                            <small className="text-muted">
-                              <i className="bi bi-info-circle me-1"></i>
-                              No available time slots for this service duration
-                            </small>
-                          </div>
-                        )}
-
-                        {/* Alternative Barbers (like customer booking) */}
-                        {walkInShowAlternatives && walkInAlternativeBarbers.length > 0 && (
-                          <div className="mt-3">
-                            <div className="alert alert-warning">
-                              <h6 className="alert-heading">
-                                <i className="bi bi-people me-2"></i>
-                                Alternative Barbers Available
-                              </h6>
-                              <p className="mb-3">The selected barber is fully booked. Consider these alternatives:</p>
-                              
-                              <div className="row g-2">
-                                {walkInAlternativeBarbers.slice(0, 3).map((barber, index) => (
-                                  <div key={index} className="col-12">
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-warning w-100"
-                                      onClick={() => handleWalkInAlternativeBarberSelect(barber.id)}
-                                    >
-                                      <div className="d-flex align-items-center justify-content-between">
-                                        <div>
-                                          <div className="fw-bold">{barber.full_name}</div>
-                                          <div className="small text-muted">
-                                            {barber.availableSlots} slots available
-                                          </div>
-                                        </div>
-                                        <div className="text-end">
-                                          <div className="small fw-bold text-success">
-                                            Next: {convertTo12Hour(barber.nextAvailableTime)}
-                                          </div>
-                                          <div className="small text-muted">Click to switch</div>
-                                        </div>
-                                      </div>
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
                     <div className="col-12 mb-3">
-                      <label htmlFor="notes" className="form-label">Notes</label>
+                      <label htmlFor="notes" className="form-label">Notes (Optional)</label>
                       <textarea
                         className="form-control"
                         id="notes"
@@ -2190,12 +2742,13 @@ const ManageAppointments = () => {
                         value={walkInFormData.notes}
                         onChange={handleWalkInChange}
                         rows="3"
-                        placeholder="Any special requests or notes..."
+                        placeholder="Add any special notes or instructions..."
                       ></textarea>
                     </div>
                   </div>
                   
-                  <div className="d-flex justify-content-end gap-2">
+                  {/* Submit Button */}
+                  <div className="d-flex justify-content-end gap-2 mt-4">
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -2210,12 +2763,12 @@ const ManageAppointments = () => {
                     >
                       {loading ? (
                         <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                          <span className="spinner-border spinner-border-sm me-2"></span>
                           Creating...
                         </>
                       ) : (
                         <>
-                          <i className="bi bi-check-lg me-2"></i>
+                          <i className="bi bi-check-circle me-2"></i>
                           Create Walk-in Appointment
                         </>
                       )}
@@ -2236,6 +2789,95 @@ const ManageAppointments = () => {
           onClose={closeAppointmentProductModal}
           onSuccess={handleProductPurchaseSuccess}
         />
+      )}
+
+      {/* Status Update Modal */}
+      {showStatusModal && statusUpdateData.appointmentId && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content shadow-lg">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-arrow-repeat me-2"></i>
+                  Update Appointment Status
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close btn-close-white" 
+                  onClick={closeStatusModal}
+                  disabled={loading}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                {(() => {
+                  const appointment = appointments.find(apt => apt.id === statusUpdateData.appointmentId);
+                  const currentStatus = appointment?.status || 'unknown';
+                  const newStatus = statusUpdateData.newStatus;
+                  const customerName = appointment?.customer?.full_name || 'Customer';
+                  const serviceName = appointment?.service?.name || 'Service';
+                  
+                  return (
+                    <>
+                      <div className="mb-4">
+                        <p className="mb-2">
+                          <strong>Customer:</strong> {customerName}
+                        </p>
+                        <p className="mb-2">
+                          <strong>Service:</strong> {serviceName}
+                        </p>
+                        <p className="mb-2">
+                          <strong>Current Status:</strong>{' '}
+                          <span className={`badge bg-${getStatusColor(currentStatus)}`}>
+                            {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
+                          </span>
+                        </p>
+                        <p className="mb-0">
+                          <strong>New Status:</strong>{' '}
+                          <span className={`badge bg-${getStatusColor(newStatus)}`}>
+                            {newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}
+                          </span>
+                        </p>
+                      </div>
+                      
+                      <div className="alert alert-info mb-0">
+                        <i className="bi bi-info-circle me-2"></i>
+                        Are you sure you want to change the status from <strong>{currentStatus}</strong> to <strong>{newStatus}</strong>?
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={closeStatusModal}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className={`btn btn-${getStatusColor(statusUpdateData.newStatus)}`}
+                  onClick={confirmStatusUpdate}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check-circle me-2"></i>
+                      Confirm Update
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -26,6 +26,10 @@ const ManageProducts = () => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [imagePreview, setImagePreview] = useState('');
   const [saveButtonDisabled, setSaveButtonDisabled] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateProduct, setDuplicateProduct] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -141,6 +145,10 @@ const ManageProducts = () => {
     setEditingId(null);
     setShowAddForm(false);
     setSaveButtonDisabled(false);
+    setShowDuplicateModal(false);
+    setDuplicateProduct(null);
+    setShowDeleteModal(false);
+    setProductToDelete(null);
   };
 
   const handleEditProduct = (product) => {
@@ -182,13 +190,26 @@ const ManageProducts = () => {
         return;
       }
       
+      // Check for duplicate product name (case-insensitive)
+      const productNameLower = formData.name.trim().toLowerCase();
+      const existingProduct = products.find(p => 
+        p.name.trim().toLowerCase() === productNameLower && 
+        (!editingId || p.id !== editingId)
+      );
+      
+      if (existingProduct) {
+        setDuplicateProduct(existingProduct);
+        setShowDuplicateModal(true);
+        return;
+      }
+      
       setLoading(true);
       setSaveButtonDisabled(true);
       setError(null);
       
       // Prepare the data object
       const productData = {
-        name: formData.name,
+        name: formData.name.trim(),
         description: formData.description,
         price,
         stock_quantity: stockQuantity,
@@ -280,38 +301,42 @@ const ManageProducts = () => {
     }
   };
 
-  const handleDeleteProduct = async (productId) => {
-    // Confirm deletion
-    if (!window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-      return;
-    }
+  const handleDeleteProduct = (productId) => {
+    const product = products.find(p => p.id === productId);
+    setProductToDelete(product);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
     
     try {
       setLoading(true);
       setError(null);
       
-      // Get product info for logging before deletion
-      const product = products.find(p => p.id === productId);
-      
       // Delete the product
       const { error } = await supabase
         .from('products')
         .delete()
-        .eq('id', productId);
+        .eq('id', productToDelete.id);
       
       if (error) throw error;
       
       // Update local state
-      setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+      setProducts(prevProducts => prevProducts.filter(p => p.id !== productToDelete.id));
       
       // Log the action
       await supabase.from('system_logs').insert([{
         action: 'product_deleted',
         details: {
-          product_name: product?.name,
-          product_id: productId
+          product_name: productToDelete?.name,
+          product_id: productToDelete.id
         }
       }]);
+      
+      // Close modal
+      setShowDeleteModal(false);
+      setProductToDelete(null);
       
     } catch (err) {
       console.error('Error deleting product:', err);
@@ -401,7 +426,9 @@ const ManageProducts = () => {
 
   return (
     <div className="container py-4">
-      <h2 className="mb-4">Manage Products</h2>
+      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+        <h2 className="mb-0 fw-bold">Manage Products</h2>
+      </div>
       
       {error && (
         <div className="alert alert-danger alert-dismissible fade show" role="alert">
@@ -658,6 +685,157 @@ const ManageProducts = () => {
         </div>
       )}
       
+      {/* Duplicate Product Modal */}
+      {showDuplicateModal && (
+        <div 
+          className="modal show d-block" 
+          tabIndex="-1" 
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDuplicateModal(false);
+              setDuplicateProduct(null);
+            }
+          }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-warning text-dark">
+                <h5 className="modal-title">
+                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                  Duplicate Product Name
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => {
+                    setShowDuplicateModal(false);
+                    setDuplicateProduct(null);
+                  }}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-3">
+                  A product with the name <strong>"{formData.name}"</strong> already exists.
+                </p>
+                {duplicateProduct && (
+                  <div className="alert alert-info">
+                    <strong>Existing Product:</strong>
+                    <ul className="mb-0 mt-2">
+                      <li>Name: {duplicateProduct.name}</li>
+                      <li>Price: {formatPrice(duplicateProduct.price)}</li>
+                      <li>Category: {duplicateProduct.category || '—'}</li>
+                      <li>Stock: {duplicateProduct.stock_quantity}</li>
+                    </ul>
+                  </div>
+                )}
+                <p className="text-muted mb-0">
+                  Please use a different name for this product.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowDuplicateModal(false);
+                    setDuplicateProduct(null);
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && productToDelete && (
+        <div 
+          className="modal show d-block" 
+          tabIndex="-1" 
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDeleteModal(false);
+              setProductToDelete(null);
+            }
+          }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                  Confirm Deletion
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setProductToDelete(null);
+                  }}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-3">
+                  Are you sure you want to delete <strong>"{productToDelete.name}"</strong>?
+                </p>
+                <div className="alert alert-warning">
+                  <strong>Warning:</strong> This action cannot be undone. All product data will be permanently deleted.
+                </div>
+                {productToDelete && (
+                  <div className="alert alert-info">
+                    <strong>Product Details:</strong>
+                    <ul className="mb-0 mt-2">
+                      <li>Name: {productToDelete.name}</li>
+                      <li>Price: {formatPrice(productToDelete.price)}</li>
+                      <li>Category: {productToDelete.category || '—'}</li>
+                      <li>Stock: {productToDelete.stock_quantity}</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setProductToDelete(null);
+                  }}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={confirmDeleteProduct}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-trash me-2"></i>
+                      Delete Product
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Products List */}
       <div className="card">
         <div className="card-header d-flex justify-content-between align-items-center">
@@ -682,7 +860,6 @@ const ManageProducts = () => {
                     <th>Category</th>
                     <th>Price</th>
                     <th>Stock</th>
-                    <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -728,11 +905,6 @@ const ManageProducts = () => {
                         </span>
                       </td>
                       <td>
-                        <span className={`badge bg-${product.is_active ? 'success' : 'secondary'}`}>
-                          {product.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td>
                         <div className="btn-group" role="group">
                           <button
                             className="btn btn-sm btn-outline-primary"
@@ -747,13 +919,6 @@ const ManageProducts = () => {
                             title="Add Stock"
                           >
                             <i className="bi bi-plus-circle"></i>
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() => handleToggleStatus(product.id, product.is_active)}
-                            title={product.is_active ? 'Deactivate' : 'Activate'}
-                          >
-                            <i className={`bi ${product.is_active ? 'bi-toggle-on' : 'bi-toggle-off'}`}></i>
                           </button>
                           <button
                             className="btn btn-sm btn-outline-danger"

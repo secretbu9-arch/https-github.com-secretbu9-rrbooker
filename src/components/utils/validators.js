@@ -52,18 +52,16 @@ export const getPasswordStrength = (password) => {
 };
 
 /**
- * Validate a phone number
+ * Validate a phone number (must be +63 followed by 10 digits)
  * @param {string} phone - Phone number to validate
  * @returns {boolean} - Whether the phone number is valid
  */
 export const isValidPhone = (phone) => {
   if (!phone) return false;
   
-  // Remove non-numeric characters
-  const cleanedPhone = phone.replace(/\D/g, '');
-  
-  // Check length (7-15 digits to accommodate international numbers)
-  return cleanedPhone.length >= 7 && cleanedPhone.length <= 15;
+  // Check for +63 prefix followed by exactly 10 digits
+  const phonePattern = /^\+63\d{10}$/;
+  return phonePattern.test(phone);
 };
 
 /**

@@ -21,8 +21,8 @@ class CentralizedNotificationService {
     status,
     changedBy = 'system'
   }) {
-    // Create unique key to prevent concurrent duplicates
-    const notificationKey = `${userId}-${appointmentId}-${status}-${Date.now()}`;
+    // Create unique key to prevent concurrent duplicates (without timestamp to catch true duplicates)
+    const notificationKey = `${userId}-${appointmentId}-${status}`;
     
     if (this.isCreating.has(notificationKey)) {
       console.log(`🔄 Notification already being created for ${notificationKey}`);
@@ -61,7 +61,7 @@ class CentralizedNotificationService {
               title = 'Your appointment has started! ✂️';
               message = 'Your barber is ready for you now.';
               break;
-            case 'done':
+            case 'completed':
               title = 'Appointment Completed ✅';
               message = 'Thank you for visiting us! Please rate your experience.';
               break;
@@ -102,7 +102,7 @@ class CentralizedNotificationService {
           message = 'Your barber is ready for you now.';
           priority = 'high';
           break;
-        case 'done':
+        case 'completed':
           title = 'Appointment Completed ✅';
           message = 'Thank you for visiting us! Please rate your experience.';
           priority = 'normal';
@@ -186,7 +186,8 @@ class CentralizedNotificationService {
     appointmentType = 'queue',
     appointmentTime = null
   }) {
-    const notificationKey = `${userId}-booking-${appointmentId}-${Date.now()}`;
+    // Create key without timestamp to catch true duplicates
+    const notificationKey = `${userId}-booking-${appointmentId}`;
     
     if (this.isCreating.has(notificationKey)) {
       console.log(`🔄 Booking notification already being created for ${notificationKey}`);
@@ -317,13 +318,57 @@ class CentralizedNotificationService {
     orderId = null,
     queueEntryId = null
   }) {
-    const notificationKey = `${userId}-${type}-${title}-${Date.now()}`;
+    // Create unique key without timestamp to catch true duplicates
+    // Include appointmentId/orderId/queueEntryId in key for better duplicate detection
+    // For reschedule requests, also include request_id if available
+    const keyParts = [userId, type, title];
+    if (appointmentId) keyParts.push(`appt-${appointmentId}`);
+    if (orderId) keyParts.push(`order-${orderId}`);
+    if (queueEntryId) keyParts.push(`queue-${queueEntryId}`);
+    if (data?.request_id) keyParts.push(`req-${data.request_id}`);
+    const notificationKey = keyParts.join('-');
     
+    // Check in-memory first to prevent rapid duplicates
     if (this.isCreating.has(notificationKey)) {
-      console.log(`🔄 Notification already being created for ${notificationKey}`);
+      console.log(`🔄 Notification already being created for ${notificationKey} - preventing duplicate`);
       return null;
     }
 
+    // For reschedule requests, check database FIRST for very recent duplicates (within 10 seconds)
+    // This catches rapid-fire duplicates that might slip through the in-memory check
+    // Check for ANY notification with same user, type, title, and appointment_id (ignore request_id)
+    const isRescheduleRequest = type === 'appointment_reschedule_request' || 
+                                 type === 'appointment_reschedule_confirmed' ||
+                                 type === 'appointment_reschedule_declined' ||
+                                 data?.action_type === 'reschedule' ||
+                                 title.includes('Reschedule Request');
+    
+    if (isRescheduleRequest && appointmentId) {
+      try {
+        // Check for ANY duplicate within last 10 seconds - very aggressive check
+        const { data: recentNotifications, error: recentError } = await supabase
+          .from('notifications')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .eq('type', type)
+          .eq('title', title)
+          .eq('data->>appointment_id', appointmentId)
+          .gte('created_at', new Date(Date.now() - 10000).toISOString()) // Last 10 seconds
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (!recentError && recentNotifications && recentNotifications.length > 0) {
+          const age = Date.now() - new Date(recentNotifications[0].created_at).getTime();
+          console.log(`🔄 Very recent duplicate reschedule notification found (${Math.round(age/1000)}s ago) - preventing duplicate`);
+          return recentNotifications[0];
+        }
+      } catch (recentCheckError) {
+        console.warn('Error checking for recent duplicates:', recentCheckError);
+        // Continue with normal flow if this check fails
+      }
+    }
+
+    // Add to in-memory set to prevent concurrent duplicates
     this.isCreating.add(notificationKey);
 
     try {
@@ -338,6 +383,63 @@ class CentralizedNotificationService {
           .eq('type', type)
           .eq('title', title)
           .eq('data->>order_id', orderId)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .limit(1);
+        existingNotifications = data;
+        if (checkError) throw checkError;
+      } else if (appointmentId) {
+        // For appointment-related notifications, check by appointmentId AND title to prevent duplicates
+        // For reschedule requests, use a shorter time window and also check by request_id if available
+        const isRescheduleRequest = type === 'appointment_reschedule_request' || 
+                                     type === 'appointment_reschedule_confirmed' ||
+                                     type === 'appointment_reschedule_declined' ||
+                                     data?.action_type === 'reschedule' ||
+                                     title.includes('Reschedule Request');
+        
+        // Use shorter time window for reschedule requests (5 minutes) to catch rapid duplicates
+        const timeWindow = isRescheduleRequest ? 5 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        
+        // For reschedule requests, check for ANY notification with same user, type, title, and appointment_id
+        // within the time window, regardless of request_id (to catch duplicates even if request_id differs)
+        let query = supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('type', type)
+          .eq('title', title)
+          .eq('data->>appointment_id', appointmentId)
+          .gte('created_at', new Date(Date.now() - timeWindow).toISOString());
+        
+        // For reschedule requests, be extra strict - check by appointment_id + title + type only
+        // This catches duplicates even if request_id is different (shouldn't happen, but safety)
+        if (isRescheduleRequest) {
+          // Don't filter by request_id for the initial check - just check for any duplicate
+          // This ensures we catch duplicates even in race conditions
+          console.log(`🔍 Checking for duplicate reschedule notification: user=${userId}, type=${type}, title="${title}", appointment=${appointmentId}`);
+        } else if (data?.request_id) {
+          // For non-reschedule, still check by request_id if available
+          query = query.eq('data->>request_id', data.request_id.toString());
+        }
+        
+        const { data: notificationData, error: checkError } = await query.limit(1);
+        existingNotifications = notificationData;
+        if (checkError) {
+          console.error('Error checking for duplicate notification:', checkError);
+          throw checkError;
+        }
+        
+        if (existingNotifications && existingNotifications.length > 0) {
+          console.log(`🔄 Duplicate notification found in database check - preventing duplicate (found ${existingNotifications.length} existing)`);
+        }
+      } else if (queueEntryId) {
+        // For queue-related notifications, check by queueEntryId AND title
+        const { data, error: checkError } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('type', type)
+          .eq('title', title)
+          .eq('data->>queue_entry_id', queueEntryId)
           .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
           .limit(1);
         existingNotifications = data;
@@ -379,6 +481,28 @@ class CentralizedNotificationService {
         return existingNotifications[0];
       }
 
+      // Final duplicate check right before inserting (catches race conditions)
+      // For reschedule requests, be extra aggressive - check within last 10 seconds
+      if (isRescheduleRequest && appointmentId) {
+        const { data: finalCheck, error: finalCheckError } = await supabase
+          .from('notifications')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .eq('type', type)
+          .eq('title', title)
+          .eq('data->>appointment_id', appointmentId)
+          .gte('created_at', new Date(Date.now() - 10000).toISOString()) // Last 10 seconds
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (!finalCheckError && finalCheck && finalCheck.length > 0) {
+          const age = Date.now() - new Date(finalCheck[0].created_at).getTime();
+          console.log(`🔄 Final duplicate check found existing notification (${Math.round(age/1000)}s ago) - preventing duplicate`);
+          this.isCreating.delete(notificationKey);
+          return finalCheck[0];
+        }
+      }
+
       const notificationData = {
         user_id: userId,
         title,
@@ -399,13 +523,73 @@ class CentralizedNotificationService {
         updated_at: new Date().toISOString()
       };
 
+      // For reschedule requests, do one final check right before insert to catch any last-millisecond duplicates
+      if (isRescheduleRequest && appointmentId && data?.request_id) {
+        const { data: lastSecondCheck, error: lastCheckError } = await supabase
+          .from('notifications')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .eq('type', type)
+          .eq('title', title)
+          .eq('data->>appointment_id', appointmentId)
+          .eq('data->>request_id', data.request_id.toString())
+          .gte('created_at', new Date(Date.now() - 5000).toISOString()) // Last 5 seconds
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (!lastCheckError && lastSecondCheck) {
+          const age = Date.now() - new Date(lastSecondCheck.created_at).getTime();
+          console.log(`🔄 Last-second duplicate check found notification (${Math.round(age/1000)}s ago) - preventing duplicate`);
+          this.isCreating.delete(notificationKey);
+          return lastSecondCheck;
+        }
+      }
+
       const { data: notification, error } = await supabase
         .from('notifications')
         .insert(notificationData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // If it's a unique constraint violation, it means a duplicate was created
+        if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+          console.log(`🔄 Database constraint prevented duplicate notification`);
+          // Try to get the existing notification
+          const { data: existing } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('type', type)
+            .eq('title', title)
+            .eq('data->>appointment_id', appointmentId);
+          
+          // For reschedule requests, also filter by request_id if available
+          let existingQuery = supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('type', type)
+            .eq('title', title)
+            .eq('data->>appointment_id', appointmentId);
+          
+          if (isRescheduleRequest && data?.request_id) {
+            existingQuery = existingQuery.eq('data->>request_id', data.request_id.toString());
+          }
+          
+          const { data: existingNotif } = await existingQuery
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (existingNotif) {
+            this.isCreating.delete(notificationKey);
+            return existingNotif;
+          }
+        }
+        throw error;
+      }
 
       console.log(`✅ Notification created: ${title} for user ${userId}`);
       
@@ -449,7 +633,8 @@ class CentralizedNotificationService {
     oldPosition = null,
     reason = null
   }) {
-    const notificationKey = `${userId}-queue-${appointmentId}-${Date.now()}`;
+    // Create key without timestamp to catch true duplicates
+    const notificationKey = `${userId}-queue-${appointmentId}`;
     
     if (this.isCreating.has(notificationKey)) {
       console.log(`🔄 Queue notification already being created for ${notificationKey}`);

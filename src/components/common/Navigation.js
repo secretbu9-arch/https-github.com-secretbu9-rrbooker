@@ -281,13 +281,6 @@ const Navigation = ({ userRole }) => {
                         Reports
                       </Link>
                     </li>
-                    <li><hr className="dropdown-divider" /></li>
-                    <li>
-                      <Link className="dropdown-item" to="/manage/advanced-security" onClick={handleNavClick}>
-                        <i className="bi bi-shield-lock me-2"></i>
-                        Advanced Security
-                      </Link>
-                    </li>
                   </ul>
                 </li>
               </>
@@ -324,6 +317,19 @@ const Navigation = ({ userRole }) => {
                 <li 
                   className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
+                >
+                  <Link 
+                    className={`nav-link ${location.pathname === ROUTES.BARBER_REVENUE ? 'active' : ''}`} 
+                    to={ROUTES.BARBER_REVENUE} 
+                    onClick={handleNavClick}
+                  >
+                    <i className="bi bi-cash-stack me-1"></i>
+                    Revenue
+                  </Link>
+                </li>
+                <li 
+                  className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
+                  style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
                   <Link 
                     className={`nav-link ${location.pathname === ROUTES.DAY_OFF_MANAGER ? 'active' : ''}`} 
@@ -389,6 +395,19 @@ const Navigation = ({ userRole }) => {
                   >
                     <i className="bi bi-shop me-1"></i>
                     Shop Products
+                  </Link>
+                </li>
+                <li 
+                  className={`nav-item ${animatedItems.includes(5) ? 'animated-item' : ''}`}
+                  style={{ transform: animatedItems.includes(5) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(5) ? 1 : 0, transition: 'all 0.5s ease' }}
+                >
+                  <Link 
+                    className={`nav-link ${location.pathname === '/orders' ? 'active' : ''}`} 
+                    to="/orders" 
+                    onClick={handleNavClick}
+                  >
+                    <i className="bi bi-bag-check me-1"></i>
+                    Orders
                   </Link>
                 </li>
               </>

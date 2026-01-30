@@ -8,9 +8,9 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
     switch (status) {
       case 'pending': return 'warning';
       case 'confirmed': return 'info';
-      case 'preparing': return 'primary';
-      case 'ready_for_pickup': return 'success';
+      case 'ready_for_pickup': return 'info';
       case 'picked_up': return 'success';
+      case 'completed': return 'success';
       case 'cancelled': return 'danger';
       default: return 'secondary';
     }
@@ -20,7 +20,6 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
     switch (status) {
       case 'pending': return 'bi-clock';
       case 'confirmed': return 'bi-check-circle';
-      case 'preparing': return 'bi-gear';
       case 'ready_for_pickup': return 'bi-box-seam';
       case 'picked_up': return 'bi-check2-all';
       case 'cancelled': return 'bi-x-circle';
@@ -32,8 +31,21 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
   const canUpdateStatus = order.status !== 'cancelled' && order.status !== 'picked_up';
 
   return (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-xl">
+    <div 
+      className="modal show d-block" 
+      tabIndex="-1" 
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        zIndex: 1050,
+        overflow: 'auto'
+      }}
+    >
+      <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">
@@ -60,12 +72,6 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                   </div>
                   <div className="card-body">
                     <div className="mb-3">
-                      <strong>Order ID:</strong>
-                      <br />
-                      <code>{order.id}</code>
-                    </div>
-                    
-                    <div className="mb-3">
                       <strong>Order Number:</strong>
                       <br />
                       {order.order_number || 'N/A'}
@@ -74,31 +80,30 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                     <div className="mb-3">
                       <strong>Status:</strong>
                       <br />
-                      <span className={`badge bg-${getStatusColor(order.status)}`}>
+                      <span 
+                        className={`badge ${
+                          order.status === 'picked_up' || order.status === 'completed' ? 'bg-success' :
+                          order.status === 'cancelled' ? 'bg-danger' :
+                          order.status === 'pending' ? 'bg-warning text-dark' :
+                          order.status === 'ready_for_pickup' ? 'bg-info' :
+                          'bg-info'
+                        }`}
+                        style={{
+                          backgroundColor: (order.status === 'picked_up' || order.status === 'completed') ? '#ff6b35' : undefined,
+                          color: (order.status === 'picked_up' || order.status === 'completed') ? '#fff' : undefined
+                        }}
+                      >
                         <i className={`bi ${getStatusIcon(order.status)} me-1`}></i>
                         {order.status.replace('_', ' ').toUpperCase()}
                       </span>
                     </div>
                     
                     <div className="mb-3">
-                      <strong>Total Amount:</strong>
-                      <br />
-                      <span className="h5 text-primary">{formatPrice(order.total_amount)}</span>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <strong>Created:</strong>
-                      <br />
-                      {new Date(order.created_at).toLocaleString()}
-                    </div>
-                    
-                    {order.updated_at && order.updated_at !== order.created_at && (
-                      <div className="mb-3">
-                        <strong>Last Updated:</strong>
-                        <br />
-                        {new Date(order.updated_at).toLocaleString()}
+                      <div className="d-flex justify-content-between align-items-center">
+                        <strong>Total Amount:</strong>
+                        <span className="h5 text-primary mb-0">{formatPrice(order.total_amount)}</span>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -134,12 +139,6 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                         {order.customer?.phone || order.customer_phone || 'N/A'}
                       </a>
                     </div>
-                    
-                    <div className="mb-3">
-                      <strong>Customer ID:</strong>
-                      <br />
-                      <code>{order.customer_id}</code>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -174,15 +173,23 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                       {order.pickup_location || 'R&R Barber Shop'}
                     </div>
                     
-                    {order.notes && (
-                      <div className="mb-3">
-                        <strong>Notes:</strong>
-                        <br />
-                        <div className="bg-light p-2 rounded">
-                          {order.notes}
-                        </div>
+                    <div className="mb-3">
+                      <strong>Notes:</strong>
+                      <br />
+                      <div className="bg-light p-2 rounded">
+                        {order.notes && order.notes.trim() !== '' ? (
+                          order.notes
+                        ) : (
+                          <span style={{ 
+                            color: '#ff8c00', 
+                            fontStyle: 'italic',
+                            fontWeight: '500'
+                          }}>
+                            No additional order request!
+                          </span>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -199,13 +206,13 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                   <div className="card-body">
                     {orderDetails && orderDetails.items ? (
                       <div className="table-responsive">
-                        <table className="table table-sm">
+                        <table className="table table-sm table-hover">
                           <thead>
                             <tr>
                               <th>Item</th>
-                              <th>Qty</th>
-                              <th>Price</th>
-                              <th>Total</th>
+                              <th className="text-center">Qty</th>
+                              <th className="text-end">Price</th>
+                              <th className="text-end">Total</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -217,40 +224,32 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                                       <img
                                         src={item.product?.image_url || item.product_image_url}
                                         alt={item.product?.name || item.product_name || 'Product'}
-                                        className="me-2"
-                                        style={{ width: '30px', height: '30px', objectFit: 'cover' }}
+                                        className="me-2 flex-shrink-0"
+                                        style={{ width: '40px', height: '40px', objectFit: 'cover' }}
                                         onError={(e) => {
-                                          e.target.src = 'https://via.placeholder.com/30x30?text=No+Image';
+                                          e.target.src = 'https://via.placeholder.com/40x40?text=No+Image';
                                         }}
                                       />
                                     )}
-                                    <div>
-                                      <strong>{item.product?.name || item.product_name || 'Unknown Product'}</strong>
-                                      {(item.product?.description || item.product_description) && (
-                                        <>
-                                          <br />
-                                          <small className="text-muted">{item.product?.description || item.product_description}</small>
-                                        </>
-                                      )}
+                                    <div className="flex-grow-1">
+                                      <strong className="d-block">{item.product?.name || item.product_name || 'Unknown Product'}</strong>
                                     </div>
                                   </div>
                                 </td>
-                                <td>
+                                <td className="text-center">
                                   <span className="badge bg-primary">{item.quantity}</span>
                                 </td>
-                                <td>{formatPrice(item.unit_price)}</td>
-                                <td>
-                                  <strong>{formatPrice(item.total_price)}</strong>
-                                </td>
+                                <td className="text-end">{formatPrice(item.unit_price)}</td>
+                                <td className="text-end fw-semibold">{formatPrice(item.total_price)}</td>
                               </tr>
                             ))}
                           </tbody>
                           <tfoot>
                             <tr className="table-active">
                               <td colSpan="3" className="text-end">
-                                <strong>Order Total:</strong>
+                                <strong>Total Amount:</strong>
                               </td>
-                              <td>
+                              <td className="text-end">
                                 <strong className="text-success">{formatPrice(order.total_amount)}</strong>
                               </td>
                             </tr>
@@ -306,17 +305,6 @@ const OrderDetailsModal = ({ order, orderDetails, onClose, onStatusUpdate, onCan
                 )}
                 
                 {order.status === 'confirmed' && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => onStatusUpdate(order.id, 'preparing')}
-                  >
-                    <i className="bi bi-gear me-1"></i>
-                    Start Preparing
-                  </button>
-                )}
-                
-                {order.status === 'preparing' && (
                   <button
                     type="button"
                     className="btn btn-warning"

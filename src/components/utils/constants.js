@@ -9,11 +9,11 @@ export const ROLES = {
 
 // Appointment statuses (Enhanced)
 export const APPOINTMENT_STATUS = {
-  PENDING: 'pending',      // New: Waiting for barber confirmation
-  SCHEDULED: 'scheduled',  // Confirmed appointments use 'scheduled' status
-  CONFIRMED: 'confirmed',  // Added: Confirmed by barber
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
   ONGOING: 'ongoing',
-  DONE: 'done',
+  COMPLETED: 'completed',
+  CANCEL: 'cancel',
   CANCELLED: 'cancelled'
 };
 
@@ -165,6 +165,7 @@ export const ROUTES = {
   PENDING_REQUESTS: '/pending',         // New
   BARBER_PROFILE: '/barber-profile',    // New
   DAY_OFF_MANAGER: '/day-off-manager',  // New
+  BARBER_REVENUE: '/barber/revenue',
   
   // Manager routes
   MANAGE_BARBERS: '/manage/barbers',
@@ -262,10 +263,10 @@ export const THEME_COLORS = {
 // Status badge colors (Enhanced)
 export const STATUS_COLORS = {
   [APPOINTMENT_STATUS.PENDING]: 'warning',
-  [APPOINTMENT_STATUS.SCHEDULED]: 'info',
   [APPOINTMENT_STATUS.CONFIRMED]: 'success',
   [APPOINTMENT_STATUS.ONGOING]: 'primary',
-  [APPOINTMENT_STATUS.DONE]: 'success',
+  [APPOINTMENT_STATUS.COMPLETED]: 'success',
+  [APPOINTMENT_STATUS.CANCEL]: 'danger',
   [APPOINTMENT_STATUS.CANCELLED]: 'danger',
   [ORDER_STATUS.PENDING]: 'warning',
   [ORDER_STATUS.PROCESSING]: 'primary',

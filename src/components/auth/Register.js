@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { PushService } from '../../services/PushService';
-import { fakeUserDetectionService } from '../../services/FakeUserDetectionService';
 import './Register.css'; // Import the matching CSS file
 
 const Register = () => {
@@ -27,10 +26,40 @@ const Register = () => {
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    const { name, value } = e.target;
+    
+    // Handle phone number with +63 prefix
+    if (name === 'phone') {
+      // Remove all non-digit characters
+      let digits = value.replace(/\D/g, '');
+      
+      // If user is typing, extract only digits after +63
+      if (value.startsWith('+63')) {
+        // Get digits after +63
+        digits = value.substring(3).replace(/\D/g, '');
+      } else if (digits.startsWith('63')) {
+        // If user typed 63 first, remove it and get remaining digits
+        digits = digits.substring(2);
+      }
+      
+      // Limit to 10 digits
+      if (digits.length > 10) {
+        digits = digits.substring(0, 10);
+      }
+      
+      // Add +63 prefix if we have digits
+      const formatted = digits.length > 0 ? `+63${digits}` : '';
+      
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatted
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   // Password strength checker
@@ -135,28 +164,7 @@ const Register = () => {
 
       console.log('Starting registration with role:', formData.role);
       
-      // Step 1: Run fake user detection analysis
-      console.log('Running security analysis...');
-      const analysis = await fakeUserDetectionService.analyzeUserRegistration(formData);
-      setSecurityAnalysis(analysis);
-      
-      // Step 2: Check if user is suspicious
-      if (analysis.isSuspicious) {
-        console.log('Suspicious user detected:', analysis);
-        setShowSecurityWarning(true);
-        setError(`Security analysis detected potential issues. Risk level: ${analysis.riskLevel.toUpperCase()}. Please review your information and try again.`);
-        setLoading(false);
-        return;
-      }
-      
-      // Step 3: For medium risk users, show warning but allow registration
-      if (analysis.riskLevel === 'medium') {
-        console.log('Medium risk user detected:', analysis);
-        setShowSecurityWarning(true);
-        setSuccess('Registration will require additional verification. Please check your email for verification link.');
-      }
-      
-      // Step 4: Proceed with registration
+      // Proceed with registration without fake-user/scam analysis
       console.log('Proceeding with registration...');
       
       // Sign up user with metadata and email verification
@@ -168,8 +176,7 @@ const Register = () => {
           data: {
             full_name: formData.fullName,
             role: formData.role,
-            phone: formData.phone,
-            security_analysis: analysis // Store analysis in metadata
+            phone: formData.phone
           }
         }
       });
@@ -183,15 +190,13 @@ const Register = () => {
       if (authData.user && !authData.user.email_confirmed_at) {
         setSuccess('Registration successful! Please check your email and click the verification link to activate your account. You will be redirected to login after verification.');
         
-        // Log successful registration with security analysis
+        // Log successful registration
         await supabase.from('system_logs').insert({
           user_id: authData.user.id,
           action: 'user_register_with_verification',
           details: { 
             email: formData.email,
-            role: formData.role,
-            security_analysis: analysis,
-            risk_level: analysis.riskLevel
+            role: formData.role
           }
         });
         
@@ -226,15 +231,13 @@ const Register = () => {
         console.log('User profile created with role:', formData.role);
       }
 
-      // Log successful registration with security analysis
+      // Log successful registration
       await supabase.from('system_logs').insert({
         user_id: authData.user.id,
         action: 'user_register_success',
         details: { 
           email: formData.email,
-          role: formData.role,
-          security_analysis: analysis,
-          risk_level: analysis.riskLevel
+          role: formData.role
         }
       });
 
@@ -500,14 +503,35 @@ const Register = () => {
 
           <div className="form-group">
             <label htmlFor="phone">Phone Number</label>
-            <input
-              type="tel"
-              id="phone"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              className="dark-input"
-            />
+            <div style={{ position: 'relative' }}>
+              <img 
+                src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png"
+                alt="Philippines"
+                style={{ 
+                  position: 'absolute', 
+                  left: '12px', 
+                  top: '50%', 
+                  transform: 'translateY(-50%)',
+                  width: '20px',
+                  height: '15px',
+                  zIndex: 10,
+                  pointerEvents: 'none',
+                  objectFit: 'cover'
+                }}
+              />
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                className="dark-input"
+                placeholder="+63XXXXXXXXXX"
+                maxLength={13}
+                style={{ paddingLeft: '45px' }}
+              />
+            </div>
+            <small className="form-text" style={{ color: 'white', fontStyle: 'italic' }}>Format: +63 followed by 10 digits</small>
           </div>
 
           <div className="form-group">

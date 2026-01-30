@@ -3,15 +3,23 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 
 const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState(initialFilters);
+  const today = new Date().toISOString().split('T')[0];
+  const [filters, setFilters] = useState({
+    status: '',
+    barber_id: '',
+    service_id: '',
+    addon_id: '',
+    start_date: initialFilters.start_date || today,
+    end_date: initialFilters.end_date || today,
+    ...initialFilters
+  });
   const [availableFilters, setAvailableFilters] = useState({});
   const [loading, setLoading] = useState(false);
 
   // Configure filters based on search type
   const filterConfigs = {
     appointments: {
-      status: ['all', 'pending', 'scheduled', 'confirmed', 'ongoing', 'done', 'cancelled'],
+      status: ['all', 'pending', 'scheduled', 'confirmed', 'ongoing', 'completed', 'cancelled'],
       barber: [],
       service: [],
       dateRange: ['today', 'week', 'month', 'custom']
@@ -37,7 +45,7 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
 
   useEffect(() => {
     performSearch();
-  }, [searchQuery, filters]);
+  }, [filters]);
 
   const loadAvailableFilters = async () => {
     try {
@@ -67,6 +75,17 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
           value: s.id,
           label: s.name
         })) || []];
+
+        // Load addons
+        const { data: addons } = await supabase
+          .from('add_ons')
+          .select('id, name')
+          .eq('is_active', true);
+        
+        config.addon = [{ value: '', label: 'All Add-ons' }, ...addons?.map(a => ({
+          value: a.id,
+          label: a.name
+        })) || []];
       }
 
       setAvailableFilters(config);
@@ -80,17 +99,33 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
     try {
       let query = supabase.from(getTableName()).select(getSelectFields());
 
-      // Apply search query
-      if (searchQuery) {
-        query = applyTextSearch(query);
+      // Apply filters
+      if (filters.status && filters.status !== 'all' && filters.status !== '') {
+        query = query.eq('status', filters.status);
       }
 
-      // Apply filters
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== 'all' && value !== '') {
-          query = applyFilter(query, key, value);
-        }
-      });
+      if (filters.barber_id && filters.barber_id !== '') {
+        query = query.eq('barber_id', filters.barber_id);
+      }
+
+      if (filters.service_id && filters.service_id !== '') {
+        query = query.eq('service_id', filters.service_id);
+      }
+
+      if (filters.addon_id && filters.addon_id !== '') {
+        // Filter by addon - check if addon ID is in the add_ons_data array
+        query = query.contains('add_ons_data', [filters.addon_id]);
+      }
+
+      // Apply date range filter
+      if (filters.start_date && filters.end_date) {
+        query = query.gte('appointment_date', filters.start_date)
+                     .lte('appointment_date', filters.end_date);
+      } else if (filters.start_date) {
+        query = query.gte('appointment_date', filters.start_date);
+      } else if (filters.end_date) {
+        query = query.lte('appointment_date', filters.end_date);
+      }
 
       // Apply ordering
       query = applyOrdering(query);
@@ -122,9 +157,9 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
       case 'appointments':
         return `
           *,
-          customer:customer_id(full_name, email),
-          barber:barber_id(full_name),
-          service:service_id(name, price)
+          customer:customer_id(id, full_name, email, phone),
+          barber:barber_id(id, full_name, email, phone),
+          service:service_id(id, name, price, duration, description)
         `;
       case 'products':
         return '*';
@@ -137,80 +172,11 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
     }
   };
 
-  const applyTextSearch = (query) => {
-    switch (type) {
-      case 'appointments':
-        return query.or(`customer.full_name.ilike.%${searchQuery}%,service.name.ilike.%${searchQuery}%`);
-      case 'products':
-        return query.or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
-      case 'services':
-        return query.or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
-      case 'users':
-        return query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
-      default:
-        return query;
-    }
-  };
-
-  const applyFilter = (query, key, value) => {
-    switch (type) {
-      case 'appointments':
-        if (key === 'status') return query.eq('status', value);
-        if (key === 'barber') return query.eq('barber_id', value);
-        if (key === 'service') return query.eq('service_id', value);
-        if (key === 'dateRange') return applyDateRangeFilter(query, value);
-        break;
-      case 'products':
-        if (key === 'price') return applyPriceFilter(query, value);
-        if (key === 'inStock') return value === 'in-stock' ? query.gt('stock_quantity', 0) : query.eq('stock_quantity', 0);
-        break;
-      case 'users':
-        if (key === 'role') return query.eq('role', value);
-        break;
-    }
-    return query;
-  };
-
-  const applyDateRangeFilter = (query, range) => {
-    const today = new Date();
-    let startDate, endDate;
-
-    switch (range) {
-      case 'today':
-        startDate = endDate = today.toISOString().split('T')[0];
-        break;
-      case 'week':
-        startDate = new Date(today.setDate(today.getDate() - 7)).toISOString().split('T')[0];
-        endDate = new Date().toISOString().split('T')[0];
-        break;
-      case 'month':
-        startDate = new Date(today.setMonth(today.getMonth() - 1)).toISOString().split('T')[0];
-        endDate = new Date().toISOString().split('T')[0];
-        break;
-      default:
-        return query;
-    }
-
-    return query.gte('appointment_date', startDate).lte('appointment_date', endDate);
-  };
-
-  const applyPriceFilter = (query, range) => {
-    switch (range) {
-      case 'under-500':
-        return query.lt('price', 500);
-      case '500-1000':
-        return query.gte('price', 500).lte('price', 1000);
-      case 'over-1000':
-        return query.gt('price', 1000);
-      default:
-        return query;
-    }
-  };
 
   const applyOrdering = (query) => {
     switch (type) {
       case 'appointments':
-        return query.order('appointment_date').order('appointment_time');
+        return query.order('appointment_date', { ascending: false }).order('appointment_time', { ascending: true });
       case 'products':
         return query.order('name');
       case 'services':
@@ -230,8 +196,16 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
   };
 
   const resetFilters = () => {
-    setSearchQuery('');
-    setFilters(initialFilters);
+    const today = new Date().toISOString().split('T')[0];
+    setFilters({
+      status: '',
+      barber_id: '',
+      service_id: '',
+      addon_id: '',
+      start_date: today,
+      end_date: today,
+      ...initialFilters
+    });
   };
 
   const exportResults = async () => {
@@ -244,62 +218,170 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
     }
   };
 
+  if (type !== 'appointments') {
+    // For other types, return the original component
+    return null;
+  }
+
   return (
-    <div className="card mb-4">
-      <div className="card-header">
-        <div className="row align-items-center">
-          <div className="col-md-6">
-            <div className="input-group">
-              <span className="input-group-text">
-                <i className="bi bi-search"></i>
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder={`Search ${type}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="col-md-6 text-end">
-            <button className="btn btn-outline-secondary me-2" onClick={resetFilters}>
-              <i className="bi bi-arrow-counterclockwise me-1"></i>
-              Reset
-            </button>
-            <button className="btn btn-outline-primary" onClick={exportResults}>
-              <i className="bi bi-download me-1"></i>
-              Export
-            </button>
-          </div>
-        </div>
+    <div className="card mb-4 border-0 shadow-sm">
+      <div className="card-header bg-white border-bottom py-3">
+        <h6 className="mb-0 fw-bold">
+          <i className="bi bi-funnel me-2"></i>
+          Filters
+        </h6>
       </div>
       <div className="card-body">
         <div className="row g-3">
-          {Object.entries(availableFilters).map(([filterKey, options]) => (
-            <div key={filterKey} className="col-md-3">
-              <label className="form-label text-capitalize">{filterKey}</label>
-              <select
-                className="form-select"
-                value={filters[filterKey] || ''}
-                onChange={(e) => handleFilterChange(filterKey, e.target.value)}
-              >
-                {Array.isArray(options) && typeof options[0] === 'string' ? (
-                  options.map(option => (
-                    <option key={option} value={option === 'all' ? '' : option}>
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </option>
-                  ))
-                ) : Array.isArray(options) ? (
-                  options.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))
-                ) : null}
-              </select>
+          {/* Status Filter */}
+          <div className="col-md-2">
+            <label className="form-label fw-bold small">
+              <i className="bi bi-tag me-1"></i>
+              Status
+            </label>
+            <select
+              className="form-select"
+              value={filters.status || ''}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+            >
+              <option value="">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+
+          {/* Barber Filter */}
+          <div className="col-md-2">
+            <label className="form-label fw-bold small">
+              <i className="bi bi-person-badge me-1"></i>
+              Barber
+            </label>
+            <select
+              className="form-select"
+              value={filters.barber_id || ''}
+              onChange={(e) => handleFilterChange('barber_id', e.target.value)}
+            >
+              <option value="">All Barbers</option>
+              {availableFilters.barber?.slice(1).map(barber => (
+                <option key={barber.value} value={barber.value}>
+                  {barber.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Service Filter */}
+          <div className="col-md-2">
+            <label className="form-label fw-bold small">
+              <i className="bi bi-scissors me-1"></i>
+              Service
+            </label>
+            <select
+              className="form-select"
+              value={filters.service_id || ''}
+              onChange={(e) => handleFilterChange('service_id', e.target.value)}
+            >
+              <option value="">All Services</option>
+              {availableFilters.service?.slice(1).map(service => (
+                <option key={service.value} value={service.value}>
+                  {service.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Add-on Filter */}
+          <div className="col-md-2">
+            <label className="form-label fw-bold small">
+              <i className="bi bi-plus-circle me-1"></i>
+              Add-on
+            </label>
+            <select
+              className="form-select"
+              value={filters.addon_id || ''}
+              onChange={(e) => handleFilterChange('addon_id', e.target.value)}
+            >
+              <option value="">All Add-ons</option>
+              {availableFilters.addon?.slice(1).map(addon => (
+                <option key={addon.value} value={addon.value}>
+                  {addon.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Start Date */}
+          <div className="col-md-2">
+            <label className="form-label fw-bold small">
+              <i className="bi bi-calendar-event me-1"></i>
+              Start Date
+            </label>
+            <div className="position-relative">
+              <input
+                type="date"
+                className="form-control"
+                value={filters.start_date || ''}
+                onChange={(e) => handleFilterChange('start_date', e.target.value)}
+                max={filters.end_date || undefined}
+                style={{
+                  paddingLeft: '2.5rem',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+              />
+              <i className="bi bi-calendar3 position-absolute" 
+                 style={{
+                   left: '0.75rem',
+                   top: '50%',
+                   transform: 'translateY(-50%)',
+                   color: '#6c757d',
+                   pointerEvents: 'none'
+                 }}></i>
             </div>
-          ))}
+          </div>
+
+          {/* End Date */}
+          <div className="col-md-2">
+            <label className="form-label fw-bold small">
+              <i className="bi bi-calendar-check me-1"></i>
+              End Date
+            </label>
+            <div className="position-relative">
+              <input
+                type="date"
+                className="form-control"
+                value={filters.end_date || ''}
+                onChange={(e) => handleFilterChange('end_date', e.target.value)}
+                min={filters.start_date || undefined}
+                style={{
+                  paddingLeft: '2.5rem',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+              />
+              <i className="bi bi-calendar3 position-absolute" 
+                 style={{
+                   left: '0.75rem',
+                   top: '50%',
+                   transform: 'translateY(-50%)',
+                   color: '#6c757d',
+                   pointerEvents: 'none'
+                 }}></i>
+            </div>
+          </div>
+        </div>
+
+        <div className="row mt-3">
+          <div className="col-12 text-end">
+            <button className="btn btn-outline-secondary btn-sm" onClick={resetFilters}>
+              <i className="bi bi-arrow-counterclockwise me-1"></i>
+              Reset Filters
+            </button>
+          </div>
         </div>
         
         {loading && (

@@ -21,13 +21,13 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "uuid": "^13.0.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "cross-env CI=false npm run build",
     "prebuild": "node scripts/sync-firebase-config.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
@@ -59,8 +59,12 @@
   },
   "devDependencies": {
     "@types/node": "^16.18.20",
+    "cross-env": "^10.1.0",
     "dotenv": "^16.6.1",
     "eslint": "^8.38.0",
     "prettier": "^2.8.7"
+  },
+  "engines": {
+    "node": ">=18 <=20"
   }
 }

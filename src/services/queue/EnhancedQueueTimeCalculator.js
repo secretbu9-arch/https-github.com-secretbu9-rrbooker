@@ -1,5 +1,5 @@
 // services/EnhancedQueueTimeCalculator.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class EnhancedQueueTimeCalculator {
   constructor() {

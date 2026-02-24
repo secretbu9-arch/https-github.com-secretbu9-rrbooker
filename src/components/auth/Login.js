@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import OnboardingSlides from '../onboarding/OnboardingSlides';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 import './Login.css'; // Import the matching CSS file
 
 const Login = () => {
@@ -56,7 +56,7 @@ const Login = () => {
       navigate('/dashboard');
     } catch (error) {
       setError(error.message);
-      
+
       // Log failed login attempt
       await supabase.from('system_logs').insert({
         action: 'login_failed',
@@ -78,10 +78,10 @@ const Login = () => {
       <div className="dark-slide-card login-card">
         <div className="barber-logo">
           <div className="logo-image-container">
-              <img 
-                src="/rrbooker-logo-3.png" 
-                alt="RAF & ROX Barbershop" 
-                className="auth-logo"
+            <img
+              src="/rrbooker-logo-3.png"
+              alt="RAF & ROX Barbershop"
+              className="auth-logo"
               onError={(e) => {
                 e.target.style.display = 'none';
                 e.target.nextSibling.style.display = 'block';
@@ -150,10 +150,11 @@ const Login = () => {
 
         <div className="register-link">
           <p>
-            Don't have an account? <Link to="/register">Sign up</Link>
-          </p>
-          <p style={{ marginTop: '0.5rem' }}>
             <Link to="/reset-password">Forgot password?</Link>
+          </p>
+          <div className="or-divider">or</div>
+          <p>
+            Don't have an account? <Link to="/register">Sign up</Link>
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 // components/manager/NotificationManager.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 
 const NotificationManager = () => {
   const [notificationData, setNotificationData] = useState({
@@ -68,8 +68,8 @@ const NotificationManager = () => {
 
       let result;
       // Use centralized service for consistency and duplicate prevention
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-      
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
+
       if (notificationData.target === 'all') {
         // For all users, still use PushService directly as centralized service doesn't support bulk
         result = await PushService.sendNotificationToAllUsers(
@@ -93,9 +93,9 @@ const NotificationManager = () => {
       }
 
       if (result) {
-        setMessage({ 
-          type: 'success', 
-          text: `Notification sent successfully to ${notificationData.target === 'all' ? 'all users' : 'selected user'}` 
+        setMessage({
+          type: 'success',
+          text: `Notification sent successfully to ${notificationData.target === 'all' ? 'all users' : 'selected user'}`
         });
         setNotificationData({
           title: '',
@@ -121,42 +121,42 @@ const NotificationManager = () => {
 
     try {
       console.log('🧪 Testing notification system...');
-      
+
       // First test: Check if we can fetch users
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select('id, full_name, role')
         .limit(5);
-      
+
       if (usersError) {
         console.error('❌ Error fetching users:', usersError);
         setMessage({ type: 'danger', text: `Database error: ${usersError.message}` });
         return;
       }
-      
+
       console.log('👥 Users found:', users?.length || 0, users);
-      
+
       if (!users || users.length === 0) {
         setMessage({ type: 'warning', text: 'No users found in database. Please create some users first.' });
         return;
       }
-      
+
       // Test with current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setMessage({ type: 'danger', text: 'No authenticated user found' });
         return;
       }
-      
+
       console.log('👤 Testing with current user:', user.id);
-      
+
       const result = await PushService.sendNotificationToUser(
         user.id,
         'Test Notification 🧪',
         'This is a test notification from the manager panel',
         { type: 'test', source: 'manager' }
       );
-      
+
       if (result) {
         setMessage({ type: 'success', text: 'Test notification sent successfully! Check your notifications.' });
       } else {
@@ -185,9 +185,9 @@ const NotificationManager = () => {
               {message.text && (
                 <div className={`alert alert-${message.type} alert-dismissible fade show`} role="alert">
                   {message.text}
-                  <button 
-                    type="button" 
-                    className="btn-close" 
+                  <button
+                    type="button"
+                    className="btn-close"
                     onClick={() => setMessage({ type: '', text: '' })}
                   ></button>
                 </div>
@@ -203,11 +203,11 @@ const NotificationManager = () => {
                       <div className="mb-3">
                         <label className="form-label">Target</label>
                         <div className="btn-group w-100" role="group">
-                          <input 
-                            type="radio" 
-                            className="btn-check" 
-                            name="target" 
-                            id="targetAll" 
+                          <input
+                            type="radio"
+                            className="btn-check"
+                            name="target"
+                            id="targetAll"
                             value="all"
                             checked={notificationData.target === 'all'}
                             onChange={handleInputChange}
@@ -215,12 +215,12 @@ const NotificationManager = () => {
                           <label className="btn btn-outline-primary" htmlFor="targetAll">
                             All Users
                           </label>
-                          
-                          <input 
-                            type="radio" 
-                            className="btn-check" 
-                            name="target" 
-                            id="targetSpecific" 
+
+                          <input
+                            type="radio"
+                            className="btn-check"
+                            name="target"
+                            id="targetSpecific"
                             value="specific"
                             checked={notificationData.target === 'specific'}
                             onChange={handleInputChange}
@@ -234,7 +234,7 @@ const NotificationManager = () => {
                       {notificationData.target === 'specific' && (
                         <div className="mb-3">
                           <label className="form-label">Select User</label>
-                          <select 
+                          <select
                             className="form-select"
                             name="userId"
                             value={notificationData.userId}
@@ -253,8 +253,8 @@ const NotificationManager = () => {
 
                       <div className="mb-3">
                         <label className="form-label">Title</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           className="form-control"
                           name="title"
                           value={notificationData.title}
@@ -266,7 +266,7 @@ const NotificationManager = () => {
 
                       <div className="mb-3">
                         <label className="form-label">Message</label>
-                        <textarea 
+                        <textarea
                           className="form-control"
                           name="body"
                           value={notificationData.body}
@@ -282,7 +282,7 @@ const NotificationManager = () => {
 
                       <div className="mb-3">
                         <label className="form-label">Type</label>
-                        <select 
+                        <select
                           className="form-select"
                           name="type"
                           value={notificationData.type}
@@ -298,7 +298,7 @@ const NotificationManager = () => {
                       </div>
 
                       <div className="d-flex gap-2">
-                        <button 
+                        <button
                           className="btn btn-primary"
                           onClick={handleSendNotification}
                           disabled={sending}
@@ -315,8 +315,8 @@ const NotificationManager = () => {
                             </>
                           )}
                         </button>
-                        
-                        <button 
+
+                        <button
                           className="btn btn-outline-secondary"
                           onClick={handleTestNotification}
                           disabled={sending}
@@ -336,46 +336,46 @@ const NotificationManager = () => {
                     </div>
                     <div className="card-body">
                       <div className="d-grid gap-2">
-                        <button 
+                        <button
                           className="btn btn-outline-primary"
                           onClick={() => setNotificationData(prev => ({
                             ...prev,
-                            title: 'Appointment Reminder',
-                            body: 'Your appointment is coming up in 30 minutes. Please arrive on time.',
+                            title: 'Appointment Reminder ⏰',
+                            body: 'Your appointment is coming up soon! Please arrive on time to ensure the best service.',
                             type: 'reminder'
                           }))}
                         >
                           <i className="bi bi-clock me-2"></i>
                           Appointment Reminder
                         </button>
-                        
-                        <button 
+
+                        <button
                           className="btn btn-outline-success"
                           onClick={() => setNotificationData(prev => ({
                             ...prev,
-                            title: 'Queue Update',
-                            body: 'You are next in line. Please proceed to the barber chair.',
+                            title: 'It\'s nearly your turn! ✂️',
+                            body: 'You are next in line. Please head over to the shop or be ready for your service.',
                             type: 'queue'
                           }))}
                         >
                           <i className="bi bi-people me-2"></i>
                           Queue Update
                         </button>
-                        
-                        <button 
+
+                        <button
                           className="btn btn-outline-info"
                           onClick={() => setNotificationData(prev => ({
                             ...prev,
-                            title: 'New Booking',
-                            body: 'You have a new booking request. Please check your dashboard.',
+                            title: 'New Booking Request 📅',
+                            body: 'Great news! You have a new booking request waiting for your approval.',
                             type: 'booking'
                           }))}
                         >
                           <i className="bi bi-calendar-plus me-2"></i>
                           New Booking
                         </button>
-                        
-                        <button 
+
+                        <button
                           className="btn btn-outline-warning"
                           onClick={() => setNotificationData(prev => ({
                             ...prev,

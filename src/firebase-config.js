@@ -4,10 +4,10 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDRP4C2T3T_eAdPOW9sYtqBRcGUghhACvo",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyCAP-KcVY2uTMl5aFMquAODPX5IhoiuDh0",
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "rrbookerappnotif.firebaseapp.com",
   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "rrbookerappnotif",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "rrbookerappnotif.appspot.com",
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "rrbookerappnotif.firebasestorage.app",
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "160590142868",
   appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:160590142868:web:7338b090540861a36b0381"
 };
@@ -32,7 +32,7 @@ export const getFCMToken = async () => {
 
     // Check if service worker is already registered
     let registration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
-    
+
     if (!registration) {
       console.log('Registering Firebase service worker...');
       registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {

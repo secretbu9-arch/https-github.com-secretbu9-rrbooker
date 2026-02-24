@@ -79,7 +79,7 @@ const RescheduleCancelModal = ({
       if (requestError) throw requestError;
 
       // Send notification to barber (database + push) via CentralizedNotificationService
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
       await centralizedNotificationService.createNotification({
         userId: appointment.barber_id,
         title: `Appointment ${action === 'reschedule' ? 'Reschedule' : 'Cancellation'} Request`,

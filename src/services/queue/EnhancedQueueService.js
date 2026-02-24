@@ -3,10 +3,10 @@
  * Handles queue operations without affecting scheduled appointments
  */
 
-import { supabase } from '../supabaseClient.js';
-import dateService from './DateService.js';
-import appointmentTypeManager from './AppointmentTypeManager.js';
-import { PushService } from './PushService.js';
+import { supabase } from '../../supabaseClient.js';
+import dateService from '../core/DateService.js';
+import appointmentTypeManager from '../booking/AppointmentTypeManager.js';
+import { PushService } from '../notifications/PushService.js';
 
 class EnhancedQueueService {
   constructor() {
@@ -23,7 +23,7 @@ class EnhancedQueueService {
   async getBarberQueueData(barberId, date) {
     try {
       console.log('🔄 EnhancedQueueService: Getting queue data for barber:', barberId, 'date:', date);
-      
+
       // Validate and normalize date
       const dateValidation = dateService.validateAndNormalizeDate(date);
       if (!dateValidation.isValid) {
@@ -32,7 +32,7 @@ class EnhancedQueueService {
 
       const normalizedDate = dateValidation.normalized;
       const dayBoundaries = dateService.getDayBoundaries(normalizedDate);
-      
+
       console.log('📅 Date info:', {
         original: date,
         normalized: normalizedDate,
@@ -60,7 +60,7 @@ class EnhancedQueueService {
 
       // Separate appointments by type
       const separatedAppointments = appointmentTypeManager.separateAppointmentsByType(allAppointments || []);
-      
+
       console.log('📊 Appointment separation:', separatedAppointments.summary);
 
       // Process each type separately
@@ -91,16 +91,16 @@ class EnhancedQueueService {
 
       // Process scheduled appointments
       result.scheduledAppointments = this.processScheduledAppointments(separatedAppointments.scheduled);
-      
+
       // Process queue appointments
       result.queueAppointments = this.processQueueAppointments(separatedAppointments.queue);
-      
+
       // Process pending requests (queue appointments with pending status)
       result.pendingRequests = this.processPendingRequests(separatedAppointments.queue);
-      
+
       // Find current appointment (ongoing)
       result.currentAppointment = this.findCurrentAppointment(allAppointments || []);
-      
+
       // Update statistics
       result.statistics.pending = result.pendingRequests.length;
       result.statistics.current = result.currentAppointment ? 1 : 0;
@@ -241,7 +241,7 @@ class EnhancedQueueService {
 
       // Get current queue to determine position
       const queueData = await this.getBarberQueueData(barberId, appointment.appointment_date);
-      
+
       let queuePosition;
       if (isUrgent) {
         // Urgent appointments go to position 1
@@ -323,12 +323,12 @@ class EnhancedQueueService {
         for (const apt of existingAppointments) {
           const { error: updateError } = await supabase
             .from('appointments')
-            .update({ 
+            .update({
               queue_position: (apt.queue_position || 0) + 1,
               updated_at: new Date().toISOString()
             })
             .eq('id', apt.id);
-          
+
           if (updateError) {
             console.warn(`Warning: Could not increment queue position for appointment ${apt.id}:`, updateError);
           }
@@ -348,12 +348,12 @@ class EnhancedQueueService {
   async notifyCustomerQueueAcceptance(appointment, queuePosition, isUrgent) {
     try {
       const title = isUrgent ? 'Urgent Appointment Confirmed! 🚨' : 'Appointment Confirmed! ✅';
-      const message = isUrgent 
+      const message = isUrgent
         ? `Your urgent appointment has been confirmed. You are #${queuePosition} in the queue.`
         : `Your appointment has been confirmed. You are #${queuePosition} in the queue.`;
 
       // Use CentralizedNotificationService to prevent duplicates
-      const { default: centralizedNotificationService } = await import('./CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
       await centralizedNotificationService.createBookingConfirmationNotification({
         userId: appointment.customer_id,
         appointmentId: appointment.id,
@@ -378,7 +378,7 @@ class EnhancedQueueService {
   async getQueueStatistics(barberId, date) {
     try {
       const queueData = await this.getBarberQueueData(barberId, date);
-      
+
       const stats = {
         date: date,
         barberId: barberId,
@@ -402,11 +402,11 @@ class EnhancedQueueService {
    */
   calculateAverageWaitTime(queueAppointments) {
     if (queueAppointments.length === 0) return 0;
-    
+
     const totalWaitTime = queueAppointments.reduce((sum, apt) => {
       return sum + (apt.estimatedWaitTime || 0);
     }, 0);
-    
+
     return Math.round(totalWaitTime / queueAppointments.length);
   }
 
@@ -419,7 +419,7 @@ class EnhancedQueueService {
     const total = queueData.statistics.total;
     const scheduled = queueData.statistics.scheduled;
     const queue = queueData.statistics.queue;
-    
+
     return {
       scheduledRatio: total > 0 ? Math.round((scheduled / total) * 100) : 0,
       queueRatio: total > 0 ? Math.round((queue / total) * 100) : 0,

@@ -1,7 +1,7 @@
 // components/manager/ManageOrders.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import OrdersService from '../../services/OrdersService';
+import OrdersService from '../../services/booking/OrdersService';
 import LoadingSpinner from '../common/LoadingSpinner';
 import OrderConfirmationModal from '../orders/OrderConfirmationModal';
 import OrderDetailsModal from '../orders/OrderDetailsModal';

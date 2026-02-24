@@ -1,5 +1,5 @@
 // services/QueueSchedulingAlgorithm.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class QueueSchedulingAlgorithm {
   // Calculate next available time slots for queue-to-scheduled conversion

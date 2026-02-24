@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 // REMOVED: PushService and NotificationService imports - use only CentralizedNotificationService
 import LoadingSpinner from '../common/LoadingSpinner';
-import addOnsService from '../../services/AddOnsService';
-import enhancedQueueService from '../../services/EnhancedQueueService';
-import dateService from '../../services/DateService';
-import appointmentTypeManager from '../../services/AppointmentTypeManager';
-import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
+import addOnsService from '../../services/booking/AddOnsService';
+import enhancedQueueService from '../../services/queue/EnhancedQueueService';
+import dateService from '../../services/core/DateService';
+import appointmentTypeManager from '../../services/booking/AppointmentTypeManager';
+import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import RescheduleModal from './RescheduleModal';
 import '../../styles/barber-appointments.css';
@@ -29,7 +29,7 @@ const BarberQueue = () => {
   });
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null });
-  
+
   // Advanced Hybrid Queue System state
   const [timeline, setTimeline] = useState([]);
   const [queueStats, setQueueStats] = useState({});
@@ -51,7 +51,7 @@ const BarberQueue = () => {
     // Set up Advanced Hybrid Queue real-time subscription
     const handleQueueUpdate = (update) => {
       console.log('🔔 Advanced Hybrid Queue real-time update:', update);
-      
+
       // Refresh queue data
       if (update.queueData.success) {
         setTimeline(update.queueData.timeline);
@@ -89,7 +89,7 @@ const BarberQueue = () => {
     const handleAppointmentChange = (event) => {
       const { barberId } = event.detail;
       console.log(`📢 Queue received custom event:`, event.detail);
-      
+
       if (barberId === user.id) {
         clearTimeout(window.queueUpdateTimeout);
         window.queueUpdateTimeout = setTimeout(() => {
@@ -109,7 +109,7 @@ const BarberQueue = () => {
 
     window.addEventListener('appointmentStatusChanged', handleAppointmentChange);
     window.addEventListener('forceRefreshBarberData', handleForceRefresh);
-    
+
     // Cleanup on unmount
     return () => {
       console.log('🧹 Cleaning up Advanced Hybrid Queue subscriptions');
@@ -136,30 +136,30 @@ const BarberQueue = () => {
   // Validate appointment data consistency
   const validateAppointmentData = (appointments) => {
     const issues = [];
-    
+
     appointments.forEach(apt => {
       // Check for data consistency
       if (apt.appointment_type === 'scheduled' && !apt.appointment_time) {
         issues.push(`Scheduled appointment ${apt.id} missing appointment_time`);
       }
-      
+
       if (apt.appointment_type === 'queue' && apt.appointment_time) {
         issues.push(`Queue appointment ${apt.id} has appointment_time (should be null)`);
       }
-      
+
       if (apt.appointment_type === 'queue' && (!apt.queue_position && apt.queue_position !== 0)) {
         issues.push(`Queue appointment ${apt.id} missing queue_position`);
       }
-      
+
       if (apt.appointment_type === 'scheduled' && apt.queue_position) {
         issues.push(`Scheduled appointment ${apt.id} has queue_position (should be null)`);
       }
     });
-    
+
     if (issues.length > 0) {
       console.warn('⚠️ Appointment data consistency issues:', issues);
     }
-    
+
     return issues.length === 0;
   };
 
@@ -181,7 +181,7 @@ const BarberQueue = () => {
       if (queueData.success) {
         // Validate appointment data consistency
         validateAppointmentData(queueData.timeline);
-        
+
         setTimeline(queueData.timeline);
         setCurrentAppointment(queueData.current);
         setQueueStats(queueData.stats);
@@ -228,27 +228,27 @@ const BarberQueue = () => {
 
   const getServicesDisplay = (appointment) => {
     const services = [];
-    
+
     // Add primary service
     if (appointment.service) {
       services.push(appointment.service.name);
     }
-    
+
     // Add additional services
     if (appointment.services_data) {
       try {
         // Handle different data types
         let serviceIds;
-        
+
         if (typeof appointment.services_data === 'string') {
           // Handle empty or invalid JSON strings
-          if (appointment.services_data.trim() === '' || 
-              appointment.services_data === '[]' || 
-              appointment.services_data === 'null' || 
-              appointment.services_data === 'undefined') {
+          if (appointment.services_data.trim() === '' ||
+            appointment.services_data === '[]' ||
+            appointment.services_data === 'null' ||
+            appointment.services_data === 'undefined') {
             return services.join(', ');
           }
-          
+
           serviceIds = JSON.parse(appointment.services_data);
         } else if (Array.isArray(appointment.services_data)) {
           // Data is already an array
@@ -257,7 +257,7 @@ const BarberQueue = () => {
           // Data is null, undefined, or other type
           return services.join(', ');
         }
-        
+
         if (Array.isArray(serviceIds)) {
           // Skip the first one as it's already added as primary service
           const additionalServiceIds = serviceIds.slice(1);
@@ -272,7 +272,7 @@ const BarberQueue = () => {
         // Return just the primary service if parsing fails
       }
     }
-    
+
     return services.join(', ');
   };
 
@@ -322,12 +322,12 @@ const BarberQueue = () => {
 
   const getTotalPrice = (appointment) => {
     let total = appointment.total_price || appointment.service?.price || 0;
-    
+
     // Add urgent fee if applicable
     if (appointment.is_urgent) {
       total += 100;
     }
-    
+
     return total;
   };
 
@@ -344,14 +344,14 @@ const BarberQueue = () => {
       if (action === 'accept') {
         // Use enhanced queue service for acceptance
         const result = await enhancedQueueService.acceptQueueRequest(
-          appointmentId, 
-          user.id, 
+          appointmentId,
+          user.id,
           appointment.is_urgent
         );
 
         if (result.success) {
           console.log('✅ Enhanced queue acceptance completed:', result);
-          
+
           // Notification is already sent by EnhancedQueueService.notifyCustomerQueueAcceptance()
           // No need to send duplicate notification here
 
@@ -372,7 +372,7 @@ const BarberQueue = () => {
         // Decline the booking
         const { error } = await supabase
           .from('appointments')
-          .update({ 
+          .update({
             status: 'cancelled',
             cancellation_reason: reason || 'Declined by barber'
           })
@@ -381,11 +381,11 @@ const BarberQueue = () => {
         if (error) throw error;
 
         // Send notification using centralized service
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: appointment.customer_id,
-          title: 'Booking Request Declined',
-          message: `Your booking request has been declined. Reason: ${reason}`,
+          title: 'Booking Request Declined ❌',
+          message: `Unfortunately, your booking request could not be accepted. Reason: ${reason || 'Barber unavailable'}. Please try another time.`,
           type: 'booking',
           channels: ['app', 'push']
         });
@@ -419,10 +419,10 @@ const BarberQueue = () => {
       setTimeout(() => fetchQueueData(), 1000);
     } catch (err) {
       console.error('❌ Enhanced queue service error:', err);
-      
+
       // More specific error messages
       let errorMessage = 'Failed to process booking request. ';
-      
+
       if (err.message) {
         if (err.message.includes('permission denied')) {
           errorMessage += 'Permission denied. Please make sure you are logged in.';
@@ -438,15 +438,15 @@ const BarberQueue = () => {
       } else {
         errorMessage += 'Please try again.';
       }
-      
+
       setError(errorMessage);
     }
   };
 
   const handleAppointmentStatus = async (appointmentId, status) => {
     try {
-      const appointment = currentAppointment?.id === appointmentId 
-        ? currentAppointment 
+      const appointment = currentAppointment?.id === appointmentId
+        ? currentAppointment
         : queuedAppointments.find(apt => apt.id === appointmentId);
 
       if (!appointment) {
@@ -454,6 +454,17 @@ const BarberQueue = () => {
       }
 
       console.log(`🔄 Queue updating appointment ${appointmentId} to ${status}`);
+
+      // Check if starting an appointment (ongoing) is for today only
+      if (status === 'ongoing') {
+        const today = new Date().toISOString().split('T')[0];
+        const appointmentDate = appointment.appointment_date || '';
+
+        if (appointmentDate !== today) {
+          setError('You can only start appointments scheduled for today.');
+          return;
+        }
+      }
 
       // Optimistic updates
       if (appointmentId === currentAppointment?.id && status === 'completed') {
@@ -493,7 +504,7 @@ const BarberQueue = () => {
 
       // Create notification using centralized service (handles both database and push)
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createAppointmentStatusNotification({
           userId: appointment.customer_id,
           appointmentId: appointmentId,
@@ -508,10 +519,10 @@ const BarberQueue = () => {
       // Notify next customer if appointment completed
       if (status === 'completed' && queuedAppointments.length > 0) {
         const nextAppointment = queuedAppointments[0];
-        
+
         // Notify next customer using centralized service
         try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
           await centralizedNotificationService.createQueuePositionNotification({
             userId: nextAppointment.customer_id,
             appointmentId: nextAppointment.id,
@@ -544,7 +555,7 @@ const BarberQueue = () => {
     } catch (err) {
       console.error('❌ Queue error updating appointment status:', err);
       setError('Failed to update appointment status. Please try again.');
-      
+
       // Refresh on error to revert optimistic updates
       fetchQueueData();
     }
@@ -552,12 +563,12 @@ const BarberQueue = () => {
 
   const formatTime = (timeString) => {
     if (!timeString) return '';
-    
+
     const [hours, minutes] = timeString.split(':');
     const hour = parseInt(hours, 10);
     const period = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
-    
+
     return `${hour12}:${minutes} ${period}`;
   };
 
@@ -634,14 +645,14 @@ const BarberQueue = () => {
           ></i>
         </button>
       </div>
-      
+
       {error && (
         <div className="alert alert-danger alert-dismissible fade show" role="alert">
           {error}
-          <button 
-            type="button" 
-            className="btn-close" 
-            onClick={() => setError(null)} 
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError(null)}
             aria-label="Close"
           ></button>
         </div>
@@ -732,7 +743,7 @@ const BarberQueue = () => {
             }}>
               {queuedAppointments[0].queue_position || 1}
             </div>
-            
+
             {/* Customer Info */}
             <div className="flex-grow-1" style={{ minWidth: 0 }}>
               <div style={{ fontSize: 'clamp(0.95rem, 3vw, 1.1rem)', fontWeight: '500', marginBottom: '0.25rem' }}>
@@ -742,7 +753,7 @@ const BarberQueue = () => {
                 Services: {getServicesDisplay(queuedAppointments[0]) || 'Classic'}
               </div>
             </div>
-            
+
             {/* Duration */}
             <div className="flex-shrink-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#4b5563' }}>
               {queuedAppointments[0].total_duration || queuedAppointments[0].service?.duration || 30} min
@@ -811,7 +822,7 @@ const BarberQueue = () => {
             }}>
               1
             </div>
-            
+
             {/* Customer Info */}
             <div className="flex-grow-1" style={{ minWidth: 0 }}>
               <div style={{ fontSize: 'clamp(0.95rem, 3vw, 1.1rem)', fontWeight: '500', marginBottom: '0.25rem' }}>
@@ -821,7 +832,7 @@ const BarberQueue = () => {
                 Services: {getServicesDisplay(currentAppointment) || 'Classic'}
               </div>
             </div>
-            
+
             {/* Duration */}
             <div className="flex-shrink-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#4b5563' }}>
               {currentAppointment.total_duration || currentAppointment.service?.duration || 30} min
@@ -894,10 +905,10 @@ const BarberQueue = () => {
         </div>
 
         {(() => {
-          const waitingList = currentAppointment 
-            ? queuedAppointments 
+          const waitingList = currentAppointment
+            ? queuedAppointments
             : queuedAppointments.slice(1);
-          
+
           return waitingList.length === 0 ? (
             <div className="text-center py-5" style={{
               background: '#f9fafb',
@@ -933,7 +944,7 @@ const BarberQueue = () => {
                     }}>
                       {appointment.queue_position || (actualIndex + 1)}
                     </div>
-                    
+
                     {/* Customer Info */}
                     <div className="flex-grow-1" style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', marginBottom: '0.25rem', color: '#1f2937' }}>
@@ -994,7 +1005,7 @@ const BarberQueue = () => {
                     {' '}({request.total_duration || (request.service?.duration || 30)} min)
                   </div>
                 </div>
-                
+
                 <div className="d-flex gap-2 w-100 w-md-auto">
                   <button
                     className="btn btn-sm flex-fill flex-md-initial"

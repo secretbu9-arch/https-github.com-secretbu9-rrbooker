@@ -1,6 +1,6 @@
 // utils/helpers.js (Enhanced with queue management and new features)
 import { DATE_FORMATS, QUEUE_SETTINGS, BOOKING_SETTINGS } from './constants';
-import addOnsService from '../../services/AddOnsService';
+import addOnsService from '../../services/booking/AddOnsService';
 
 /**
  * Format a date string or Date object using Intl.DateTimeFormat

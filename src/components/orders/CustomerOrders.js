@@ -161,7 +161,7 @@ const CustomerOrders = () => {
 
       // Cancel expired orders
       if (ordersToCancel.length > 0) {
-        const { default: ordersService } = await import('../../services/OrdersService');
+        const { default: ordersService } = await import('../../services/booking/OrdersService');
         
         for (const order of ordersToCancel) {
           try {
@@ -252,7 +252,7 @@ const CustomerOrders = () => {
 
   const handleConfirmCancellation = async (orderId, reason) => {
     try {
-      const { default: ordersService } = await import('../../services/OrdersService');
+      const { default: ordersService } = await import('../../services/booking/OrdersService');
       await ordersService.cancelOrder(orderId, reason, 'customer');
       await fetchOrders();
       setShowCancellationModal(false);
@@ -316,7 +316,7 @@ const CustomerOrders = () => {
     if (!orderToCancel) return;
 
     try {
-      const { default: ordersService } = await import('../../services/OrdersService');
+      const { default: ordersService } = await import('../../services/booking/OrdersService');
       await ordersService.updateOrderStatus(orderToCancel.id, 'cancelled');
       await fetchOrders();
       setShowCancelModal(false);

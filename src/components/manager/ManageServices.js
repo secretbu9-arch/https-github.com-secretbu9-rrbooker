@@ -1,7 +1,7 @@
 // components/manager/ManageServices.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { apiService } from '../../services/ApiService';
+import { apiService } from '../../services/core/ApiService';
 import { formatPrice } from '../utils/helpers';
 import { isValidPrice } from '../utils/validators';
 import LoadingSpinner from '../common/LoadingSpinner';

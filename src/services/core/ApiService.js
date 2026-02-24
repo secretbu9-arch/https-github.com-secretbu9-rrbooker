@@ -1,16 +1,16 @@
 // services/ApiService.js (Enhanced with queue management and new features)
-import { supabase } from '../supabaseClient';
-import addOnsService from './AddOnsService';
+import { supabase } from '../../supabaseClient';
+import addOnsService from '../booking/AddOnsService';
 
 /**
  * Enhanced API Service for handling all barbershop operations
  */
 class ApiService {
-  
+
   // =====================
   // USER MANAGEMENT
   // =====================
-  
+
   async getCurrentUser() {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) throw error;
@@ -23,7 +23,7 @@ class ApiService {
       .select('*')
       .eq('id', userId)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -38,7 +38,7 @@ class ApiService {
       .eq('id', userId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -54,7 +54,7 @@ class ApiService {
       .eq('role', 'barber')
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -72,7 +72,7 @@ class ApiService {
         barber:barber_id(id, full_name, email, phone, barber_status),
         service:service_id(id, name, price, duration, description)
       `);
-    
+
     // Apply filters
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -86,7 +86,7 @@ class ApiService {
         }
       }
     });
-    
+
     // Default sorting by queue number, then by appointment time
     if (filters.sort_by) {
       query = query.order(filters.sort_by, { ascending: filters.sort_dir !== 'desc' });
@@ -96,9 +96,9 @@ class ApiService {
         .order('queue_position', { ascending: true, nullsLast: true })
         .order('appointment_time', { ascending: true });
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data;
   }
@@ -163,7 +163,7 @@ class ApiService {
         service:service_id(id, name, price, duration, description)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -178,7 +178,7 @@ class ApiService {
     // If urgent, need to adjust other queue numbers
     if (isUrgent) {
       const appointment = await this.getAppointmentById(appointmentId);
-      
+
       // Get all existing appointments to increment their queue numbers
       const { data: existingAppointments, error: fetchError } = await supabase
         .from('appointments')
@@ -195,13 +195,13 @@ class ApiService {
       for (const apt of existingAppointments || []) {
         await supabase
           .from('appointments')
-          .update({ 
+          .update({
             queue_position: apt.queue_position + 1,
             updated_at: new Date().toISOString()
           })
           .eq('id', apt.id);
       }
-      
+
       updates.queue_position = 1;
     }
 
@@ -216,7 +216,7 @@ class ApiService {
         service:service_id(id, name, price, duration, description)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -232,7 +232,7 @@ class ApiService {
       .eq('id', appointmentId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -261,7 +261,7 @@ class ApiService {
         service:service_id(id, name, price, duration, description)
       `)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -281,7 +281,7 @@ class ApiService {
       .eq('id', appointmentId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -297,7 +297,7 @@ class ApiService {
       `)
       .eq('id', appointmentId)
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -307,7 +307,7 @@ class ApiService {
       .from('appointments')
       .delete()
       .eq('id', appointmentId);
-    
+
     if (error) throw error;
     return true;
   }
@@ -328,12 +328,12 @@ class ApiService {
       .eq('appointment_date', date)
       .in('status', ['scheduled', 'ongoing'])
       .order('queue_position', { ascending: true, nullsLast: true });
-    
+
     if (error) throw error;
-    
+
     const current = data?.find(apt => apt.status === 'ongoing') || null;
     const queue = data?.filter(apt => apt.status === 'scheduled') || [];
-    
+
     return { current, queue, total: data?.length || 0 };
   }
 
@@ -352,9 +352,9 @@ class ApiService {
     if (date) {
       query = query.eq('appointment_date', date);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data || [];
   }
@@ -368,9 +368,9 @@ class ApiService {
       .eq('status', 'scheduled')
       .order('queue_position', { ascending: false })
       .limit(1);
-    
+
     if (error) throw error;
-    
+
     const maxQueueNumber = data?.[0]?.queue_position || 0;
     return maxQueueNumber + 1;
   }
@@ -388,11 +388,11 @@ class ApiService {
       .single();
 
     if (nextError && nextError.code !== 'PGRST116') throw nextError;
-    
+
     if (nextCustomer) {
       return await this.updateAppointmentStatus(nextCustomer.id, 'ongoing');
     }
-    
+
     return null;
   }
 
@@ -404,15 +404,15 @@ class ApiService {
     let query = supabase
       .from('services')
       .select('*');
-    
+
     if (!includeInactive) {
       query = query.eq('is_active', true);
     }
-    
+
     query = query.order('name');
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data;
   }
@@ -427,7 +427,7 @@ class ApiService {
       }])
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -442,7 +442,7 @@ class ApiService {
       .eq('id', serviceId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -455,41 +455,41 @@ class ApiService {
         .select('id, status, appointment_date')
         .eq('service_id', serviceId)
         .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
-      
+
       if (checkError) {
         console.error('Error checking service usage:', checkError);
         throw new Error('Failed to check if service is in use');
       }
-      
+
       // If service is being used by active appointments, prevent deletion
       if (appointments && appointments.length > 0) {
-        const activeAppointments = appointments.filter(apt => 
+        const activeAppointments = appointments.filter(apt =>
           ['pending', 'scheduled', 'confirmed', 'ongoing'].includes(apt.status)
         );
-        
+
         if (activeAppointments.length > 0) {
           throw new Error(`Cannot delete service. It is currently being used by ${activeAppointments.length} active appointment(s). Please deactivate the service instead or wait until all appointments are completed.`);
         }
       }
-      
+
       // Check if service is referenced in services_data JSON field
       const { data: jsonReferences, error: jsonError } = await supabase
         .from('appointments')
         .select('id, services_data')
         .not('services_data', 'is', null)
         .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
-      
+
       if (jsonError) {
         console.error('Error checking JSON service references:', jsonError);
         throw new Error('Failed to check service references in appointment data');
       }
-      
+
       // Check if service ID appears in any services_data JSON arrays
       if (jsonReferences && jsonReferences.length > 0) {
         const activeJsonReferences = jsonReferences.filter(apt => {
           try {
-            const servicesData = typeof apt.services_data === 'string' 
-              ? JSON.parse(apt.services_data) 
+            const servicesData = typeof apt.services_data === 'string'
+              ? JSON.parse(apt.services_data)
               : apt.services_data;
             return Array.isArray(servicesData) && servicesData.includes(serviceId);
           } catch (e) {
@@ -497,23 +497,23 @@ class ApiService {
             return false;
           }
         });
-        
+
         if (activeJsonReferences.length > 0) {
           throw new Error(`Cannot delete service. It is referenced in ${activeJsonReferences.length} active appointment(s) as part of multiple services. Please deactivate the service instead.`);
         }
       }
-      
+
       // If no active references, proceed with deletion
       const { error } = await supabase
         .from('services')
         .delete()
         .eq('id', serviceId);
-      
+
       if (error) {
         console.error('Error deleting service:', error);
         throw new Error(`Failed to delete service: ${error.message}`);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Service deletion error:', error);
@@ -549,7 +549,7 @@ class ApiService {
       }])
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -564,7 +564,7 @@ class ApiService {
       .eq('id', addOnId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -577,18 +577,18 @@ class ApiService {
         .select('id, add_ons_data, status')
         .not('add_ons_data', 'is', null)
         .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
-      
+
       if (checkError) {
         console.error('Error checking add-on usage:', checkError);
         throw new Error('Failed to check if add-on is in use');
       }
-      
+
       // Check if add-on ID appears in any add_ons_data JSON arrays
       if (appointments && appointments.length > 0) {
         const activeReferences = appointments.filter(apt => {
           try {
-            const addOnsData = typeof apt.add_ons_data === 'string' 
-              ? JSON.parse(apt.add_ons_data) 
+            const addOnsData = typeof apt.add_ons_data === 'string'
+              ? JSON.parse(apt.add_ons_data)
               : apt.add_ons_data;
             return Array.isArray(addOnsData) && addOnsData.includes(addOnId);
           } catch (e) {
@@ -596,23 +596,23 @@ class ApiService {
             return false;
           }
         });
-        
+
         if (activeReferences.length > 0) {
           throw new Error(`Cannot delete add-on. It is currently being used by ${activeReferences.length} active appointment(s). Please deactivate the add-on instead.`);
         }
       }
-      
+
       // If no active references, proceed with deletion
       const { error } = await supabase
         .from('add_ons')
         .delete()
         .eq('id', addOnId);
-      
+
       if (error) {
         console.error('Error deleting add-on:', error);
         throw new Error(`Failed to delete add-on: ${error.message}`);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Add-on deletion error:', error);
@@ -635,7 +635,7 @@ class ApiService {
       .select(selectFields)
       .eq('role', 'barber')
       .order('full_name');
-    
+
     if (error) throw error;
     return data;
   }
@@ -647,9 +647,9 @@ class ApiService {
       .eq('barber_id', barberId)
       .eq('appointment_date', date)
       .in('status', ['scheduled', 'ongoing', 'pending']);
-    
+
     if (error) throw error;
-    
+
     const maxCapacity = 15; // Standardized capacity for all barbers
     return {
       current: count || 0,
@@ -669,9 +669,9 @@ class ApiService {
       .eq('barber_id', barberId)
       .gte('appointment_date', dateFrom)
       .lte('appointment_date', dateTo);
-    
+
     if (error) throw error;
-    
+
     const completed = data?.filter(apt => apt.status === 'completed') || [];
     const cancelled = data?.filter(apt => apt.status === 'cancelled') || [];
     const revenue = completed.reduce((sum, apt) => {
@@ -679,7 +679,7 @@ class ApiService {
       const urgentFee = apt.is_urgent ? 100 : 0;
       return sum + basePrice + urgentFee;
     }, 0);
-    
+
     return {
       totalAppointments: data?.length || 0,
       completedAppointments: completed.length,
@@ -724,7 +724,7 @@ class ApiService {
   async createNotification(notification) {
     console.warn('⚠️ DEPRECATED: ApiService.createNotification is deprecated. Use CentralizedNotificationService instead.');
     console.warn('⚠️ This prevents duplicate notifications. Please update your code.');
-    
+
     // Return a mock response to prevent errors
     return {
       id: 'deprecated',
@@ -740,7 +740,7 @@ class ApiService {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
-    
+
     if (error) throw error;
     return data;
   }
@@ -748,14 +748,14 @@ class ApiService {
   async markNotificationAsRead(notificationId) {
     const { data, error } = await supabase
       .from('notifications')
-      .update({ 
+      .update({
         is_read: true,
         read_at: new Date().toISOString()
       })
       .eq('id', notificationId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -775,7 +775,7 @@ class ApiService {
       }])
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   }
@@ -789,25 +789,25 @@ class ApiService {
       `)
       .order('created_at', { ascending: false })
       .limit(limit);
-    
+
     if (filters.user_id) {
       query = query.eq('user_id', filters.user_id);
     }
-    
+
     if (filters.action) {
       query = query.eq('action', filters.action);
     }
-    
+
     if (filters.date_from) {
       query = query.gte('created_at', filters.date_from);
     }
-    
+
     if (filters.date_to) {
       query = query.lte('created_at', filters.date_to);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data;
   }
@@ -828,9 +828,9 @@ class ApiService {
       .eq('status', 'completed')
       .gte('appointment_date', dateFrom)
       .lte('appointment_date', dateTo);
-    
+
     if (error) throw error;
-    
+
     // Process data to get daily revenue including urgent fees
     const revenueByDate = {};
     data.forEach(appointment => {
@@ -838,14 +838,14 @@ class ApiService {
       const basePrice = appointment.total_price || appointment.service?.price || 0;
       const urgentFee = appointment.is_urgent ? 100 : 0;
       const totalPrice = basePrice + urgentFee;
-      
+
       if (!revenueByDate[date]) {
         revenueByDate[date] = 0;
       }
-      
+
       revenueByDate[date] += totalPrice;
     });
-    
+
     return Object.entries(revenueByDate).map(([date, amount]) => ({
       date,
       amount
@@ -867,9 +867,9 @@ class ApiService {
       `)
       .gte('appointment_date', dateFrom)
       .lte('appointment_date', dateTo);
-    
+
     if (error) throw error;
-    
+
     // Analyze queue performance
     const analytics = {
       totalBookings: data?.length || 0,
@@ -878,18 +878,18 @@ class ApiService {
       queueEfficiency: 0,
       barberWorkload: {}
     };
-    
+
     // Calculate average queue position
     const queuePositions = data?.filter(apt => apt.queue_position).map(apt => apt.queue_position) || [];
     if (queuePositions.length > 0) {
       analytics.averageQueuePosition = queuePositions.reduce((sum, pos) => sum + pos, 0) / queuePositions.length;
     }
-    
+
     // Calculate barber workload
     data?.forEach(appointment => {
       const barberId = appointment.barber_id;
       const barberName = appointment.barber?.full_name || 'Unknown';
-      
+
       if (!analytics.barberWorkload[barberId]) {
         analytics.barberWorkload[barberId] = {
           barberName,
@@ -898,18 +898,18 @@ class ApiService {
           completedAppointments: 0
         };
       }
-      
+
       analytics.barberWorkload[barberId].totalAppointments += 1;
-      
+
       if (appointment.is_urgent) {
         analytics.barberWorkload[barberId].urgentAppointments += 1;
       }
-      
+
       if (appointment.status === 'completed') {
         analytics.barberWorkload[barberId].completedAppointments += 1;
       }
     });
-    
+
     return analytics;
   }
 
@@ -921,7 +921,7 @@ class ApiService {
     // Helper method to format appointment data for display
     const addOns = this.getAddOns();
     let formattedData = { ...appointment };
-    
+
     // Parse and format services data
     if (appointment.services_data) {
       try {
@@ -930,28 +930,28 @@ class ApiService {
         formattedData.additionalServices = [];
       }
     }
-    
+
     // Parse and format add-ons data
     if (appointment.add_ons_data) {
       try {
         const addOnIds = JSON.parse(appointment.add_ons_data);
-        formattedData.addOns = addOnIds.map(addonId => 
+        formattedData.addOns = addOnIds.map(addonId =>
           addOns.find(addon => addon.id === addonId)
         ).filter(Boolean);
       } catch (e) {
         formattedData.addOns = [];
       }
     }
-    
+
     // Calculate total price including urgent fee
     formattedData.finalPrice = (appointment.total_price || 0) + (appointment.is_urgent ? 100 : 0);
-    
+
     return formattedData;
   }
 
   calculateEstimatedWaitTime(queuePosition, averageServiceTime = 35) {
     const waitMinutes = (queuePosition - 1) * averageServiceTime;
-    
+
     if (waitMinutes < 60) {
       return `${waitMinutes} min`;
     } else {
@@ -964,7 +964,7 @@ class ApiService {
   // =====================
   // PRODUCT MANAGEMENT
   // =====================
-  
+
   async getProducts(includeInactive = false) {
     try {
       let query = supabase
@@ -978,13 +978,13 @@ class ApiService {
 
       const { data, error } = await query;
       if (error) throw error;
-      
+
       // Add is_available field based on stock_quantity and is_active
       const productsWithAvailability = (data || []).map(product => ({
         ...product,
         is_available: product.is_active && (Number(product.stock_quantity) > 0)
       }));
-      
+
       return productsWithAvailability;
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -1001,13 +1001,13 @@ class ApiService {
         .single();
 
       if (error) throw error;
-      
+
       // Add is_available field based on stock_quantity and is_active
       const productWithAvailability = {
         ...data,
         is_available: data.is_active && (Number(data.stock_quantity) > 0)
       };
-      
+
       return productWithAvailability;
     } catch (error) {
       console.error('Error getting product by ID:', error);

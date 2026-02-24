@@ -7,8 +7,8 @@
  * @version 1.0.0
  */
 
-import { supabase } from '../supabaseClient';
-import CentralizedNotificationService from './CentralizedNotificationService';
+import { supabase } from '../../supabaseClient';
+import CentralizedNotificationService from '../notifications/CentralizedNotificationService';
 
 class BarberAvailabilityService {
   constructor() {
@@ -82,7 +82,7 @@ class BarberAvailabilityService {
       console.log('🔍 Checking day-off status for barber:', barberId, 'date:', date);
       const dayOffStatus = await this.checkDayOff(barberId, date);
       console.log('📅 Day-off status result:', dayOffStatus);
-      
+
       if (!dayOffStatus.isAvailable) {
         console.log('❌ Barber is on day-off:', dayOffStatus);
         return {
@@ -163,7 +163,7 @@ class BarberAvailabilityService {
   async checkDayOff(barberId, date) {
     try {
       console.log('🔍 Checking day-offs for barber:', barberId, 'date:', date);
-      
+
       // Check if table exists first
       const { data: dayOffs, error } = await supabase
         .from('barber_day_offs')
@@ -261,7 +261,7 @@ class BarberAvailabilityService {
       // Check for time conflicts
       const timeConflicts = appointments?.filter(apt => {
         if (!apt.appointment_time) return false;
-        
+
         const aptStart = apt.appointment_time.slice(0, 5);
         const aptEnd = this.addMinutesToTime(aptStart, apt.total_duration || 30);
         const requestedStart = timeSlot.slice(0, 5);
@@ -328,7 +328,7 @@ class BarberAvailabilityService {
           currentAppointment.appointment_time.slice(0, 5),
           currentAppointment.total_duration || 30
         );
-        
+
         return {
           isAvailable: false,
           reason: 'Barber is currently with a customer',
@@ -392,7 +392,7 @@ class BarberAvailabilityService {
             return {
               success: false,
               error: 'Overlapping day-off already exists',
-              overlapping: existingDayOffs?.find(dayOff => 
+              overlapping: existingDayOffs?.find(dayOff =>
                 startDate <= dayOff.end_date && endDate >= dayOff.start_date
               )
             };
@@ -565,7 +565,7 @@ class BarberAvailabilityService {
     try {
       const timeSlots = this.generateTimeSlots();
       const currentIndex = timeSlots.indexOf(currentTime.slice(0, 5));
-      
+
       for (let i = currentIndex + 1; i < timeSlots.length; i++) {
         const timeSlot = timeSlots[i];
         const availability = await this.checkBarberAvailability(barberId, date, timeSlot);
@@ -620,10 +620,10 @@ class BarberAvailabilityService {
 
     for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
       const dateStr = date.toISOString().split('T')[0];
-      const isDayOff = dayOffs.some(dayOff => 
+      const isDayOff = dayOffs.some(dayOff =>
         dateStr >= dayOff.start_date && dateStr <= dayOff.end_date
       );
-      
+
       if (!isDayOff) {
         availableDates.push(dateStr);
       }

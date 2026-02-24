@@ -3,7 +3,7 @@
  * Separates scheduled appointments from queue appointments with proper validation
  */
 
-import dateService from './DateService.js';
+import dateService from '../core/DateService.js';
 
 class AppointmentTypeManager {
   constructor() {
@@ -230,7 +230,7 @@ class AppointmentTypeManager {
 
     // Handle different time formats
     const time = timeString.toString().trim();
-    
+
     // If it's already in HH:MM format
     if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
       return time;
@@ -281,7 +281,7 @@ class AppointmentTypeManager {
 
     appointments.forEach((appointment, index) => {
       const validation = this.validateAppointmentType(appointment);
-      
+
       if (!validation.isValid) {
         result.invalid.push({
           index,
@@ -327,7 +327,7 @@ class AppointmentTypeManager {
    */
   sortAppointmentsByType(appointments, type) {
     const separated = this.separateAppointmentsByType(appointments);
-    
+
     switch (type) {
       case this.appointmentTypes.SCHEDULED:
         return separated.scheduled.sort((a, b) => {
@@ -359,17 +359,17 @@ class AppointmentTypeManager {
    */
   getAppointmentTypeStatistics(appointments) {
     const separated = this.separateAppointmentsByType(appointments);
-    
+
     return {
       ...separated.summary,
       percentages: {
-        scheduled: separated.summary.total > 0 ? 
+        scheduled: separated.summary.total > 0 ?
           Math.round((separated.summary.scheduled / separated.summary.total) * 100) : 0,
-        queue: separated.summary.total > 0 ? 
+        queue: separated.summary.total > 0 ?
           Math.round((separated.summary.queue / separated.summary.total) * 100) : 0,
-        walkIn: separated.summary.total > 0 ? 
+        walkIn: separated.summary.total > 0 ?
           Math.round((separated.summary.walkIn / separated.summary.total) * 100) : 0,
-        invalid: separated.summary.total > 0 ? 
+        invalid: separated.summary.total > 0 ?
           Math.round((separated.summary.invalid / separated.summary.total) * 100) : 0
       },
       validation: {
@@ -388,7 +388,7 @@ class AppointmentTypeManager {
   debugAppointmentType(appointment) {
     const validation = this.validateAppointmentType(appointment);
     const currentDate = dateService.getCurrentDateFormats();
-    
+
     return {
       original: appointment,
       validation: validation,

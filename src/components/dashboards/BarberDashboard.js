@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 import { ROUTES } from '../utils/constants';
 import RescheduleModal from '../barber/RescheduleModal';
-import addOnsService from '../../services/AddOnsService';
+import addOnsService from '../../services/booking/AddOnsService';
 
 const BarberDashboard = () => {
   const [todaySchedule, setTodaySchedule] = useState([]);
@@ -570,7 +570,7 @@ const BarberDashboard = () => {
 
         // Create notification using centralized service (handles both database and push)
         try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
 
           // Determine appointment type from the appointment data
           const appointmentType = appointment.appointment_type || 'queue';
@@ -625,7 +625,7 @@ const BarberDashboard = () => {
 
         // Create notification using centralized service (handles both database and push)
         try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
           await centralizedNotificationService.createNotification({
             userId: appointment.customer_id,
             title: 'Booking Request Declined',
@@ -736,7 +736,7 @@ const BarberDashboard = () => {
       }
 
       // Create notification using centralized service (ONLY way to create notifications)
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
       await centralizedNotificationService.createAppointmentStatusNotification({
         userId: appointment.customer_id,
         appointmentId: appointmentId,

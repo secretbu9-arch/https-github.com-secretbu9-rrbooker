@@ -6,7 +6,8 @@
   align-items: center;
   min-height: 100vh;
   width: 100%;
-  background-color: #2E2C34; /* Dark background */
+  background-color: #2E2C34;
+  /* Dark background */
   padding: 1rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   color: white;
@@ -16,7 +17,8 @@
   position: relative;
   width: 100%;
   max-width: 375px;
-  background-color: #3A384A; /* Dark card background */
+  background-color: #3A384A;
+  /* Dark card background */
   border-radius: 24px;
   padding: 2rem;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
@@ -24,7 +26,8 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  overflow: visible; /* Changed from hidden to visible */
+  overflow: visible;
+  /* Changed from hidden to visible */
   min-height: 600px;
 }
 
@@ -60,14 +63,16 @@
   align-items: center;
   border-radius: 50%;
   overflow: hidden;
-  z-index: 2; /* Ensure logo is above other elements */
+  z-index: 2;
+  /* Ensure logo is above other elements */
 }
 
 .logo-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  z-index: 2; /* Ensure image is above other elements */
+  z-index: 2;
+  /* Ensure image is above other elements */
 }
 
 /* Auth Logo Styles for img tag - Using onboarding button colors */
@@ -102,30 +107,36 @@
 
 /* Fallback logo styling */
 .logo-fallback-text {
-  display: none; /* Hidden by default */
+  display: none;
+  /* Hidden by default */
   font-size: 3rem;
   font-weight: 900;
   color: white;
-  z-index: 3; /* Ensure text is above other elements */
+  z-index: 3;
+  /* Ensure text is above other elements */
 }
 
 /* When logo-placeholder class is added, show fallback */
 .logo-placeholder {
   background-color: #F8A34A;
-  display: flex !important; /* Force display */
+  display: flex !important;
+  /* Force display */
   justify-content: center;
   align-items: center;
 }
 
 .logo-placeholder .logo-fallback-text {
-  display: block !important; /* Force display */
+  display: block !important;
+  /* Force display */
 }
 
 .logo-text {
   text-align: center;
   margin-top: 1rem;
-  z-index: 2; /* Ensure text is above other elements */
-  position: relative; /* Added to ensure proper stacking */
+  z-index: 2;
+  /* Ensure text is above other elements */
+  position: relative;
+  /* Added to ensure proper stacking */
 }
 
 .logo-text h1 {
@@ -135,14 +146,16 @@
   margin: 0;
   letter-spacing: 1px;
   white-space: nowrap;
-  color: white; /* Ensure text is visible */
+  color: white;
+  /* Ensure text is visible */
 }
 
 .logo-text p {
   color: #F8A34A;
   font-size: 1rem;
   margin-top: 0.2rem;
-  display: block !important; /* Force display */
+  display: block !important;
+  /* Force display */
 }
 
 /* Add decorative elements around the illustration */
@@ -171,7 +184,8 @@
   font-weight: 700;
   color: white;
   margin-bottom: 0.5rem;
-  z-index: 2; /* Ensure text is above other elements */
+  z-index: 2;
+  /* Ensure text is above other elements */
 }
 
 .slide-subtitle {
@@ -179,7 +193,8 @@
   font-weight: 500;
   color: #F8A34A;
   margin-bottom: 1rem;
-  z-index: 2; /* Ensure text is above other elements */
+  z-index: 2;
+  /* Ensure text is above other elements */
 }
 
 .slide-description {
@@ -188,14 +203,16 @@
   color: rgba(255, 255, 255, 0.7);
   margin-bottom: 2rem;
   max-width: 280px;
-  z-index: 2; /* Ensure text is above other elements */
+  z-index: 2;
+  /* Ensure text is above other elements */
 }
 
 .slide-indicators {
   display: flex;
   justify-content: center;
   margin-bottom: 2rem;
-  z-index: 2; /* Ensure indicators are above other elements */
+  z-index: 2;
+  /* Ensure indicators are above other elements */
 }
 
 .indicator {
@@ -229,8 +246,10 @@
   margin-top: auto;
   text-transform: uppercase;
   letter-spacing: 1px;
-  z-index: 3; /* Ensure button is above other elements */
-  position: relative; /* Added to ensure proper stacking */
+  z-index: 3;
+  /* Ensure button is above other elements */
+  position: relative;
+  /* Added to ensure proper stacking */
 }
 
 .action-button:hover {
@@ -302,7 +321,8 @@
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   transition: color 0.2s ease;
-  z-index: 5; /* High z-index to ensure visibility */
+  z-index: 5;
+  /* High z-index to ensure visibility */
 }
 
 .skip-link:hover {
@@ -316,6 +336,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -347,7 +368,7 @@
     padding: 1.5rem;
     min-height: 500px;
   }
-  
+
   .slide-illustration {
     width: 150px;
     height: 150px;
@@ -355,35 +376,35 @@
     /* Reduce padding on smaller screens */
     padding-top: 0.5rem;
   }
-  
+
   .barber-logo {
     /* Reduce margin on smaller screens */
     margin-top: 0.5rem;
   }
-  
+
   .slide-illustration::before {
     width: 170px;
     height: 170px;
   }
-  
+
   .slide-illustration::after {
     width: 120px;
     height: 120px;
   }
-  
+
   .slide-title {
     margin-bottom: 0.5rem;
   }
-  
+
   .slide-description {
     margin-bottom: 1.5rem;
   }
-  
+
   .logo-image-container {
     width: 120px;
     height: 120px;
   }
-  
+
   .logo-image-container::before {
     width: 145px;
     height: 145px;
@@ -393,24 +414,53 @@
     font-size: 2.5rem;
   }
 }
+
 .a {
-    color: #000;
+  color: #000;
 }
+
 .signup-link {
   font-size: 0.9rem;
-  color: #F8A34A; /* Orange color matching the buttons */
+  color: #F8A34A;
+  /* Orange color matching the buttons */
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
 }
-.register-link a{
+
+.register-link {
+  margin-top: 2rem;
+  width: 100%;
+}
+
+.register-link a {
   font-size: 0.9rem;
-  color: #F8A34A; /* Orange color matching the buttons */
- 
+  color: #F8A34A;
+  /* Orange color matching the buttons */
 }
 
 .signup-link:hover {
-  color: #FFC107; /* Brighter orange on hover */
+  color: #FFC107;
+  /* Brighter orange on hover */
   text-decoration: underline;
   transform: translateY(-1px);
+}
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+  margin: 1rem 0;
+  width: 100%;
+}
+
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.1);
+  margin: 0 1rem;
 }

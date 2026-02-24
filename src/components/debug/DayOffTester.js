@@ -1,7 +1,7 @@
 // Debug component to test day-off functionality
 import React, { useState } from 'react';
 import { supabase } from '../../supabaseClient';
-import BarberAvailabilityService from '../../services/BarberAvailabilityService';
+import BarberAvailabilityService from '../../services/booking/BarberAvailabilityService';
 
 const DayOffTester = ({ user }) => {
   const [testResults, setTestResults] = useState([]);

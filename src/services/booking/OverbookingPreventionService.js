@@ -1,5 +1,5 @@
 // services/OverbookingPreventionService.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class OverbookingPreventionService {
   // Comprehensive overbooking prevention check

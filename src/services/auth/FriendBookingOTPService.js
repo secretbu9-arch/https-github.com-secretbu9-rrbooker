@@ -1,5 +1,5 @@
-import { supabase } from '../supabaseClient';
-import { emailService } from './EmailService';
+import { supabase } from '../../supabaseClient';
+import { emailService } from '../notifications/EmailService';
 
 const OTP_EXPIRATION_MINUTES = 10;
 

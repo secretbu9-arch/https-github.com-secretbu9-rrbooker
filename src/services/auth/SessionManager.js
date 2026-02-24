@@ -1,5 +1,5 @@
 // services/SessionManager.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class SessionManager {
   constructor() {

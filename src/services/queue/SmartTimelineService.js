@@ -5,8 +5,8 @@
  * Intelligently fills gaps and prevents conflicts
  */
 
-import { supabase } from '../supabaseClient';
-import { formatDateLocal } from '../utils/dateHelpers';
+import { supabase } from '../../supabaseClient';
+import { formatDateLocal } from '../../utils/dateHelpers';
 
 class SmartTimelineService {
   constructor() {
@@ -50,11 +50,11 @@ class SmartTimelineService {
       if (error) throw error;
 
       // 2. Separate scheduled and queue appointments
-      const scheduled = appointments?.filter(apt => 
+      const scheduled = appointments?.filter(apt =>
         apt.appointment_type === 'scheduled' && apt.appointment_time !== null
       ) || [];
-      
-      const queue = appointments?.filter(apt => 
+
+      const queue = appointments?.filter(apt =>
         apt.appointment_type === 'queue' || apt.queue_position !== null
       ) || [];
 
@@ -149,7 +149,7 @@ class SmartTimelineService {
       // Check if there's a gap before this block
       if (previousEnd < block.startMinutes) {
         const gapDuration = block.startMinutes - previousEnd;
-        
+
         // Try to fill gap with queue appointments
         const queueFit = this.fillGapWithQueue(
           queue.slice(queueIndex),
@@ -253,7 +253,7 @@ class SmartTimelineService {
    */
   calculateGaps(scheduled) {
     const gaps = [];
-    const sorted = [...scheduled].sort((a, b) => 
+    const sorted = [...scheduled].sort((a, b) =>
       this.timeToMinutes(a.appointment_time) - this.timeToMinutes(b.appointment_time)
     );
 
@@ -270,7 +270,7 @@ class SmartTimelineService {
       if (previousEnd < lunchStart && startTime > previousEnd) {
         const gapStart = previousEnd;
         const gapEnd = Math.min(startTime, lunchStart);
-        
+
         if (gapEnd > gapStart) {
           gaps.push({
             startTime: this.minutesToTime(gapStart),
@@ -321,7 +321,7 @@ class SmartTimelineService {
   assignEstimatedTimes(queue, gaps, scheduled) {
     return queue.map((apt, index) => {
       const duration = apt.total_duration || apt.service?.duration || 30;
-      
+
       // Calculate cumulative time from previous queue appointments
       let cumulativeTime = 0;
       for (let i = 0; i < index; i++) {
@@ -354,7 +354,7 @@ class SmartTimelineService {
    * Check if queue fits in available gaps
    */
   checkQueueFitsInGaps(queue, gaps) {
-    const totalQueueTime = queue.reduce((sum, apt) => 
+    const totalQueueTime = queue.reduce((sum, apt) =>
       sum + (apt.total_duration || apt.service?.duration || 30) + this.BUFFER_TIME, 0
     );
     const totalGapTime = gaps.reduce((sum, gap) => sum + gap.duration, 0);
@@ -372,7 +372,7 @@ class SmartTimelineService {
    */
   detectConflicts(timeline) {
     const conflicts = [];
-    
+
     for (let i = 0; i < timeline.length - 1; i++) {
       const current = timeline[i];
       const next = timeline[i + 1];
@@ -438,7 +438,7 @@ class SmartTimelineService {
     try {
       const timeline = await this.getUnifiedTimeline(barberId, date);
       const queueFits = timeline.summary.queueFitsInGaps;
-      
+
       // Check if adding this duration would still fit
       const newTotalQueue = queueFits.totalQueueTime + serviceDuration + this.BUFFER_TIME;
       const wouldFit = newTotalQueue <= queueFits.totalGapTime;
@@ -465,7 +465,7 @@ class SmartTimelineService {
    */
   calculateEstimatedStartForNewQueue(timeline, serviceDuration) {
     const queueBlocks = timeline.timeline.filter(b => b.type === 'queue');
-    
+
     if (queueBlocks.length === 0) {
       // First in queue, use first available gap
       const firstGap = timeline.gaps[0];

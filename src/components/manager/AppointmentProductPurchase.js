@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { apiService } from '../../services/ApiService';
-import ordersService from '../../services/OrdersService';
+import { apiService } from '../../services/core/ApiService';
+import ordersService from '../../services/booking/OrdersService';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const AppointmentProductPurchase = ({ appointment, onClose, onSuccess }) => {

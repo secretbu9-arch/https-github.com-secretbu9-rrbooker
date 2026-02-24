@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { passwordResetOTPService } from '../../services/PasswordResetOTPService';
+import { passwordResetOTPService } from '../../services/auth/PasswordResetOTPService';
 import './Login.css'; // Reuse Login styles
 
 const ResetPassword = () => {

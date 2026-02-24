@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import OrdersService from '../../services/OrdersService';
+import OrdersService from '../../services/booking/OrdersService';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const OrderCheckout = () => {

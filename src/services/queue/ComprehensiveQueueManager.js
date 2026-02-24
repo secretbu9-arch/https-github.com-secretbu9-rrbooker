@@ -4,8 +4,8 @@
  * changing priorities, and managing queue positions
  */
 
-import { supabase } from '../supabaseClient';
-import CentralizedNotificationService from './CentralizedNotificationService';
+import { supabase } from '../../supabaseClient';
+import CentralizedNotificationService from '../notifications/CentralizedNotificationService';
 
 class ComprehensiveQueueManager {
   constructor() {
@@ -105,7 +105,7 @@ class ComprehensiveQueueManager {
         customer_id: appointment.customer_id,
         primary_customer_id: appointment.primary_customer_id
       });
-      
+
       if (customerId) {
         try {
           await CentralizedNotificationService.createNotification({
@@ -274,7 +274,7 @@ class ComprehensiveQueueManager {
 
       // Update positions for other appointments
       const updates = [];
-      
+
       if (newPosition < currentPosition) {
         // Moving up in queue - shift others down
         otherAppointments.forEach(apt => {

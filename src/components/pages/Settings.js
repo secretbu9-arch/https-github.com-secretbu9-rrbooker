@@ -1,8 +1,10 @@
 // components/pages/Settings.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { passwordResetOTPService } from '../../services/PasswordResetOTPService';
+import { passwordResetOTPService } from '../../services/auth/PasswordResetOTPService';
+import { PushService } from '../../services/notifications/PushService';
 import logoImage from '../../assets/images/raf-rok-logo.png';
+import { Capacitor } from '@capacitor/core';
 
 const Settings = () => {
   const [user, setUser] = useState(null);
@@ -11,12 +13,18 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [activeTab, setActiveTab] = useState('notifications');
-  
+
   // Settings state
   const [settings, setSettings] = useState({
     emailNotifications: true,
     language: 'en',
     timezone: 'Asia/Manila'
+  });
+
+  // Push notification state
+  const [pushStatus, setPushStatus] = useState({
+    supported: true,
+    permission: 'default'
   });
 
   // Password change state (OTP-based, like ResetPassword)
@@ -31,29 +39,113 @@ const Settings = () => {
 
   useEffect(() => {
     fetchUserData();
+    checkPushStatus();
   }, []);
+
+  const checkPushStatus = async () => {
+    try {
+      const support = await PushService.checkNotificationSupport();
+      const isSupported = support.push || support.web;
+      // Get the most relevant permission status
+      const currentPermission = Capacitor.isNativePlatform()
+        ? support.permissions.push
+        : support.permissions.web;
+
+      setPushStatus({
+        supported: isSupported,
+        permission: currentPermission
+      });
+    } catch (error) {
+      console.error('Error checking push status:', error);
+      // Fallback
+      setPushStatus({
+        supported: 'Notification' in window || Capacitor.isNativePlatform(),
+        permission: typeof Notification !== 'undefined' ? Notification.permission : 'default'
+      });
+    }
+  };
+
+  const handleEnablePush = async () => {
+    try {
+      setSaving(true);
+      await PushService.initialize(true); // Force re-initialization/token refresh
+      await checkPushStatus();
+      setMessage({ type: 'success', text: 'Push notifications initialized!' });
+    } catch (error) {
+      console.error('Error enabling push notifications:', error);
+      setMessage({ type: 'error', text: 'Failed to enable push notifications.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      setSaving(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not found');
+
+      await PushService.sendNotificationToUser(
+        user.id,
+        'Test Notification 🔔',
+        'If you see this, push notifications are working correctly!',
+        { type: 'test' }
+      );
+
+      setMessage({ type: 'success', text: 'Test notification sent! Check your device.' });
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      setMessage({ type: 'error', text: 'Failed to send test notification.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBrowserTest = async () => {
+    try {
+      if (!('Notification' in window)) {
+        setMessage({ type: 'error', text: 'Notifications not supported in this browser.' });
+        return;
+      }
+
+      if (Notification.permission !== 'granted') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          setMessage({ type: 'error', text: 'Browser permission denied. Please enable them in your address bar.' });
+          return;
+        }
+      }
+
+      await PushService.showBrowserNotification(
+        'Notification Test 🔔',
+        'If you see this, your browser is correctly configured to show popups!'
+      );
+    } catch (error) {
+      console.error('Error in browser test:', error);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      
+
       // Get current authenticated user
       const { data: authUser, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
-      
+
       if (authUser?.user) {
         setUser(authUser.user);
-        
+
         // Fetch user profile from users table
         const { data: profileData, error: profileError } = await supabase
           .from('users')
           .select('*')
           .eq('email', authUser.user.email)
           .single();
-          
+
         if (profileError) throw profileError;
         setProfile(profileData);
-        
+
         // Load saved settings (you might want to create a user_settings table)
         // For now, we'll use default settings
         setSettings({
@@ -93,7 +185,7 @@ const Settings = () => {
       // Here you would typically save to a user_settings table
       // For now, we'll just simulate a save
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
@@ -203,9 +295,9 @@ const Settings = () => {
           <div className="card shadow-sm mb-4">
             <div className="card-header bg-dark text-white">
               <div className="d-flex align-items-center">
-                <img 
-                  src={logoImage} 
-                  alt="RAF & ROK" 
+                <img
+                  src={logoImage}
+                  alt="RAF & ROK"
                   height="40"
                   className="me-3"
                   style={{
@@ -232,9 +324,9 @@ const Settings = () => {
             <div className={`alert alert-${message.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show`} role="alert">
               <i className={`bi ${message.type === 'error' ? 'bi-exclamation-triangle' : 'bi-check-circle'} me-2`}></i>
               {message.text}
-              <button 
-                type="button" 
-                className="btn-close" 
+              <button
+                type="button"
+                className="btn-close"
                 onClick={() => setMessage({ type: '', text: '' })}
               ></button>
             </div>
@@ -245,7 +337,7 @@ const Settings = () => {
             <div className="card-header">
               <ul className="nav nav-tabs card-header-tabs" role="tablist">
                 <li className="nav-item" role="presentation">
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'notifications' ? 'active' : ''}`}
                     onClick={() => setActiveTab('notifications')}
                     type="button"
@@ -255,7 +347,7 @@ const Settings = () => {
                   </button>
                 </li>
                 <li className="nav-item" role="presentation">
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'privacy' ? 'active' : ''}`}
                     onClick={() => setActiveTab('privacy')}
                     type="button"
@@ -265,7 +357,7 @@ const Settings = () => {
                   </button>
                 </li>
                 <li className="nav-item" role="presentation">
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'security' ? 'active' : ''}`}
                     onClick={() => setActiveTab('security')}
                     type="button"
@@ -275,7 +367,7 @@ const Settings = () => {
                   </button>
                 </li>
                 <li className="nav-item" role="presentation">
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'preferences' ? 'active' : ''}`}
                     onClick={() => setActiveTab('preferences')}
                     type="button"
@@ -295,28 +387,116 @@ const Settings = () => {
                     <i className="bi bi-bell me-2"></i>
                     Notification Preferences
                   </h5>
-                  
+
                   <div className="row">
                     <div className="col-md-6 mb-4">
-                      <div className="card border-light">
+                      <div className="card border-light h-100">
+                        <div className="card-body">
+                          <div className="d-flex justify-content-between align-items-center mb-3">
+                            <h6 className="card-title mb-0">Push Notifications</h6>
+                            {pushStatus.supported ? (
+                              <span className={`badge ${pushStatus.permission === 'granted' ? 'bg-success' : (pushStatus.permission === 'denied' ? 'bg-danger' : 'bg-warning')}`}>
+                                {pushStatus.permission === 'granted' ? 'Enabled' : (pushStatus.permission === 'denied' ? 'Blocked' : 'Disabled')}
+                              </span>
+                            ) : (
+                              <span className="badge bg-secondary">Not Supported</span>
+                            )}
+                          </div>
+
+                          {pushStatus.permission === 'denied' && (
+                            <div className="alert alert-danger py-2 px-3 mb-3" style={{ fontSize: '0.8rem' }}>
+                              <i className="bi bi-exclamation-octagon-fill me-2"></i>
+                              Notifications are <strong>blocked</strong> by your browser.
+                              <div className="mt-1">
+                                Click the <strong>lock icon</strong> (🔒) in your browser address bar and select "Reset permission" to fix this.
+                              </div>
+                            </div>
+                          )}
+
+                          <p className="small text-muted mb-3">
+                            Receive real-time updates directly on your device.
+                          </p>
+
+                          {/* iOS Specific Instructions */}
+                          {/iPhone|iPad|iPod/i.test(navigator.userAgent) && (
+                            <div className={`alert ${window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches ? 'alert-success' : 'alert-warning'} py-2 px-3 mb-3`} style={{ fontSize: '0.85rem' }}>
+                              <h6 className="alert-heading mb-1" style={{ fontSize: '0.9rem' }}>
+                                <i className="bi bi-apple me-2"></i>
+                                {window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches ? 'PWA Mode Active' : 'iOS Setup Required'}
+                              </h6>
+                              {!(window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) ? (
+                                <>
+                                  <p className="mb-2">Chrome on iOS only supports notifications when saved as an app:</p>
+                                  <ol className="mb-0 ps-3">
+                                    <li>Tap the <strong>Share</strong> icon (in the address bar or bottom bar).</li>
+                                    <li>Select <strong>"Add to Home Screen"</strong>.</li>
+                                    <li>Open the <strong>R&R Booker</strong> app from your home screen.</li>
+                                  </ol>
+                                </>
+                              ) : (
+                                <p className="mb-0">You are running in App mode! You can now enable push notifications below.</p>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="d-grid gap-2">
+                            {pushStatus.permission !== 'granted' ? (
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={handleEnablePush}
+                                disabled={saving}
+                              >
+                                <i className="bi bi-bell-fill me-2"></i>
+                                Enable Push Notifications
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  className="btn btn-outline-success btn-sm"
+                                  onClick={handleTestNotification}
+                                  disabled={saving}
+                                >
+                                  <i className="bi bi-send-fill me-2"></i>
+                                  Send Test Notification
+                                </button>
+                                <button
+                                  className="btn btn-outline-info btn-sm"
+                                  onClick={handleBrowserTest}
+                                  disabled={saving}
+                                >
+                                  <i className="bi bi-window-stack me-2"></i>
+                                  Test Browser Popup
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-md-6 mb-4">
+                      <div className="card border-light h-100">
                         <div className="card-body">
                           <h6 className="card-title">Email Notifications</h6>
-                          <div className="form-check form-switch mb-3">
-                            <input 
-                              className="form-check-input" 
-                              type="checkbox" 
+                          <p className="small text-muted mb-3">
+                            Get appointment summaries and updates via email.
+                          </p>
+                          <div className="form-check form-switch">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
                               id="emailNotifications"
                               checked={settings.emailNotifications}
                               onChange={(e) => handleSettingChange('emailNotifications', e.target.checked)}
                             />
                             <label className="form-check-label" htmlFor="emailNotifications">
-                              Receive email notifications
+                              Receive emails
                             </label>
                           </div>
                         </div>
                       </div>
                     </div>
-                    
+
                   </div>
                 </div>
               )}
@@ -328,7 +508,7 @@ const Settings = () => {
                     <i className="bi bi-shield-lock me-2"></i>
                     Privacy Settings
                   </h5>
-                  
+
                   <div className="card border-light mb-4">
                     <div className="card-body">
                       <h6 className="card-title">Data Sharing</h6>
@@ -349,7 +529,7 @@ const Settings = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="card border-light">
                     <div className="card-body">
                       <h6 className="card-title">Account Data</h6>
@@ -376,7 +556,7 @@ const Settings = () => {
                     <i className="bi bi-key me-2"></i>
                     Security Settings
                   </h5>
-                  
+
                   {/* Change Password */}
                   <div className="card border-light mb-4">
                     <div className="card-body">
@@ -494,7 +674,7 @@ const Settings = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Two-Factor Authentication */}
                   <div className="card border-light">
                     <div className="card-body">
@@ -519,17 +699,17 @@ const Settings = () => {
                     <i className="bi bi-sliders me-2"></i>
                     Application Preferences
                   </h5>
-                  
+
                   <div className="row">
-                    
+
                     <div className="col-md-6 mb-4">
                       <div className="card border-light">
                         <div className="card-body">
                           <h6 className="card-title">Localization</h6>
                           <div className="mb-3">
                             <label htmlFor="language" className="form-label">Language</label>
-                            <select 
-                              className="form-select" 
+                            <select
+                              className="form-select"
                               id="language"
                               value={settings.language}
                               onChange={(e) => handleSettingChange('language', e.target.value)}
@@ -540,8 +720,8 @@ const Settings = () => {
                           </div>
                           <div className="mb-3">
                             <label htmlFor="timezone" className="form-label">Timezone</label>
-                            <select 
-                              className="form-select" 
+                            <select
+                              className="form-select"
                               id="timezone"
                               value={settings.timezone}
                               onChange={(e) => handleSettingChange('timezone', e.target.value)}
@@ -560,7 +740,7 @@ const Settings = () => {
               {/* Save Button */}
               {activeTab !== 'security' && (
                 <div className="d-flex justify-content-end mt-4">
-                  <button 
+                  <button
                     className="btn btn-primary"
                     onClick={saveSettings}
                     disabled={saving}

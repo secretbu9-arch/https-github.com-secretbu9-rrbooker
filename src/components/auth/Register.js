@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 import './Register.css'; // Import the matching CSS file
 
 const Register = () => {

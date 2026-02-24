@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { apiService } from '../../services/ApiService';
-import { PushService } from '../../services/PushService';
+import { apiService } from '../../services/core/ApiService';
+import { PushService } from '../../services/notifications/PushService';
 import NotificationModal from '../manager/NotificationModal';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 
@@ -420,7 +420,7 @@ const ManagerDashboard = () => {
       // Create notification using centralized service (ONLY way to create notifications)
       const appointment = recentAppointments.find(apt => apt.id === appointmentId);
       if (appointment) {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createAppointmentStatusNotification({
           userId: appointment.customer_id,
           appointmentId: appointmentId,
@@ -483,7 +483,7 @@ const ManagerDashboard = () => {
         await apiService.declineAppointment(appointmentId, 'Declined by management');
         
         // Use CentralizedNotificationService to prevent duplicates
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         // Keep decline notification (distinct event) or move to centralized flow if needed
         await centralizedNotificationService.createNotification({
           userId: appointmentData.customer_id,

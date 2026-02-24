@@ -1,7 +1,7 @@
 // components/barber/BarberDayOffManager.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import BarberAvailabilityService from '../../services/BarberAvailabilityService';
+import BarberAvailabilityService from '../../services/booking/BarberAvailabilityService';
 
 const BarberDayOffManager = ({ user }) => {
   const [dayOffs, setDayOffs] = useState([]);
@@ -44,7 +44,7 @@ const BarberDayOffManager = ({ user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.start_date || !formData.end_date) {
       setError('Please select both start and end dates');
       return;
@@ -76,7 +76,7 @@ const BarberDayOffManager = ({ user }) => {
         });
         setShowAddForm(false);
         await fetchDayOffs();
-        
+
         // Show success message
         alert('Day-off scheduled successfully! Existing appointments have been cancelled and customers notified.');
       } else {
@@ -97,7 +97,7 @@ const BarberDayOffManager = ({ user }) => {
 
     try {
       setLoading(true);
-      
+
       const { error } = await supabase
         .from('barber_day_offs')
         .update({ is_active: false })
@@ -174,7 +174,7 @@ const BarberDayOffManager = ({ user }) => {
               </h2>
               <p className="text-muted mb-0">Schedule your unavailable dates and manage your availability</p>
             </div>
-            <button 
+            <button
               className="btn btn-primary"
               onClick={() => setShowAddForm(true)}
             >
@@ -203,7 +203,7 @@ const BarberDayOffManager = ({ user }) => {
                     <i className="bi bi-calendar-plus me-2"></i>
                     Schedule New Day-Off
                   </h5>
-                  <button 
+                  <button
                     className="btn btn-outline-light btn-sm"
                     onClick={() => setShowAddForm(false)}
                   >
@@ -223,7 +223,7 @@ const BarberDayOffManager = ({ user }) => {
                         className="form-control"
                         id="start_date"
                         value={formData.start_date}
-                        onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                         min={new Date().toISOString().split('T')[0]}
                         required
                       />
@@ -237,7 +237,7 @@ const BarberDayOffManager = ({ user }) => {
                         className="form-control"
                         id="end_date"
                         value={formData.end_date}
-                        onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                         min={formData.start_date || new Date().toISOString().split('T')[0]}
                         required
                       />
@@ -250,7 +250,7 @@ const BarberDayOffManager = ({ user }) => {
                         className="form-select"
                         id="type"
                         value={formData.type}
-                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                         required
                       >
                         <option value="day_off">Day Off</option>
@@ -268,7 +268,7 @@ const BarberDayOffManager = ({ user }) => {
                         className="form-control"
                         id="reason"
                         value={formData.reason}
-                        onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                         placeholder="Brief reason for unavailability"
                       />
                     </div>
@@ -280,8 +280,8 @@ const BarberDayOffManager = ({ user }) => {
                     </div>
                     <div className="col-12">
                       <div className="d-flex gap-2">
-                        <button 
-                          type="submit" 
+                        <button
+                          type="submit"
                           className="btn btn-primary"
                           disabled={submitting}
                         >
@@ -297,8 +297,8 @@ const BarberDayOffManager = ({ user }) => {
                             </>
                           )}
                         </button>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="btn btn-outline-secondary"
                           onClick={() => setShowAddForm(false)}
                         >
@@ -343,7 +343,7 @@ const BarberDayOffManager = ({ user }) => {
                           <div>
                             <h6 className="mb-0 text-capitalize">{dayOff.type.replace('_', ' ')}</h6>
                             <small className="text-muted">
-                              {dayOff.start_date === dayOff.end_date 
+                              {dayOff.start_date === dayOff.end_date
                                 ? formatDate(dayOff.start_date)
                                 : `${formatDate(dayOff.start_date)} - ${formatDate(dayOff.end_date)}`
                               }
@@ -367,7 +367,7 @@ const BarberDayOffManager = ({ user }) => {
                       <div className="mb-3">
                         <h6 className="text-muted mb-1">Duration:</h6>
                         <p className="small mb-0">
-                          {dayOff.start_date === dayOff.end_date 
+                          {dayOff.start_date === dayOff.end_date
                             ? '1 day'
                             : `${Math.ceil((new Date(dayOff.end_date) - new Date(dayOff.start_date)) / (1000 * 60 * 60 * 24)) + 1} days`
                           }

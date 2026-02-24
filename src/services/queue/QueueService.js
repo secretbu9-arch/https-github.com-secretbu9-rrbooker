@@ -1,5 +1,5 @@
-import { supabase } from '../supabaseClient';
-import { PushService } from './PushService';
+import { supabase } from '../../supabaseClient';
+import { PushService } from '../notifications/PushService';
 
 class QueueService {
   // Get queue status for a barber
@@ -69,7 +69,7 @@ class QueueService {
 
       const { error } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           priority_level: newPriority,
           manager_adjusted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -111,16 +111,16 @@ class QueueService {
         const priorityOrder = { 'urgent': 0, 'high': 1, 'normal': 2, 'low': 3 };
         const aPriority = priorityOrder[a.priority_level] || 2;
         const bPriority = priorityOrder[b.priority_level] || 2;
-        
+
         if (aPriority !== bPriority) {
           return aPriority - bPriority;
         }
-        
+
         // If same priority, sort by appointment time or creation time
         if (a.appointment_time && b.appointment_time) {
           return a.appointment_time.localeCompare(b.appointment_time);
         }
-        
+
         return new Date(a.created_at) - new Date(b.created_at);
       });
 
@@ -130,7 +130,7 @@ class QueueService {
         if (sortedAppointments[i].queue_position !== newPosition) {
           await supabase
             .from('appointments')
-            .update({ 
+            .update({
               queue_position: newPosition,
               updated_at: new Date().toISOString()
             })
@@ -157,15 +157,15 @@ class QueueService {
       const { data, error } = await supabase
         .from('appointments')
         .select(`
-          id,
-          customer_id,
-          barber_id,
-          appointment_date,
-          appointment_time,
-          status,
-          queue_position,
-          priority_level,
-          barber:barber_id(full_name, email)
+id,
+  customer_id,
+  barber_id,
+  appointment_date,
+  appointment_time,
+  status,
+  queue_position,
+  priority_level,
+  barber: barber_id(full_name, email)
         `)
         .eq('id', appointmentId)
         .single();
@@ -224,7 +224,7 @@ class QueueService {
   async getQueueAnalytics(date = null) {
     try {
       const targetDate = date || new Date().toISOString().split('T')[0];
-      
+
       const { data, error } = await supabase
         .from('enhanced_queue_analytics')
         .select('*')
@@ -245,7 +245,7 @@ class QueueService {
       if (!appointment || !appointment.queue_position) return null;
 
       const queueStatus = await this.getBarberQueueStatus(
-        appointment.barber_id, 
+        appointment.barber_id,
         appointment.appointment_date
       );
 
@@ -263,17 +263,17 @@ class QueueService {
 
   // Set up real-time queue updates
   setupQueueUpdates(barberId, date, callback) {
-    const channelName = `queue-updates-${barberId}-${date}`;
-    
+    const channelName = `queue - updates - ${barberId} -${date} `;
+
     const subscription = supabase
       .channel(channelName)
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
           table: 'appointments',
-          filter: `barber_id=eq.${barberId}`
-        }, 
+          filter: `barber_id = eq.${barberId} `
+        },
         (payload) => {
           console.log('Queue update received:', payload);
           callback(payload);

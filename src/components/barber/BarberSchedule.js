@@ -2,12 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import LoadingSpinner from '../common/LoadingSpinner';
-import addOnsService from '../../services/AddOnsService';
-import { PushService } from '../../services/PushService';
+import addOnsService from '../../services/booking/AddOnsService';
+import { PushService } from '../../services/notifications/PushService';
 import BulkCancellationModal from './BulkCancellationModal';
 import RescheduleModal from './RescheduleModal';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
-import ComprehensiveQueueManager from '../../services/ComprehensiveQueueManager';
+import ComprehensiveQueueManager from '../../services/queue/ComprehensiveQueueManager';
 import { toISODateString, getStatusColor, getStatusIcon } from '../utils/helpers';
 import '../../styles/barber-appointments.css';
 
@@ -126,19 +126,19 @@ const BarberSchedule = () => {
       // Set up real-time subscription
       const channelName = `barber-schedule-${user.id}-${Date.now()}`;
       console.log(`📡 Setting up schedule subscription: ${channelName}`);
-      
+
       const subscription = supabase
         .channel(channelName)
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
+        .on('postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
             table: 'appointments',
             filter: `barber_id=eq.${user.id}`
-          }, 
+          },
           (payload) => {
             console.log(`📥 Schedule received real-time update:`, payload);
-            
+
             clearTimeout(window.scheduleUpdateTimeout);
             window.scheduleUpdateTimeout = setTimeout(() => {
               console.log('🔄 Schedule refreshing data...');
@@ -159,7 +159,7 @@ const BarberSchedule = () => {
       const handleAppointmentChange = (event) => {
         const { barberId } = event.detail;
         console.log(`📢 Schedule received custom event:`, event.detail);
-        
+
         if (barberId === user.id) {
           clearTimeout(window.scheduleUpdateTimeout);
           window.scheduleUpdateTimeout = setTimeout(() => {
@@ -205,45 +205,45 @@ const BarberSchedule = () => {
   const generateWeekDays = () => {
     const days = [];
     const startDate = new Date(selectedDate);
-    
+
     // Find the Monday of the current week
     const day = startDate.getDay();
     const diff = startDate.getDate() - day + (day === 0 ? -6 : 1);
     startDate.setDate(diff);
-    
+
     // Generate array for the week (Mon-Sun)
     for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
       days.push(date);
     }
-    
+
     setWeekDays(days);
   };
 
   // Validate appointment data consistency
   const validateAppointmentData = (appointments) => {
     const issues = [];
-    
+
     appointments.forEach(apt => {
       // Check for data consistency
       if (apt.appointment_type === 'scheduled' && !apt.appointment_time) {
         issues.push(`Scheduled appointment ${apt.id} missing appointment_time`);
       }
-      
+
       if (apt.appointment_type === 'queue' && apt.appointment_time) {
         issues.push(`Queue appointment ${apt.id} has appointment_time (should be null)`);
       }
-      
+
       if (apt.appointment_type === 'queue' && !apt.queue_position) {
         issues.push(`Queue appointment ${apt.id} missing queue_position`);
       }
-      
+
       if (apt.appointment_type === 'scheduled' && apt.queue_position) {
         issues.push(`Scheduled appointment ${apt.id} has queue_position (should be null)`);
       }
     });
-    
+
     if (issues.length > 0) {
       console.warn('⚠️ Appointment data consistency issues:', issues);
       // Only auto-fix if we're not already in the process of fixing
@@ -251,7 +251,7 @@ const BarberSchedule = () => {
         fixDataConsistencyIssues();
       }
     }
-    
+
     return issues.length === 0;
   };
 
@@ -264,14 +264,14 @@ const BarberSchedule = () => {
     try {
       setIsFixingDataConsistency(true);
       console.log('🔧 Attempting to fix data consistency issues...');
-      
+
       // Get current appointments to identify issues
-      const currentAppointments = appointments.filter(apt => 
+      const currentAppointments = appointments.filter(apt =>
         apt.appointment_date === `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
       );
 
       // Fix queue appointments that have appointment_time (should be null)
-      const queueWithTimeIssues = currentAppointments.filter(apt => 
+      const queueWithTimeIssues = currentAppointments.filter(apt =>
         apt.appointment_type === 'queue' && apt.appointment_time
       );
 
@@ -279,7 +279,7 @@ const BarberSchedule = () => {
         console.log(`🔧 Fixing queue appointment ${appointment.id} - removing appointment_time`);
         await supabase
           .from('appointments')
-          .update({ 
+          .update({
             appointment_time: null,
             updated_at: new Date().toISOString()
           })
@@ -287,7 +287,7 @@ const BarberSchedule = () => {
       }
 
       // Fix scheduled appointments that have queue_position (should be null)
-      const scheduledWithQueueIssues = currentAppointments.filter(apt => 
+      const scheduledWithQueueIssues = currentAppointments.filter(apt =>
         apt.appointment_type === 'scheduled' && apt.queue_position
       );
 
@@ -295,7 +295,7 @@ const BarberSchedule = () => {
         console.log(`🔧 Fixing scheduled appointment ${appointment.id} - removing queue_position`);
         await supabase
           .from('appointments')
-          .update({ 
+          .update({
             queue_position: null,
             updated_at: new Date().toISOString()
           })
@@ -303,7 +303,7 @@ const BarberSchedule = () => {
       }
 
       console.log('✅ Data consistency issues fixed directly');
-      
+
       // Refresh appointments after fixing (but don't trigger validation again)
       setTimeout(() => {
         fetchAppointmentsWithoutValidation();
@@ -327,17 +327,17 @@ const BarberSchedule = () => {
   const fetchAppointmentsInternal = async (shouldValidate = true) => {
     try {
       setLoading(true);
-      
+
       // Get start and end of the week using local timezone
       const startOfWeek = new Date(weekDays[0] || selectedDate);
       const endOfWeek = new Date(weekDays[6] || selectedDate);
-      
+
       // Format dates in local timezone to avoid UTC conversion issues
       const startDate = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
       const endDate = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
-      
+
       console.log('Fetching schedule appointments from:', startDate, 'to:', endDate);
-      
+
       // Fetch appointments for the week with all necessary fields
       const { data, error } = await supabase
         .from('appointments')
@@ -358,12 +358,12 @@ const BarberSchedule = () => {
       console.log('📅 Schedule appointments fetched:', data?.length || 0);
       console.log('📅 Selected date (local):', selectedDate.toLocaleDateString());
       console.log('📅 Selected date formatted:', `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`);
-      
+
       // Validate appointment data consistency only if requested
       if (shouldValidate && data && data.length > 0) {
         validateAppointmentData(data);
       }
-      
+
       // Log detailed appointment data for debugging
       if (data && data.length > 0) {
         console.log('📋 Detailed appointment data:', data.map(apt => ({
@@ -384,30 +384,30 @@ const BarberSchedule = () => {
           customer_rating: apt.customer_rating,
           is_reviewed: apt.is_reviewed
         })));
-        
+
         // Check for missing data
-        const missingData = data.filter(apt => 
-          !apt.customer?.full_name || 
-          !apt.service?.name || 
+        const missingData = data.filter(apt =>
+          !apt.customer?.full_name ||
+          !apt.service?.name ||
           !apt.appointment_time
         );
-        
+
         if (missingData.length > 0) {
           console.warn('⚠️ Appointments with missing data:', missingData);
         }
-        
+
         // Check queue positions
         const queueAppointments = data.filter(apt => apt.queue_position);
         console.log('👥 Appointments with queue positions:', queueAppointments.length);
-        
+
         // Check urgent appointments
         const urgentAppointments = data.filter(apt => apt.is_urgent);
         console.log('🚨 Urgent appointments:', urgentAppointments.length);
       }
-      
+
       const normalizedData = (data || []).map(normalizeAppointmentRecord);
       setAppointments(normalizedData);
-      
+
     } catch (err) {
       console.error('Error fetching appointments:', err);
       setError('Failed to load schedule. Please try again.');
@@ -418,25 +418,25 @@ const BarberSchedule = () => {
 
   const getServicesDisplay = (appointment) => {
     const services = [];
-    
+
     if (appointment.service) {
       services.push(appointment.service.name);
     }
-    
+
     if (appointment.services_data) {
       try {
         // Handle different data types
         let serviceIds;
-        
+
         if (typeof appointment.services_data === 'string') {
           // Handle empty or invalid JSON strings
-          if (appointment.services_data.trim() === '' || 
-              appointment.services_data === '[]' || 
-              appointment.services_data === 'null' || 
-              appointment.services_data === 'undefined') {
+          if (appointment.services_data.trim() === '' ||
+            appointment.services_data === '[]' ||
+            appointment.services_data === 'null' ||
+            appointment.services_data === 'undefined') {
             return services.join(', ');
           }
-          
+
           serviceIds = JSON.parse(appointment.services_data);
         } else if (Array.isArray(appointment.services_data)) {
           // Data is already an array
@@ -445,7 +445,7 @@ const BarberSchedule = () => {
           // Data is null, undefined, or other type
           return services.join(', ');
         }
-        
+
         if (Array.isArray(serviceIds) && serviceIds.length > 1) {
           services.push(`+${serviceIds.length - 1} more`);
         }
@@ -454,7 +454,7 @@ const BarberSchedule = () => {
         // Return just the primary service if parsing fails
       }
     }
-    
+
     return services.join(', ');
   };
 
@@ -469,9 +469,9 @@ const BarberSchedule = () => {
       const trimmed = addOnsData.trim();
       if (!trimmed || trimmed === '[]' || trimmed === 'null' || trimmed === 'undefined') {
         return [];
-        }
+      }
 
-        try {
+      try {
         const parsed = JSON.parse(trimmed);
         if (Array.isArray(parsed)) return parsed;
         if (parsed && Array.isArray(parsed.items)) return parsed.items;
@@ -558,15 +558,15 @@ const BarberSchedule = () => {
         if (appointment.appointment_type === 'queue') {
           // For queue appointments, assign queue position and calculate estimated time
           console.log('📋 Accepting queue appointment - assigning queue position');
-          
+
           // Get current queue appointments for this barber and date
-          const dateAppointments = getAppointmentsForDate(selectedDate).filter(apt => 
+          const dateAppointments = getAppointmentsForDate(selectedDate).filter(apt =>
             apt.status === 'confirmed' && apt.appointment_type === 'queue'
           );
-          
+
           if (appointment.is_urgent) {
             updates.queue_position = 1;
-            
+
             // Increment all existing queue positions
             // Fetch appointments that need their queue positions incremented
             const { data: existingAppointments, error: fetchError } = await supabase
@@ -578,7 +578,7 @@ const BarberSchedule = () => {
               .eq('appointment_type', 'queue')
               .not('queue_position', 'is', null)
               .neq('id', appointmentId);
-            
+
             if (fetchError) {
               console.warn('Warning: Could not fetch appointments for queue position increment:', fetchError);
             } else if (existingAppointments && existingAppointments.length > 0) {
@@ -586,7 +586,7 @@ const BarberSchedule = () => {
               for (const apt of existingAppointments) {
                 await supabase
                   .from('appointments')
-                  .update({ 
+                  .update({
                     queue_position: (apt.queue_position || 0) + 1,
                     updated_at: new Date().toISOString()
                   })
@@ -597,14 +597,14 @@ const BarberSchedule = () => {
             const maxQueueNumber = Math.max(0, ...dateAppointments.map(apt => apt.queue_position || 0));
             updates.queue_position = maxQueueNumber + 1;
           }
-          
+
           // Calculate estimated wait time based on queue position and existing appointments
           const totalWaitTime = dateAppointments.reduce((total, apt) => {
             return total + (apt.total_duration || 30) + 5; // Add 5 minutes buffer
           }, 0);
-          
+
           updates.estimated_wait_time = totalWaitTime;
-          
+
         } else if (appointment.appointment_type === 'scheduled') {
           // For scheduled appointments, don't assign queue position
           console.log('📅 Accepting scheduled appointment - no queue position needed');
@@ -620,8 +620,8 @@ const BarberSchedule = () => {
 
         // Create notification using centralized service (handles both database and push)
         try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-          
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
+
           if (appointment.appointment_type === 'queue') {
             // For queue appointments, send queue-specific notification
             await centralizedNotificationService.createBookingConfirmationNotification({
@@ -676,7 +676,7 @@ const BarberSchedule = () => {
 
         // Create notification using centralized service (prevents duplicates)
         try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
           await centralizedNotificationService.createNotification({
             userId: appointment.customer_id,
             title: 'Booking Request Declined',
@@ -686,7 +686,7 @@ const BarberSchedule = () => {
             priority: 'high',
             channels: ['app', 'push'],
             appointmentId: appointmentId,
-            data: { 
+            data: {
               status: 'declined',
               reason: reason || null
             }
@@ -755,17 +755,17 @@ const BarberSchedule = () => {
       console.log(`🔄 Schedule starting status change: ${appointment.status} → ${canonicalStatus} for appointment ${appointmentId}`);
 
       // Optimistic update - update UI immediately
-      setAppointments(prev => prev.map(apt => 
-        apt.id === appointmentId 
-          ? normalizeAppointmentRecord({ 
-              ...apt, 
-              status: canonicalStatus, 
-              queue_position: canonicalStatus === 'ongoing' ? 0 : 
-                           canonicalStatus === 'completed' || canonicalStatus === 'cancelled' ? null : 
-                           apt.queue_position,
-              cancellation_reason: canonicalStatus === 'cancelled' ? (reason || apt.cancellation_reason) : apt.cancellation_reason,
-              updated_at: new Date().toISOString()
-            })
+      setAppointments(prev => prev.map(apt =>
+        apt.id === appointmentId
+          ? normalizeAppointmentRecord({
+            ...apt,
+            status: canonicalStatus,
+            queue_position: canonicalStatus === 'ongoing' ? 0 :
+              canonicalStatus === 'completed' || canonicalStatus === 'cancelled' ? null :
+                apt.queue_position,
+            cancellation_reason: canonicalStatus === 'cancelled' ? (reason || apt.cancellation_reason) : apt.cancellation_reason,
+            updated_at: new Date().toISOString()
+          })
           : apt
       ));
 
@@ -803,7 +803,7 @@ const BarberSchedule = () => {
       if (canonicalStatus === 'cancelled' && appointment.queue_position != null) {
         try {
           console.log(`🔄 Collapsing queue positions after barber cancelling position ${appointment.queue_position}`);
-          
+
           const { data: affected, error: fetchErr } = await supabase
             .from('appointments')
             .select('id, queue_position')
@@ -819,7 +819,7 @@ const BarberSchedule = () => {
             for (const item of affected) {
               await supabase
                 .from('appointments')
-                .update({ 
+                .update({
                   queue_position: Math.max(1, (item.queue_position || 1) - 1),
                   updated_at: new Date().toISOString()
                 })
@@ -864,8 +864,8 @@ const BarberSchedule = () => {
           break;
         case 'cancelled':
           notificationData.title = 'Appointment Cancelled ❌';
-          notificationData.message = reason ? 
-            `Your appointment has been cancelled by the barber. Reason: ${reason}` : 
+          notificationData.message = reason ?
+            `Your appointment has been cancelled by the barber. Reason: ${reason}` :
             'Your appointment has been cancelled by the barber.';
           break;
         default:
@@ -874,7 +874,7 @@ const BarberSchedule = () => {
       }
 
       // Create notification using centralized service (ONLY way to create notifications)
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
       await centralizedNotificationService.createAppointmentStatusNotification({
         userId: appointment.customer_id,
         appointmentId: appointmentId,
@@ -884,8 +884,8 @@ const BarberSchedule = () => {
 
       // If starting an appointment, notify other customers in queue about updated wait times
       if (canonicalStatus === 'ongoing') {
-        const queuedAppointments = appointments.filter(apt => 
-          apt.status === 'confirmed' && 
+        const queuedAppointments = appointments.filter(apt =>
+          apt.status === 'confirmed' &&
           apt.appointment_date === appointment.appointment_date &&
           apt.queue_position > 0
         ).sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
@@ -925,7 +925,7 @@ const BarberSchedule = () => {
     } catch (err) {
       console.error('❌ Error updating appointment status:', err);
       setError(err.message || 'Failed to update appointment status. Please try again.');
-      
+
       // Revert optimistic update on error
       fetchAppointments();
     }
@@ -943,7 +943,7 @@ const BarberSchedule = () => {
 
   const confirmCancelAppointment = async () => {
     if (!cancelAppointmentId) return;
-    
+
     try {
       await handleAppointmentStatus(cancelAppointmentId, 'cancelled', cancelReason);
       setShowCancelModal(false);
@@ -1029,18 +1029,18 @@ const BarberSchedule = () => {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const formattedDate = `${year}-${month}-${day}`;
-    
+
     return appointments.filter(apt => apt.appointment_date === formattedDate);
   };
 
   const formatTime = (timeString) => {
     if (!timeString) return '';
-    
+
     const [hours, minutes] = timeString.split(':');
     const hour = parseInt(hours, 10);
     const period = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
-    
+
     return `${hour12}:${minutes} ${period}`;
   };
 
@@ -1190,419 +1190,419 @@ const BarberSchedule = () => {
           </div>
         </div>
       </div>
-      
+
       {error && (
         <div className="alert alert-danger alert-dismissible fade show" role="alert">
           {error}
-          <button 
+          <button
             type="button"
-            className="btn-close" 
+            className="btn-close"
             onClick={() => setError(null)}
             aria-label="Close"
           ></button>
         </div>
       )}
 
-        <>
-      {/* Enhanced Week Navigation with Labels */}
-      <div className="row mb-4">
-        <div className="col-3 col-md-2 d-flex align-items-center">
-          <button 
-            className="btn btn-outline-primary btn-sm w-100" 
-            onClick={() => navigateWeek(-1)}
-            title="Previous Week"
-          >
-            <i className="bi bi-chevron-left me-1"></i>
-            <span className="d-none d-sm-inline">Previous</span>
-            <span className="d-sm-none">Prev</span>
-          </button>
-        </div>
-        
-        <div className="col-6 col-md-8">
-          <div className="card shadow-sm">
-            <div className="card-body p-3 text-center">
-              <h5 className="mb-1 fw-bold">
-                {weekDays.length > 0 ? (
-                  `${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
+      <>
+        {/* Enhanced Week Navigation with Labels */}
+        <div className="row mb-4">
+          <div className="col-3 col-md-2 d-flex align-items-center">
+            <button
+              className="btn btn-outline-primary btn-sm w-100"
+              onClick={() => navigateWeek(-1)}
+              title="Previous Week"
+            >
+              <i className="bi bi-chevron-left me-1"></i>
+              <span className="d-none d-sm-inline">Previous</span>
+              <span className="d-sm-none">Prev</span>
+            </button>
+          </div>
+
+          <div className="col-6 col-md-8">
+            <div className="card shadow-sm">
+              <div className="card-body p-3 text-center">
+                <h5 className="mb-1 fw-bold">
+                  {weekDays.length > 0 ? (
+                    `${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
                    ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                ) : 'Loading...'}
-              </h5>
-              <small className="text-muted">Week View</small>
+                  ) : 'Loading...'}
+                </h5>
+                <small className="text-muted">Week View</small>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div className="col-3 col-md-2 d-flex align-items-center">
-          <button 
-            className="btn btn-outline-primary btn-sm w-100" 
-            onClick={() => navigateWeek(1)}
-            title="Next Week"
-          >
-            <span className="d-none d-sm-inline me-1">Next</span>
-            <span className="d-sm-none me-1">Next</span>
-            <i className="bi bi-chevron-right"></i>
-          </button>
-        </div>
-      </div>
 
-      {/* Enhanced Week View */}
-      <div className="row g-2 g-md-3 mb-4">
-        {weekDays.map((date, index) => (
-          <div key={index} className="col-6 col-md">
-            <div 
-              className={`day-card card h-100 shadow-sm ${isToday(date) ? 'border-primary border-2' : ''} ${isSelectedDate(date) ? 'bg-primary bg-opacity-10' : ''}`}
-              onClick={() => handleDateChange(date)}
-              style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+          <div className="col-3 col-md-2 d-flex align-items-center">
+            <button
+              className="btn btn-outline-primary btn-sm w-100"
+              onClick={() => navigateWeek(1)}
+              title="Next Week"
             >
-              <div className="card-header text-center p-2">
-                <div className={`fw-bold ${isToday(date) ? 'text-primary' : ''}`}>
-                  {date.toLocaleDateString('en-US', { weekday: 'short' })}
+              <span className="d-none d-sm-inline me-1">Next</span>
+              <span className="d-sm-none me-1">Next</span>
+              <i className="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+
+        {/* Enhanced Week View */}
+        <div className="row g-2 g-md-3 mb-4">
+          {weekDays.map((date, index) => (
+            <div key={index} className="col-6 col-md">
+              <div
+                className={`day-card card h-100 shadow-sm ${isToday(date) ? 'border-primary border-2' : ''} ${isSelectedDate(date) ? 'bg-primary bg-opacity-10' : ''}`}
+                onClick={() => handleDateChange(date)}
+                style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+              >
+                <div className="card-header text-center p-2">
+                  <div className={`fw-bold ${isToday(date) ? 'text-primary' : ''}`}>
+                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                  </div>
+                  <div className={`${isToday(date) ? 'text-primary fw-bold' : 'text-muted'}`}>
+                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </div>
                 </div>
-                <div className={`${isToday(date) ? 'text-primary fw-bold' : 'text-muted'}`}>
-                  {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </div>
-              </div>
-              <div className="card-body p-2 text-center">
-                {(() => {
-                  const dateAppointments = getAppointmentsForDate(date);
-                  if (dateAppointments.length === 0) {
+                <div className="card-body p-2 text-center">
+                  {(() => {
+                    const dateAppointments = getAppointmentsForDate(date);
+                    if (dateAppointments.length === 0) {
+                      return (
+                        <div>
+                          <i className="bi bi-calendar-x text-muted fs-5"></i>
+                          <div className="small text-muted mt-1">No appointments</div>
+                        </div>
+                      );
+                    }
+
+                    const pendingCount = dateAppointments.filter(apt => apt.status === 'pending').length;
+                    const confirmedCount = dateAppointments.filter(apt => apt.status === 'confirmed').length;
+                    const ongoingCount = dateAppointments.filter(apt => apt.status === 'ongoing').length;
+                    const completedCount = dateAppointments.filter(apt => apt.status === 'completed').length;
+
                     return (
                       <div>
-                        <i className="bi bi-calendar-x text-muted fs-5"></i>
-                        <div className="small text-muted mt-1">No appointments</div>
+                        <div className="badge bg-primary rounded-pill mb-1">
+                          {dateAppointments.length} {dateAppointments.length === 1 ? 'appt' : 'appts'}
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          {pendingCount > 0 && (
+                            <div className="badge bg-warning rounded-pill small">
+                              <i className="bi bi-clock me-1"></i>
+                              {pendingCount} pending
+                            </div>
+                          )}
+                          {confirmedCount > 0 && (
+                            <div className="badge bg-info rounded-pill small">
+                              <i className="bi bi-calendar-check me-1"></i>
+                              {confirmedCount} confirmed
+                            </div>
+                          )}
+                          {ongoingCount > 0 && (
+                            <div className="badge bg-info rounded-pill small">
+                              <i className="bi bi-scissors me-1"></i>
+                              {ongoingCount} ongoing
+                            </div>
+                          )}
+                          {completedCount > 0 && (
+                            <div className="badge bg-success rounded-pill small">
+                              <i className="bi bi-check-circle me-1"></i>
+                              {completedCount} done
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
-                  }
-                  
-                  const pendingCount = dateAppointments.filter(apt => apt.status === 'pending').length;
-                  const confirmedCount = dateAppointments.filter(apt => apt.status === 'confirmed').length;
-                  const ongoingCount = dateAppointments.filter(apt => apt.status === 'ongoing').length;
-                  const completedCount = dateAppointments.filter(apt => apt.status === 'completed').length;
-                  
-                  return (
-                    <div>
-                      <div className="badge bg-primary rounded-pill mb-1">
-                        {dateAppointments.length} {dateAppointments.length === 1 ? 'appt' : 'appts'}
-                      </div>
-                      <div className="d-flex flex-column gap-1">
-                        {pendingCount > 0 && (
-                          <div className="badge bg-warning rounded-pill small">
-                            <i className="bi bi-clock me-1"></i>
-                            {pendingCount} pending
-                          </div>
-                        )}
-                        {confirmedCount > 0 && (
-                          <div className="badge bg-info rounded-pill small">
-                            <i className="bi bi-calendar-check me-1"></i>
-                            {confirmedCount} confirmed
-                          </div>
-                        )}
-                        {ongoingCount > 0 && (
-                          <div className="badge bg-info rounded-pill small">
-                            <i className="bi bi-scissors me-1"></i>
-                            {ongoingCount} ongoing
-                          </div>
-                        )}
-                        {completedCount > 0 && (
-                          <div className="badge bg-success rounded-pill small">
-                            <i className="bi bi-check-circle me-1"></i>
-                            {completedCount} done
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                  })()}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      {/* Enhanced Day Schedule with Modern UI */}
-      <div className="card shadow-lg border-0">
-        <div className="card-header bg-gradient bg-primary text-white position-relative overflow-hidden">
-          <div className="position-absolute top-0 end-0 w-100 h-100 opacity-10">
-            <i className="bi bi-calendar3" style={{ fontSize: '8rem', position: 'absolute', top: '-2rem', right: '-2rem' }}></i>
-          </div>
-          <div className="d-flex align-items-center justify-content-between position-relative">
-            <div className="flex-grow-1">
-              <h4 className="mb-1 fw-bold">
-              <i className="bi bi-calendar3 me-2"></i>
-                <span className="d-none d-sm-inline">
-              {selectedDate.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-                </span>
-                <span className="d-sm-none">
-                  {selectedDate.toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  })}
-                </span>
-              </h4>
-              <p className="mb-0 text-white-50 fw-medium">Your daily appointment schedule</p>
+        {/* Enhanced Day Schedule with Modern UI */}
+        <div className="card shadow-lg border-0">
+          <div className="card-header bg-gradient bg-primary text-white position-relative overflow-hidden">
+            <div className="position-absolute top-0 end-0 w-100 h-100 opacity-10">
+              <i className="bi bi-calendar3" style={{ fontSize: '8rem', position: 'absolute', top: '-2rem', right: '-2rem' }}></i>
             </div>
+            <div className="d-flex align-items-center justify-content-between position-relative">
+              <div className="flex-grow-1">
+                <h4 className="mb-1 fw-bold">
+                  <i className="bi bi-calendar3 me-2"></i>
+                  <span className="d-none d-sm-inline">
+                    {selectedDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </span>
+                  <span className="d-sm-none">
+                    {selectedDate.toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </span>
+                </h4>
+                <p className="mb-0 text-white-50 fw-medium">Your daily appointment schedule</p>
+              </div>
+              {(() => {
+                const dateAppointments = getAppointmentsForDate(selectedDate);
+                return dateAppointments.length > 0 && (
+                  <div className="text-center d-none d-md-block">
+                    <div className="bg-white bg-opacity-20 rounded-pill px-3 py-2">
+                      <span className="fw-bold fs-4 text-dark">{dateAppointments.length}</span>
+                      <div className="small text-dark opacity-75">
+                        {dateAppointments.length === 1 ? 'appointment' : 'appointments'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Mobile Stats Section */}
+          {(() => {
+            const dateAppointments = getAppointmentsForDate(selectedDate);
+            return dateAppointments.length > 0 && (
+              <div className="d-md-none p-3 bg-light border-bottom">
+                <div className="row g-3">
+                  <div className="col-6">
+                    <div className="stat-card-mobile text-center">
+                      <div className="stat-number">{dateAppointments.length}</div>
+                      <div className="stat-label">
+                        {dateAppointments.length === 1 ? 'Appointment' : 'Appointments'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="stat-card-mobile text-center">
+                      <div className="stat-number">{dateAppointments.reduce((total, apt) => total + (apt.total_duration || apt.service?.duration || 30), 0)}</div>
+                      <div className="stat-label">Minutes</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
+
+          <div className="card-body p-0">
             {(() => {
               const dateAppointments = getAppointmentsForDate(selectedDate);
-              return dateAppointments.length > 0 && (
-                <div className="text-center d-none d-md-block">
-                  <div className="bg-white bg-opacity-20 rounded-pill px-3 py-2">
-                    <span className="fw-bold fs-4 text-dark">{dateAppointments.length}</span>
-                    <div className="small text-dark opacity-75">
-                      {dateAppointments.length === 1 ? 'appointment' : 'appointments'}
+
+              if (loading) {
+                return (
+                  <div className="text-center py-5">
+                    <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                      <span className="visually-hidden">Loading...</span>
                     </div>
+                    <p className="text-muted">Loading appointments...</p>
+                  </div>
+                );
+              }
+
+              if (dateAppointments.length === 0) {
+                return (
+                  <div className="text-center py-5">
+                    <div className="display-1 text-muted mb-4">
+                      <i className="bi bi-calendar-x"></i>
+                    </div>
+                    <h5 className="text-muted mb-3">No appointments scheduled</h5>
+                    <p className="text-muted">You have a free day! Enjoy your time off.</p>
+                  </div>
+                );
+              }
+
+              // Get pending appointments that need barber acceptance
+              const pendingAppointments = dateAppointments.filter(apt => apt.status === 'pending');
+              const activeQueueAppointments = dateAppointments
+                .filter(apt => apt.appointment_type === 'queue' && apt.status !== 'completed' && apt.status !== 'cancelled')
+                .sort((a, b) => {
+                  const posA = a.queue_position ?? Infinity;
+                  const posB = b.queue_position ?? Infinity;
+                  if (posA !== posB) return posA - posB;
+                  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                });
+
+              return (
+                <div className="p-0">
+                  {/* Pending Appointments Section */}
+                  {pendingAppointments.length > 0 && (
+                    <div className="pending-appointments-section p-3 bg-warning bg-opacity-10 border-bottom">
+                      <h6 className="mb-3 text-warning">
+                        <i className="bi bi-clock-history me-2"></i>
+                        Pending Approval ({pendingAppointments.length})
+                      </h6>
+                      <div className="alert alert-warning mb-0">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Action Required:</strong> These appointments need your approval before they can be scheduled.
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="appointment-card-list">
+                    {dateAppointments.map((appointment) => {
+                      const statusColor = getStatusColor(appointment.status);
+                      const totalPrice = getTotalPrice(appointment);
+                      let queueNumber = appointment.queue_position;
+                      if (queueNumber == null && appointment.appointment_type === 'queue') {
+                        const computedIndex = activeQueueAppointments.findIndex(apt => apt.id === appointment.id);
+                        if (computedIndex !== -1) {
+                          queueNumber = computedIndex + 1;
+                        }
+                      }
+
+                      const serviceLabel = [
+                        appointment.service?.name,
+                        getAddOnsDisplayString(appointment.add_ons_data)
+                      ].filter(Boolean).join(' + ');
+
+                      return (
+                        <div
+                          key={`card-${appointment.id}`}
+                          className={`appointment-card-simple mb-3 border rounded-3 shadow-sm ${appointment.status === 'ongoing' ? 'border-primary bg-light' : 'bg-white'}`}
+                        >
+                          <div className="p-3 position-relative">
+                            <div className="d-flex justify-content-between align-items-start mb-3">
+                              <div className="d-flex align-items-center gap-3">
+                                <div className="rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px' }}>
+                                  {queueNumber != null ? queueNumber : '-'}
+                                </div>
+                                <div>
+                                  <h6 className="fw-bold mb-1 text-dark">
+                                    {appointment.customer?.full_name || 'Unknown Customer'}
+                                  </h6>
+                                  {appointment.appointment_time && (
+                                    <div className="text-muted small">Time: {appointment.appointment_time.substring(0, 5)}</div>
+                                  )}
+                                  {serviceLabel && (
+                                    <div className="text-muted small mt-1">{serviceLabel}</div>
+                                  )}
+                                  {appointment.status === 'pending' && (
+                                    <span className="badge bg-warning-subtle text-warning-emphasis mt-2 me-1">Pending</span>
+                                  )}
+                                  {appointment.is_urgent && (
+                                    <span className="badge bg-danger-subtle text-danger-emphasis mt-2">Urgent</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-end">
+                                <span className={`badge bg-${statusColor}`}>{formatStatus(appointment.status)}</span>
+                              </div>
+                            </div>
+
+                            <div className="d-flex justify-content-between align-items-center mb-3">
+                              <div className="text-muted small">
+                                {appointment.total_duration || appointment.service?.duration || '—'} min
+                              </div>
+                              <div className="fw-bold text-success">
+                                ₱{totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                            </div>
+
+                            <FriendBookingDisplay appointment={appointment} variant="compact" />
+
+                            <div className="mt-3 d-flex justify-content-end">
+                              {renderAppointmentActions(appointment)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
             })()}
           </div>
         </div>
-        
-        {/* Mobile Stats Section */}
-        {(() => {
-          const dateAppointments = getAppointmentsForDate(selectedDate);
-          return dateAppointments.length > 0 && (
-            <div className="d-md-none p-3 bg-light border-bottom">
-              <div className="row g-3">
-                <div className="col-6">
-                  <div className="stat-card-mobile text-center">
-                    <div className="stat-number">{dateAppointments.length}</div>
-                    <div className="stat-label">
-                      {dateAppointments.length === 1 ? 'Appointment' : 'Appointments'}
+
+        {/* Bulk Cancellation Modal */}
+        <BulkCancellationModal
+          isOpen={showBulkCancelModal}
+          onClose={() => setShowBulkCancelModal(false)}
+          barberId={user?.id}
+          selectedDate={toISODateString(selectedDate)}
+          onSuccess={(cancelledCount) => {
+            console.log(`✅ Bulk cancelled ${cancelledCount} appointments`);
+            fetchAppointments(); // Refresh the schedule
+          }}
+        />
+
+        {/* Reschedule Modal */}
+        <RescheduleModal
+          isOpen={rescheduleModal.isOpen}
+          onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
+          appointment={rescheduleModal.appointment}
+          onSuccess={(request) => {
+            console.log('✅ Reschedule request created:', request);
+            setRescheduleModal({ isOpen: false, appointment: null });
+            fetchAppointments(); // Refresh the schedule after reschedule request
+          }}
+        />
+
+        {/* Cancellation Reason Modal */}
+        {showCancelModal && (
+          <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    <i className="bi bi-exclamation-triangle text-warning me-2"></i>
+                    Cancel Appointment
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={closeCancelModal}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <p className="mb-3">Are you sure you want to cancel this appointment?</p>
+                  <div className="mb-3">
+                    <label htmlFor="cancelReason" className="form-label">
+                      <i className="bi bi-chat-text me-1"></i>
+                      Reason for cancellation (optional)
+                    </label>
+                    <textarea
+                      className="form-control"
+                      id="cancelReason"
+                      rows="3"
+                      placeholder="Enter reason for cancellation..."
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                    />
+                    <div className="form-text">
+                      This reason will be shared with the customer.
                     </div>
                   </div>
                 </div>
-                <div className="col-6">
-                  <div className="stat-card-mobile text-center">
-                    <div className="stat-number">{dateAppointments.reduce((total, apt) => total + (apt.total_duration || apt.service?.duration || 30), 0)}</div>
-                    <div className="stat-label">Minutes</div>
-                  </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={closeCancelModal}
+                  >
+                    <i className="bi bi-x-circle me-1"></i>
+                    Keep Appointment
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={confirmCancelAppointment}
+                  >
+                    <i className="bi bi-check-circle me-1"></i>
+                    Cancel Appointment
+                  </button>
                 </div>
-              </div>
-              
-            </div>
-          );
-        })()}
-        
-        <div className="card-body p-0">
-          {(() => {
-            const dateAppointments = getAppointmentsForDate(selectedDate);
-            
-            if (loading) {
-              return (
-                <div className="text-center py-5">
-                  <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                    <span className="visually-hidden">Loading...</span>
-                  </div>
-                  <p className="text-muted">Loading appointments...</p>
-                </div>
-              );
-            }
-            
-            if (dateAppointments.length === 0) {
-              return (
-                <div className="text-center py-5">
-                  <div className="display-1 text-muted mb-4">
-                    <i className="bi bi-calendar-x"></i>
-                  </div>
-                  <h5 className="text-muted mb-3">No appointments scheduled</h5>
-                  <p className="text-muted">You have a free day! Enjoy your time off.</p>
-                </div>
-              );
-            }
-
-            // Get pending appointments that need barber acceptance
-            const pendingAppointments = dateAppointments.filter(apt => apt.status === 'pending');
-            const activeQueueAppointments = dateAppointments
-              .filter(apt => apt.appointment_type === 'queue' && apt.status !== 'completed' && apt.status !== 'cancelled')
-              .sort((a, b) => {
-                const posA = a.queue_position ?? Infinity;
-                const posB = b.queue_position ?? Infinity;
-                if (posA !== posB) return posA - posB;
-                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-              });
-            
-            return (
-              <div className="p-0">
-                {/* Pending Appointments Section */}
-                {pendingAppointments.length > 0 && (
-                  <div className="pending-appointments-section p-3 bg-warning bg-opacity-10 border-bottom">
-                    <h6 className="mb-3 text-warning">
-                      <i className="bi bi-clock-history me-2"></i>
-                      Pending Approval ({pendingAppointments.length})
-                    </h6>
-                    <div className="alert alert-warning mb-0">
-                      <i className="bi bi-exclamation-triangle me-2"></i>
-                      <strong>Action Required:</strong> These appointments need your approval before they can be scheduled.
-                    </div>
-                  </div>
-                )}
-
-                <div className="appointment-card-list">
-                  {dateAppointments.map((appointment) => {
-                    const statusColor = getStatusColor(appointment.status);
-                    const totalPrice = getTotalPrice(appointment);
-                    let queueNumber = appointment.queue_position;
-                    if (queueNumber == null && appointment.appointment_type === 'queue') {
-                      const computedIndex = activeQueueAppointments.findIndex(apt => apt.id === appointment.id);
-                      if (computedIndex !== -1) {
-                        queueNumber = computedIndex + 1;
-                      }
-                    }
- 
-                    const serviceLabel = [
-                      appointment.service?.name,
-                      getAddOnsDisplayString(appointment.add_ons_data)
-                    ].filter(Boolean).join(' + ');
-
-                    return (
-                      <div
-                        key={`card-${appointment.id}`}
-                        className={`appointment-card-simple mb-3 border rounded-3 shadow-sm ${appointment.status === 'ongoing' ? 'border-primary bg-light' : 'bg-white'}`}
-                      >
-                        <div className="p-3 position-relative">
-                          <div className="d-flex justify-content-between align-items-start mb-3">
-                            <div className="d-flex align-items-center gap-3">
-                              <div className="rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px' }}>
-                                {queueNumber != null ? queueNumber : '-'}
-                         </div>
-                              <div>
-                                <h6 className="fw-bold mb-1 text-dark">
-                              {appointment.customer?.full_name || 'Unknown Customer'}
-                            </h6>
-                                {appointment.appointment_time && (
-                                  <div className="text-muted small">Time: {appointment.appointment_time.substring(0, 5)}</div>
-                                )}
-                                {serviceLabel && (
-                                  <div className="text-muted small mt-1">{serviceLabel}</div>
-                                )}
-                                {appointment.status === 'pending' && (
-                                  <span className="badge bg-warning-subtle text-warning-emphasis mt-2 me-1">Pending</span>
-                                )}
-                                {appointment.is_urgent && (
-                                  <span className="badge bg-danger-subtle text-danger-emphasis mt-2">Urgent</span>
-                                )}
-                      </div>
-                            </div>
-                            <div className="text-end">
-                              <span className={`badge bg-${statusColor}`}>{formatStatus(appointment.status)}</span>
-                            </div>
-                          </div>
-
-                          <div className="d-flex justify-content-between align-items-center mb-3">
-                            <div className="text-muted small">
-                              {appointment.total_duration || appointment.service?.duration || '—'} min
-                          </div>
-                            <div className="fw-bold text-success">
-                              ₱{totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                          </div>
-
-                          <FriendBookingDisplay appointment={appointment} variant="compact" />
-
-                          <div className="mt-3 d-flex justify-content-end">
-                            {renderAppointmentActions(appointment)}
-                          </div>
-                      </div>
-                    </div>
-                    );
-                  })}
-                  </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* Bulk Cancellation Modal */}
-      <BulkCancellationModal
-        isOpen={showBulkCancelModal}
-        onClose={() => setShowBulkCancelModal(false)}
-        barberId={user?.id}
-        selectedDate={toISODateString(selectedDate)}
-        onSuccess={(cancelledCount) => {
-          console.log(`✅ Bulk cancelled ${cancelledCount} appointments`);
-          fetchAppointments(); // Refresh the schedule
-        }}
-      />
-
-      {/* Reschedule Modal */}
-      <RescheduleModal
-        isOpen={rescheduleModal.isOpen}
-        onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
-        appointment={rescheduleModal.appointment}
-        onSuccess={(request) => {
-          console.log('✅ Reschedule request created:', request);
-          setRescheduleModal({ isOpen: false, appointment: null });
-          fetchAppointments(); // Refresh the schedule after reschedule request
-        }}
-      />
-
-      {/* Cancellation Reason Modal */}
-      {showCancelModal && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  <i className="bi bi-exclamation-triangle text-warning me-2"></i>
-                  Cancel Appointment
-                </h5>
-                <button 
-                  type="button" 
-                  className="btn-close" 
-                  onClick={closeCancelModal}
-                  aria-label="Close"
-                ></button>
-              </div>
-              <div className="modal-body">
-                <p className="mb-3">Are you sure you want to cancel this appointment?</p>
-                <div className="mb-3">
-                  <label htmlFor="cancelReason" className="form-label">
-                    <i className="bi bi-chat-text me-1"></i>
-                    Reason for cancellation (optional)
-                  </label>
-                  <textarea
-                    className="form-control"
-                    id="cancelReason"
-                    rows="3"
-                    placeholder="Enter reason for cancellation..."
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                  />
-                  <div className="form-text">
-                    This reason will be shared with the customer.
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={closeCancelModal}
-                >
-                  <i className="bi bi-x-circle me-1"></i>
-                  Keep Appointment
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-danger" 
-                  onClick={confirmCancelAppointment}
-                >
-                  <i className="bi bi-check-circle me-1"></i>
-                  Cancel Appointment
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-        </>
+        )}
+      </>
     </div>
   );
 };

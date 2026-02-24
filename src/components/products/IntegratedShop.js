@@ -4,9 +4,9 @@ import { supabase } from '../../supabaseClient';
 import { useProducts } from '../hooks/useProducts';
 import { formatPrice } from '../utils/helpers';
 import LoadingSpinner from '../common/LoadingSpinner';
-import { apiService } from '../../services/ApiService';
+import { apiService } from '../../services/core/ApiService';
 import { useAuth } from '../hooks/useAuth';
-import ordersService from '../../services/OrdersService';
+import ordersService from '../../services/booking/OrdersService';
 
 const IntegratedShop = () => {
   const { 

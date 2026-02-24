@@ -1,8 +1,8 @@
 // hooks/useProducts.js
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabaseClient';
-import { apiService } from '../../services/ApiService';
-import { storageService } from '../../services/StorageService';
+import { apiService } from '../../services/core/ApiService';
+import { storageService } from '../../services/core/StorageService';
 
 /**
  * Custom hook for managing products

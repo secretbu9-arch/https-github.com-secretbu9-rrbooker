@@ -1,7 +1,7 @@
 // components/barber/RescheduleModal.js
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
-import addOnsService from '../../services/AddOnsService';
+import addOnsService from '../../services/booking/AddOnsService';
 
 const RescheduleModal = ({ 
   isOpen, 
@@ -157,7 +157,7 @@ const RescheduleModal = ({
 
       // Send notification to customer via CentralizedNotificationService
       // The service has built-in duplicate prevention, but we'll add an extra check here
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
       
       // Extra safety check: verify no duplicate notification exists for this specific request
       const { data: existingNotifs, error: checkError } = await supabase

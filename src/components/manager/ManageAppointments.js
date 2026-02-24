@@ -1,15 +1,15 @@
 // components/manager/ManageAppointments.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { apiService } from '../../services/ApiService';
+import { apiService } from '../../services/core/ApiService';
 // REMOVED: PushService import - use only CentralizedNotificationService
 import { formatDate, formatTime, getStatusColor, parseAddOnsData, mapLegacyAddonIds } from '../utils/helpers';
 import { APPOINTMENT_STATUS } from '../utils/constants';
 import LoadingSpinner from '../common/LoadingSpinner';
 import SearchAndFilter from '../common/SearchAndFilter';
 import AppointmentProductPurchase from './AppointmentProductPurchase';
-import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
-import UnifiedSlotBookingService from '../../services/UnifiedSlotBookingService';
+import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
+import UnifiedSlotBookingService from '../../services/booking/UnifiedSlotBookingService';
 import { 
   BOOKING_STATUS, 
   APPOINTMENT_FIELDS, 
@@ -753,7 +753,7 @@ const ManageAppointments = () => {
       
       // Create notification using centralized service (handles both database and push)
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: selectedAppointment.customer_id,
           title: 'Appointment Updated 📝',
@@ -887,7 +887,7 @@ const ManageAppointments = () => {
       }
 
       // Create notification using centralized service (ONLY way to create notifications)
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
       
       // Notify customer
       await centralizedNotificationService.createAppointmentStatusNotification({
@@ -1323,7 +1323,7 @@ const ManageAppointments = () => {
       // Create notification for barber using CentralizedNotificationService to prevent duplicates
       console.log('📢 Creating notification for barber...');
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: walkInFormData.barber_id,
           title: 'Walk-in Appointment Added',

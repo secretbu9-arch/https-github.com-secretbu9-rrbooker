@@ -1,5 +1,5 @@
-import { supabase } from '../supabaseClient';
-import { emailService } from './EmailService';
+import { supabase } from '../../supabaseClient';
+import { emailService } from '../notifications/EmailService';
 
 const OTP_EXPIRATION_MINUTES = 10;
 
@@ -41,7 +41,7 @@ class PasswordResetOTPService {
         .delete()
         .eq('email', normalizedEmail)
         .is('verified_at', null);
-      
+
       if (deleteError) {
         console.warn('⚠️ [Password Reset OTP] Error deleting old codes:', deleteError);
       }
@@ -74,16 +74,16 @@ class PasswordResetOTPService {
         });
       } catch (emailError) {
         console.error('❌ [Password Reset OTP] Email sending failed:', emailError);
-        
+
         // Delete the OTP code since email failed
         await supabase
           .from(this.table)
           .delete()
           .eq('email', normalizedEmail)
           .eq('code', code);
-        
+
         throw new Error(
-          emailError.message || 
+          emailError.message ||
           'Failed to send OTP code email. Please check your email service configuration or try again later.'
         );
       }

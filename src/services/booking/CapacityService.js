@@ -1,5 +1,5 @@
 // services/CapacityService.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class CapacityService {
   // Check if barber has capacity for a new appointment

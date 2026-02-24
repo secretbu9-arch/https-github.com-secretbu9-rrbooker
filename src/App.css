@@ -3,15 +3,23 @@
 
 /* Custom variables - matching with navigation */
 :root {
-  --primary-color: #2c2c2c;     /* Dark gray/black (from the logo) */
-  --secondary-color: #3498db;   /* Blue accent */
-  --accent-color: #d4b068;      /* Gold accent for barbershop feel */
-  --success-color: #27ae60;     /* Green */
-  --warning-color: #f39c12;     /* Orange */
-  --danger-color: #e74c3c;      /* Red */
-  --light-gray: #f8f9fa;        /* Light background */
-  --dark-gray: #1e1e1e;         /* Darker gray for backgrounds */
-  
+  --primary-color: #2c2c2c;
+  /* Dark gray/black (from the logo) */
+  --secondary-color: #3498db;
+  /* Blue accent */
+  --accent-color: #d4b068;
+  /* Gold accent for barbershop feel */
+  --success-color: #27ae60;
+  /* Green */
+  --warning-color: #f39c12;
+  /* Orange */
+  --danger-color: #e74c3c;
+  /* Red */
+  --light-gray: #f8f9fa;
+  /* Light background */
+  --dark-gray: #1e1e1e;
+  /* Darker gray for backgrounds */
+
   /* Gradient variables */
   --primary-gradient: linear-gradient(135deg, #2c3e50, #3498db);
   --success-gradient: linear-gradient(135deg, #27ae60, #2ecc71);
@@ -31,31 +39,48 @@
 .barber-welcome-header,
 .manager-welcome-header,
 .customer-welcome-header {
-  background: linear-gradient(90deg, #1e1e1e 0%, #2c2c2c 100%);
-  border-left: 4px solid var(--accent-color);
-  margin-bottom: 1.5rem;
-  border-radius: 8px;
-  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%);
+  border-left: 5px solid var(--accent-color);
+  margin-bottom: 0;
+  border-radius: 12px;
+  transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.barber-welcome-header:hover,
-.manager-welcome-header:hover,
+.customer-welcome-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at top right, rgba(212, 176, 104, 0.1), transparent 60%);
+  pointer-events: none;
+}
+
 .customer-welcome-header:hover {
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+  transform: translateY(-4px);
+  border-left-width: 8px;
 }
 
 .dashboard-logo {
-  transition: transform 0.3s ease;
+  transition: all 0.4s ease;
   background-color: #ffffff;
-  padding: 3px;
-  border-radius: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.customer-welcome-header:hover .dashboard-logo {
+  transform: scale(1.1) rotate(-8deg);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
 }
 
 .barber-welcome-header:hover .dashboard-logo,
-.manager-welcome-header:hover .dashboard-logo,
-.customer-welcome-header:hover .dashboard-logo {
+.manager-welcome-header:hover .dashboard-logo {
   transform: rotate(-5deg);
 }
 
@@ -478,12 +503,14 @@
   letter-spacing: 0.5px;
 }
 
-.current-appointment, .current-row {
+.current-appointment,
+.current-row {
   background-color: rgba(52, 152, 219, 0.1) !important;
   border-left: 3px solid var(--secondary-color);
 }
 
-.date-info, .time-info {
+.date-info,
+.time-info {
   font-size: 0.875rem;
 }
 
@@ -495,16 +522,20 @@
   font-weight: 600;
 }
 
-.service-details, .phone-number {
+.service-details,
+.phone-number {
   font-size: 0.8rem;
   color: #6c757d;
 }
 
-.barber-name, .customer-name {
+.barber-name,
+.customer-name {
   font-weight: 500;
 }
 
-.duration, .price, .time-badge {
+.duration,
+.price,
+.time-badge {
   background-color: rgba(0, 0, 0, 0.05);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
@@ -658,7 +689,8 @@
   font-weight: 600;
 }
 
-.activity-time, .activity-user {
+.activity-time,
+.activity-user {
   font-size: 0.8rem;
   color: #6c757d;
 }
@@ -883,25 +915,26 @@
   .card-body {
     padding: 1rem;
   }
-  
+
   .quick-action-icon {
     width: 50px;
     height: 50px;
     font-size: 1.5rem;
   }
-  
+
   .card-icon {
     font-size: 2rem;
   }
-  
+
   .stats-card h2 {
     font-size: 1.5rem;
   }
-  
+
   .position-number {
     font-size: 3rem;
   }
 }
+
 .navbar-logo {
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.7));
 }
@@ -956,6 +989,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -968,19 +1002,22 @@
   font-size: 0.95rem;
 }
 
-.form-select, .form-control {
+.form-select,
+.form-control {
   border: 1px solid rgba(0, 0, 0, 0.1);
   padding: 0.75rem 1rem;
   font-size: 1rem;
   transition: all 0.2s ease;
 }
 
-.form-select:focus, .form-control:focus {
+.form-select:focus,
+.form-control:focus {
   border-color: var(--secondary-color);
   box-shadow: 0 0 0 0.25rem rgba(52, 152, 219, 0.25);
 }
 
-.form-select-lg, .form-control-lg {
+.form-select-lg,
+.form-control-lg {
   height: calc(3.5rem + 2px);
 }
 
@@ -1079,24 +1116,91 @@ textarea.form-control {
   .booking-header {
     padding: 1rem !important;
   }
-  
+
   .booking-header h1 {
     font-size: 1.5rem;
   }
-  
+
   .booking-card .card-body {
     padding: 1.25rem !important;
   }
-  
-  .form-select-lg, .form-control-lg {
+
+  .form-select-lg,
+  .form-control-lg {
     height: calc(3rem + 2px);
     font-size: 1rem;
     padding: 0.5rem 1rem;
   }
-  
+
   .btn-lg {
     padding: 0.5rem 1rem;
     font-size: 0.95rem;
+  }
+}
+
+/* Barber Card Interactive Styles */
+.barber-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
+  border: 2px solid transparent !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.barber-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.barber-card.border-primary {
+  border-color: var(--secondary-color) !important;
+  background-color: rgba(52, 152, 219, 0.05) !important;
+}
+
+.barber-card .card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.barber-card .btn-outline-primary {
+  margin-top: auto;
+  transition: all 0.2s ease;
+}
+
+.barber-card:active {
+  transform: scale(0.98);
+}
+
+/* Mobile specific interactivity */
+@media (max-width: 575px) {
+  .barber-card {
+    margin-bottom: 0.75rem;
+  }
+
+  .barber-card .card-body {
+    padding: 1rem !important;
+  }
+
+  /* Make the barber selection list more compact on mobile */
+  .barber-selection-row {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    gap: 1rem;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+  }
+
+  .barber-selection-row::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari and Opera */
+  }
+
+  .barber-selection-row>.col-md-6 {
+    flex: 0 0 85%;
+    max-width: 85%;
   }
 }
 
@@ -1105,8 +1209,10 @@ textarea.form-control {
 /* Fix for dropdown visibility */
 .form-select {
   position: relative;
-  z-index: 10; /* Ensure selects have higher z-index than surrounding elements */
-  appearance: auto !important; /* Override any custom styling that might hide native dropdowns */
+  z-index: 10;
+  /* Ensure selects have higher z-index than surrounding elements */
+  appearance: auto !important;
+  /* Override any custom styling that might hide native dropdowns */
   -webkit-appearance: auto !important;
   -moz-appearance: auto !important;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
@@ -1144,7 +1250,7 @@ textarea.form-control {
 }
 
 /* Fix for Safari */
-@media not all and (min-resolution:.001dpcm) { 
+@media not all and (min-resolution:.001dpcm) {
   @supports (-webkit-appearance:none) {
     .form-select {
       -webkit-appearance: menulist !important;
@@ -1169,8 +1275,9 @@ select.form-select-fix {
   border: 1px solid #ced4da;
   border-radius: 0.375rem;
   appearance: auto;
-  transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+  transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
 }
+
 /* Haircut Recommender Styles with Camera Feature */
 
 /* Header styles - matching with other components */
@@ -1209,10 +1316,15 @@ select.form-select-fix {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.3s ease-out forwards;
 }
 
 /* Tab system for upload/camera */
@@ -1367,7 +1479,8 @@ select.form-select-fix {
   position: relative;
   width: 100%;
   height: 0;
-  padding-bottom: 75%; /* 4:3 aspect ratio */
+  padding-bottom: 75%;
+  /* 4:3 aspect ratio */
   border-radius: 10px;
   overflow: hidden;
   background-color: #000;
@@ -1414,10 +1527,12 @@ select.form-select-fix {
     opacity: 0.7;
     transform: scale(0.95);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.05);
   }
+
   100% {
     opacity: 0.7;
     transform: scale(0.95);
@@ -1604,7 +1719,7 @@ select.form-select-fix {
 
 .recommendation-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   border-color: #007bff;
 }
 
@@ -1709,8 +1824,13 @@ select.form-select-fix {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .time-slot-card:hover {
@@ -1748,6 +1868,7 @@ select.form-select-fix {
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1808,13 +1929,15 @@ select.form-select-fix {
 }
 
 /* Form Control Improvements */
-.form-control, .form-select {
+.form-control,
+.form-select {
   border-radius: 10px;
   border: 2px solid #e9ecef;
   transition: all 0.3s ease;
 }
 
-.form-control:focus, .form-select:focus {
+.form-control:focus,
+.form-select:focus {
   border-color: #007bff;
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
@@ -1836,6 +1959,7 @@ select.form-select-fix {
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -1966,16 +2090,16 @@ select.form-select-fix {
   .recommender-header h1 {
     font-size: 1.5rem;
   }
-  
+
   .history-styles {
     flex-wrap: wrap;
   }
-  
+
   .history-style {
     flex: 0 0 50%;
     margin-bottom: 1rem;
   }
-  
+
   .haircut-image {
     width: 100px;
     height: 100px;
@@ -1986,44 +2110,45 @@ select.form-select-fix {
   .haircut-item {
     flex-direction: column;
   }
-  
+
   .haircut-image {
     width: 100%;
     height: 200px;
   }
-  
+
   .btn-book-style {
     align-self: stretch;
     margin-top: 0.5rem;
   }
-  
+
   .upload-icon {
     font-size: 2rem;
   }
-  
+
   .upload-title {
     font-size: 1rem;
   }
-  
+
   .history-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .history-date {
     margin-top: 0.5rem;
   }
-  
+
   .tab-button {
     padding: 0.5rem;
     font-size: 0.9rem;
   }
-  
+
   .camera-guide {
     width: 120px;
     height: 120px;
   }
 }
+
 /* Simple Reactive Header Design */
 .booking-header-simple {
   background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
@@ -2118,22 +2243,22 @@ select.form-select-fix {
   .booking-header-simple {
     padding: 1rem;
   }
-  
+
   .step-indicators-simple {
     flex-wrap: wrap;
     gap: 0.5rem;
   }
-  
+
   .step-simple {
     flex: 0 0 calc(50% - 0.25rem);
   }
-  
+
   .step-circle-simple {
     width: 30px;
     height: 30px;
     font-size: 0.8rem;
   }
-  
+
   .step-text-simple {
     font-size: 0.7rem;
   }
@@ -2143,24 +2268,24 @@ select.form-select-fix {
   .booking-header-simple {
     padding: 0.75rem;
   }
-  
+
   .step-indicators-simple {
     flex-direction: column;
     gap: 0.75rem;
   }
-  
+
   .step-simple {
     flex: none;
     width: 100%;
     flex-direction: row;
     justify-content: flex-start;
   }
-  
+
   .step-circle-simple {
     margin-bottom: 0;
     margin-right: 0.75rem;
   }
-  
+
   .step-text-simple {
     text-align: left;
   }
@@ -2250,18 +2375,18 @@ select.form-select-fix {
   .booking-summary-modern {
     padding: 1rem;
   }
-  
+
   .summary-section {
     padding: 1rem;
     margin-bottom: 1rem;
   }
-  
+
   .summary-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
   }
-  
+
   .summary-value {
     text-align: left;
   }
@@ -2381,11 +2506,12 @@ select.form-select-fix {
 
 /* Recommendation Cards Styling */
 .recommendations-section {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-  border: 1px solid #ffc107;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 15px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   margin-bottom: 2rem;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .recommendation-card-modern {
@@ -2485,17 +2611,17 @@ select.form-select-fix {
   .recommendations-section {
     padding: 1rem;
   }
-  
+
   .recommendation-card-modern {
     padding: 1rem;
   }
-  
+
   .recommendation-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-  
+
   .recommendation-name {
     margin-left: 0;
   }
@@ -2581,15 +2707,15 @@ select.form-select-fix {
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 0.5rem;
   }
-  
+
   .time-slot-modern {
     padding: 0.75rem;
   }
-  
+
   .time-slot-time {
     font-size: 0.8rem;
   }
-  
+
   .time-slot-status {
     font-size: 0.7rem;
   }
@@ -2599,7 +2725,7 @@ select.form-select-fix {
   .time-slots-grid {
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   }
-  
+
   .time-slot-modern {
     padding: 0.5rem;
   }
@@ -2615,6 +2741,7 @@ select.form-select-fix {
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2809,43 +2936,43 @@ select.form-select-fix {
   .booking-header-modern {
     padding: 2rem !important;
   }
-  
+
   .step-indicators-modern {
     flex-wrap: wrap;
     gap: 1rem;
   }
-  
+
   .step-indicator {
     flex: 0 0 calc(50% - 0.5rem);
   }
-  
+
   .step-circle {
     width: 40px;
     height: 40px;
     font-size: 1rem;
   }
-  
+
   .step-label {
     max-width: 100px;
   }
-  
+
   .step-title {
     font-size: 0.8rem;
   }
-  
+
   .step-description {
     font-size: 0.7rem;
   }
-  
+
   .appointment-type-cards {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
-  
+
   .appointment-type-card {
     padding: 1rem;
   }
-  
+
   .appointment-type-icon {
     width: 40px;
     height: 40px;
@@ -2857,34 +2984,34 @@ select.form-select-fix {
   .booking-header-modern {
     padding: 1.5rem !important;
   }
-  
+
   .step-indicators-modern {
     flex-direction: column;
     gap: 1.5rem;
   }
-  
+
   .step-indicator {
     flex: none;
     width: 100%;
   }
-  
+
   .step-connector {
     display: none;
   }
-  
+
   .step-circle {
     width: 45px;
     height: 45px;
   }
-  
+
   .step-content-modern {
     padding: 1.5rem !important;
   }
-  
+
   .step-title {
     font-size: 1.5rem;
   }
-  
+
   .step-icon {
     width: 50px;
     height: 50px;
@@ -3041,40 +3168,43 @@ select.form-select-fix {
 
 /* Responsive adjustments for all components */
 @media (max-width: 992px) {
+
   .booking-header,
   .appointment-header,
   .recommender-header {
     padding: 1rem !important;
   }
-  
+
   .booking-header h1,
   .appointment-header h1,
   .recommender-header h1 {
     font-size: 1.5rem;
   }
-  
+
   .card-body {
     padding: 1.25rem !important;
   }
 }
 
 @media (max-width: 576px) {
+
   .booking-logo,
   .appointment-logo,
   .recommender-logo {
     height: 35px !important;
   }
-  
+
   .booking-header h1,
   .appointment-header h1,
   .recommender-header h1 {
     font-size: 1.25rem;
   }
-  
+
   .section-title {
     font-size: 1.1rem;
   }
 }
+
 /* Admin Logout Button Styles */
 
 .admin-logout-btn {
@@ -3134,9 +3264,11 @@ select.form-select-fix {
   0% {
     box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
   }
+
   70% {
     box-shadow: 0 0 0 6px rgba(231, 76, 60, 0);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
   }
@@ -3157,6 +3289,7 @@ select.form-select-fix {
     padding: 0.75rem !important;
   }
 }
+
 /* Admin Logout Button - Enhanced CSS for Clickability */
 .admin-logout-btn {
   background-color: rgba(231, 76, 60, 0.3) !important;
@@ -3170,10 +3303,13 @@ select.form-select-fix {
   align-items: center !important;
   justify-content: center !important;
   position: relative !important;
-  overflow: visible !important; /* Changed from hidden to ensure no events are blocked */
+  overflow: visible !important;
+  /* Changed from hidden to ensure no events are blocked */
   text-decoration: none !important;
-  pointer-events: auto !important; /* Explicitly enable pointer events */
-  z-index: 1035 !important; /* Higher z-index to ensure clickability */
+  pointer-events: auto !important;
+  /* Explicitly enable pointer events */
+  z-index: 1035 !important;
+  /* Higher z-index to ensure clickability */
 }
 
 /* Make sure the container for the logout button doesn't interfere */
@@ -3222,9 +3358,11 @@ select.form-select-fix {
   0% {
     box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.6);
   }
+
   70% {
     box-shadow: 0 0 0 8px rgba(231, 76, 60, 0);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
   }
@@ -3239,7 +3377,8 @@ select.form-select-fix {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  z-index: 1035; /* Ensure it's clickable */
+  z-index: 1035;
+  /* Ensure it's clickable */
 }
 
 /* Ensure nav items don't have any pointer event issues */
@@ -3260,16 +3399,17 @@ select.form-select-fix {
     padding: 0.75rem !important;
     background-color: rgba(231, 76, 60, 0.4) !important;
   }
-  
+
   .navbar-right {
     align-items: flex-start;
     width: 100%;
   }
-  
+
   .navbar-right .nav-item {
     width: 100%;
   }
 }
+
 /* Add this to your CSS file */
 
 .admin-logout-btn {
@@ -3305,10 +3445,12 @@ select.form-select-fix {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
   }
+
   70% {
     transform: scale(1);
     box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
   }
+
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
@@ -3418,74 +3560,74 @@ select.form-select-fix {
   .queue-status-body {
     padding: 1rem;
   }
-  
+
   .queue-stat-card {
     padding: 1rem;
   }
-  
+
   .queue-stat-number {
     font-size: 1.5rem;
   }
-  
+
   .next-available-time {
     font-size: 1.25rem;
   }
-  
+
   .status-indicator {
     flex-direction: column;
     gap: 0.5rem;
     text-align: center;
   }
-  
+
   /* Mobile-specific improvements */
   .mobile-optimized {
     padding: 0.75rem;
   }
-  
+
   .mobile-text-small {
     font-size: 0.8rem;
   }
-  
+
   .mobile-button-full {
     width: 100%;
   }
-  
+
   .mobile-stack {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .mobile-center {
     text-align: center;
   }
-  
+
   /* Better touch targets for mobile */
   .btn-mobile {
     min-height: 44px;
     padding: 0.75rem 1rem;
   }
-  
+
   /* Improved card spacing on mobile */
   .card-mobile {
     margin-bottom: 1rem;
   }
-  
+
   /* Better form spacing on mobile */
   .form-mobile {
     margin-bottom: 1.5rem;
   }
-  
+
   /* Mobile-friendly alerts */
   .alert-mobile {
     padding: 1rem;
     margin-bottom: 1rem;
   }
-  
+
   /* Mobile queue status improvements */
   .queue-status-mobile {
     padding: 0.75rem;
   }
-  
+
   .queue-stat-mobile {
     padding: 0.75rem;
     min-height: 80px;
@@ -3493,17 +3635,17 @@ select.form-select-fix {
     flex-direction: column;
     justify-content: center;
   }
-  
+
   /* Mobile barber cards */
   .barber-card-mobile {
     padding: 1rem;
     margin-bottom: 1rem;
   }
-  
+
   .barber-stats-mobile {
     font-size: 0.9rem;
   }
-  
+
   /* Mobile step indicators */
   .step-mobile {
     padding: 0.5rem;
@@ -3513,29 +3655,30 @@ select.form-select-fix {
 
 /* Desktop Enhancements */
 @media (min-width: 768px) {
+
   /* Enhanced desktop cards */
   .desktop-card {
     transition: all 0.3s ease;
     border-radius: 20px;
   }
-  
+
   .desktop-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
   }
-  
+
   /* Desktop statistics */
   .desktop-stat {
     padding: 2rem;
     border-radius: 20px;
     transition: all 0.3s ease;
   }
-  
+
   .desktop-stat:hover {
     transform: translateY(-3px);
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
   }
-  
+
   /* Desktop buttons */
   .desktop-btn {
     padding: 0.75rem 2rem;
@@ -3543,12 +3686,12 @@ select.form-select-fix {
     font-weight: 600;
     transition: all 0.3s ease;
   }
-  
+
   .desktop-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   }
-  
+
   /* Desktop alerts */
   .desktop-alert {
     border-radius: 20px;
@@ -3556,7 +3699,7 @@ select.form-select-fix {
     border: none;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   }
-  
+
   /* Desktop queue status */
   .desktop-queue-status {
     border-radius: 20px;
@@ -3565,7 +3708,7 @@ select.form-select-fix {
     border: 1px solid #e9ecef;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   }
-  
+
   /* Desktop form elements */
   .desktop-form {
     padding: 2rem;
@@ -3573,19 +3716,19 @@ select.form-select-fix {
     background: #ffffff;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   }
-  
+
   /* Desktop step indicators */
   .desktop-step {
     padding: 1rem 2rem;
     border-radius: 15px;
     transition: all 0.3s ease;
   }
-  
+
   .desktop-step:hover {
     background: rgba(0, 123, 255, 0.1);
     transform: translateY(-2px);
   }
-  
+
   /* Desktop barber cards */
   .desktop-barber-card {
     padding: 2rem;
@@ -3593,27 +3736,29 @@ select.form-select-fix {
     transition: all 0.3s ease;
     border: 2px solid transparent;
   }
-  
+
   .desktop-barber-card:hover {
     border-color: #007bff;
     transform: translateY(-3px);
     box-shadow: 0 12px 30px rgba(0, 123, 255, 0.15);
   }
-  
+
   /* Desktop pulse animation */
   .desktop-pulse {
     animation: desktopPulse 2s infinite;
   }
-  
+
   @keyframes desktopPulse {
     0% {
       transform: scale(0.95);
       box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
     }
+
     70% {
       transform: scale(1);
       box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
     }
+
     100% {
       transform: scale(0.95);
       box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
@@ -3659,32 +3804,33 @@ select.form-select-fix {
 
 /* Mobile Responsive Appointments View */
 @media (max-width: 767px) {
+
   /* Simplify filter dropdowns on mobile */
   .form-select-sm {
     font-size: 0.875rem;
     padding: 0.375rem 0.5rem;
   }
-  
+
   /* Make appointment cards stack better on mobile */
   .appointment-card {
     margin-bottom: 1rem;
   }
-  
+
   /* Reduce padding on mobile */
   .card-body {
     padding: 1rem;
   }
-  
+
   .card-header {
     padding: 0.75rem 1rem;
   }
-  
+
   /* Make buttons more touch-friendly */
   .btn-sm {
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
   }
-  
+
   /* Better spacing for filter badges */
   .badge {
     font-size: 0.75rem;
@@ -3733,22 +3879,22 @@ select.form-select-fix {
   .shop-filter-card {
     margin-bottom: 1rem;
   }
-  
+
   .input-group-lg .form-control {
     font-size: 1rem;
     padding: 0.5rem 0.75rem;
   }
-  
+
   .input-group-lg .input-group-text {
     padding: 0.5rem 0.75rem;
   }
-  
+
   /* Make filter labels more compact on mobile */
   .form-label.small {
     font-size: 0.75rem;
     margin-bottom: 0.25rem;
   }
-  
+
   /* Better spacing for filter badges on mobile */
   .d-flex.flex-wrap.gap-2 {
     gap: 0.5rem !important;

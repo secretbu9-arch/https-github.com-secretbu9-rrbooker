@@ -1,7 +1,7 @@
 // components/manager/QueueManagementPanel.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import ComprehensiveQueueManager from '../../services/ComprehensiveQueueManager';
+import ComprehensiveQueueManager from '../../services/queue/ComprehensiveQueueManager';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const QueueManagementPanel = () => {

@@ -64,7 +64,7 @@ function drawFaceSilhouette(ctx, centerX, centerY, faceWidth, faceHeight, ratios
   ctx.beginPath();
 
   // Draw shape-specific outlines for the 6 required shapes
-  switch(shape) {
+  switch (shape) {
     case 'Round':
       // Perfect circle - equal width and height, truly round
       const radius = Math.min(faceWidth, faceHeight) / 2;
@@ -112,7 +112,7 @@ function drawFaceSilhouette(ctx, centerX, centerY, faceWidth, faceHeight, ratios
 
     case 'Triangle':
       // Narrow forehead, wide jaw - inverted triangle
-  ctx.moveTo(centerX, topY);
+      ctx.moveTo(centerX, topY);
       ctx.lineTo(centerX + foreheadHalf * 0.5, templeY);
       ctx.lineTo(centerX + cheekHalf * 0.8, cheekY);
       ctx.lineTo(centerX + jawHalf, jawY);
@@ -121,29 +121,29 @@ function drawFaceSilhouette(ctx, centerX, centerY, faceWidth, faceHeight, ratios
       ctx.lineTo(centerX - jawHalf, jawY);
       ctx.lineTo(centerX - cheekHalf * 0.8, cheekY);
       ctx.lineTo(centerX - foreheadHalf * 0.5, templeY);
-  ctx.closePath();
+      ctx.closePath();
       break;
 
     case 'Oval':
       // Egg-shaped - wider forehead than jaw, smooth curves
-      ctx.ellipse(centerX, centerY, faceWidth/2, faceHeight/2, 0, 0, 2 * Math.PI);
+      ctx.ellipse(centerX, centerY, faceWidth / 2, faceHeight / 2, 0, 0, 2 * Math.PI);
       break;
 
     default:
       // Default oval shape
-      ctx.ellipse(centerX, centerY, faceWidth/2, faceHeight/2, 0, 0, 2 * Math.PI);
+      ctx.ellipse(centerX, centerY, faceWidth / 2, faceHeight / 2, 0, 0, 2 * Math.PI);
   }
 }
 
 // Professional face shape profiles for the 6 required shapes
 function getShapeProfile(shape) {
   const professional = {
-    Round:    { widthScale: 1.00, heightScale: 1.00, ratios: { forehead: 1.00, cheek: 1.00, jaw: 1.00 } },
-    Diamond:  { widthScale: 0.90, heightScale: 1.10, ratios: { forehead: 0.65, cheek: 1.25, jaw: 0.55 } },
-    Oblong:   { widthScale: 0.80, heightScale: 1.25, ratios: { forehead: 0.95, cheek: 0.90, jaw: 0.85 } },
-    Rectangle:{ widthScale: 0.85, heightScale: 1.20, ratios: { forehead: 1.00, cheek: 1.00, jaw: 1.00 } },
+    Round: { widthScale: 1.00, heightScale: 1.00, ratios: { forehead: 1.00, cheek: 1.00, jaw: 1.00 } },
+    Diamond: { widthScale: 0.90, heightScale: 1.10, ratios: { forehead: 0.65, cheek: 1.25, jaw: 0.55 } },
+    Oblong: { widthScale: 0.80, heightScale: 1.25, ratios: { forehead: 0.95, cheek: 0.90, jaw: 0.85 } },
+    Rectangle: { widthScale: 0.85, heightScale: 1.20, ratios: { forehead: 1.00, cheek: 1.00, jaw: 1.00 } },
     Triangle: { widthScale: 0.95, heightScale: 1.05, ratios: { forehead: 0.75, cheek: 0.95, jaw: 1.15 } },
-    Oval:     { widthScale: 0.85, heightScale: 1.15, ratios: { forehead: 0.90, cheek: 1.00, jaw: 0.85 } }
+    Oval: { widthScale: 0.85, heightScale: 1.15, ratios: { forehead: 0.90, cheek: 1.00, jaw: 0.85 } }
   };
   return professional[shape] || professional.Oval;
 }
@@ -194,14 +194,14 @@ const HaircutRecommender = () => {
       const mobile = width < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
       setIsMobile(mobile);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     fetchPreviousRecommendations();
     setTimeout(() => setAnimateItems(true), 300);
     preloadFaceShapeImages();
-    
+
     return () => {
       stopCamera();
       window.removeEventListener('resize', checkMobile);
@@ -303,22 +303,22 @@ const HaircutRecommender = () => {
         .filter(appointment => {
           const notes = appointment.notes || '';
           // Only include appointments that have proper haircut recommendation format
-          return notes.includes('HAIRCUT RECOMMENDATION') && 
-                 (notes.includes('Style:') || notes.includes('Description:'));
+          return notes.includes('HAIRCUT RECOMMENDATION') &&
+            (notes.includes('Style:') || notes.includes('Description:'));
         })
         .map(appointment => {
           const notes = appointment.notes || '';
-          
+
           const lines = notes.split('\n');
           const styleLine = lines.find(line => line.startsWith('Style:'));
           const descriptionLine = lines.find(line => line.startsWith('Description:'));
           const faceShapeLine = lines.find(line => line.startsWith('Face Shape:'));
-          
+
           // Extract structured data
           const style = styleLine ? styleLine.replace('Style:', '').trim() : 'Unknown Style';
           const description = descriptionLine ? descriptionLine.replace('Description:', '').trim() : 'No description available';
           const faceShape = faceShapeLine ? faceShapeLine.replace('Face Shape:', '').trim() : 'Unknown';
-          
+
           return {
             id: appointment.id,
             style,
@@ -347,11 +347,11 @@ const HaircutRecommender = () => {
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
-          
+
           // Set canvas to 9:16 aspect ratio
           const targetAspectRatio = 9 / 16;
           let cropWidth, cropHeight, cropX, cropY;
-          
+
           if (img.width / img.height > targetAspectRatio) {
             // Image is wider than target ratio, crop width
             cropHeight = img.height;
@@ -365,14 +365,14 @@ const HaircutRecommender = () => {
             cropX = 0;
             cropY = (img.height - cropHeight) / 2;
           }
-          
+
           // Set canvas size to 9:16
           canvas.width = 360; // 9 * 40
           canvas.height = 640; // 16 * 40
-          
+
           // Draw cropped image
           ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-          
+
           setSelectedImage(canvas.toDataURL('image/jpeg', 0.9));
           setFaceShape('');
           setRecommendations([]);
@@ -395,19 +395,19 @@ const HaircutRecommender = () => {
       // Let the OS choose the native preview size; we will letterbox via CSS if needed.
       const constraints = isMobile
         ? {
-            video: {
-              facingMode: 'user'
-            }
+          video: {
+            facingMode: 'user'
           }
+        }
         : {
-            video: {
-              facingMode: 'user',
-              width: { ideal: 1080 },
-              height: { ideal: 1920 },
-              aspectRatio: { ideal: 9 / 16 },
-              frameRate: { ideal: 30 }
-            }
-          };
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1080 },
+            height: { ideal: 1920 },
+            aspectRatio: { ideal: 9 / 16 },
+            frameRate: { ideal: 30 }
+          }
+        };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -429,7 +429,7 @@ const HaircutRecommender = () => {
       } else if (err.name === 'NotFoundError') {
         setError('No camera found. Please try uploading a photo instead.');
       } else {
-      setError('Could not access camera. Please check permissions or try uploading a photo instead.');
+        setError('Could not access camera. Please check permissions or try uploading a photo instead.');
       }
     }
   };
@@ -484,19 +484,19 @@ const HaircutRecommender = () => {
         // Use original image dimensions
         const originalWidth = preloadedImg.naturalWidth || preloadedImg.width;
         const originalHeight = preloadedImg.naturalHeight || preloadedImg.height;
-        
+
         // Calculate scale to fit within camera view with proper spacing
         const maxWidth = canvas.width * 0.6; // 60% of canvas width
         const maxHeight = canvas.height * 0.7; // 70% of canvas height
         const spacing = 20; // Spacing from edges
-        
+
         const scaleX = (maxWidth - spacing) / originalWidth;
         const scaleY = (maxHeight - spacing) / originalHeight;
         const maxFitScale = Math.min(scaleX, scaleY); // Maximum scale that fits
-        
+
         // Mobile: use full fitted size; Desktop: keep reduced size for better framing
         const scaleFactor = isMobile ? maxFitScale : 0.4;
-        
+
         // Debug logging
         console.log(`Camera overlay - ${shape}:`, {
           originalSize: `${originalWidth}x${originalHeight}`,
@@ -504,14 +504,14 @@ const HaircutRecommender = () => {
           fixedScale: scaleFactor.toFixed(2),
           canvasSize: `${canvas.width}x${canvas.height}`
         });
-        
+
         const overlayWidth = originalWidth * scaleFactor;
         const overlayHeight = originalHeight * scaleFactor;
-        
+
         // Center the image with proper spacing
         const overlayX = centerX - overlayWidth / 2;
         const overlayY = centerY - overlayHeight / 2;
-        
+
         ctx.globalAlpha = 0.8;
         ctx.drawImage(preloadedImg, overlayX, overlayY, overlayWidth, overlayHeight);
         ctx.globalAlpha = 1.0;
@@ -522,9 +522,9 @@ const HaircutRecommender = () => {
         ctx.setLineDash([6, 6]);
         ctx.fillStyle = 'rgba(255,255,255,0.06)';
         drawFaceSilhouette(ctx, centerX, centerY, faceWidth, faceHeight, profile.ratios || { forehead: 0.92, cheek: 1.0, jaw: 0.78 }, shape);
-      ctx.fill();
-      ctx.stroke();
-      ctx.setLineDash([]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
       rafRef.current = requestAnimationFrame(draw);
@@ -538,15 +538,15 @@ const HaircutRecommender = () => {
       const canvas = cameraCanvasRef.current;
       const width = video.videoWidth;
       const height = video.videoHeight;
-      
+
       // Create a temporary canvas for cropping to 9:16
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d');
-      
+
       // Set temp canvas to 9:16 aspect ratio
       const targetAspectRatio = 9 / 16;
       let cropWidth, cropHeight, cropX, cropY;
-      
+
       if (width / height > targetAspectRatio) {
         // Video is wider than target ratio, crop width
         cropHeight = height;
@@ -560,18 +560,18 @@ const HaircutRecommender = () => {
         cropX = 0;
         cropY = (height - cropHeight) / 2;
       }
-      
+
       // Set temp canvas size to 9:16
       tempCanvas.width = 360; // 9 * 40
       tempCanvas.height = 640; // 16 * 40
-      
+
       // Draw cropped and mirrored image
       tempCtx.save();
       tempCtx.translate(tempCanvas.width, 0);
       tempCtx.scale(-1, 1);
       tempCtx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, tempCanvas.width, tempCanvas.height);
       tempCtx.restore();
-      
+
       const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
       setSelectedImage(dataUrl);
       setRecommendations([]);
@@ -623,26 +623,26 @@ const HaircutRecommender = () => {
       // Use original image dimensions
       const originalWidth = preloadedImg.naturalWidth || preloadedImg.width;
       const originalHeight = preloadedImg.naturalHeight || preloadedImg.height;
-      
+
       // Calculate scale to fit within image view with proper spacing
       const maxWidth = canvas.width * 0.6; // 60% of canvas width
       const maxHeight = canvas.height * 0.7; // 70% of canvas height
       const spacing = 20; // Spacing from edges
-      
+
       const scaleX = (maxWidth - spacing) / originalWidth;
       const scaleY = (maxHeight - spacing) / originalHeight;
       const maxFitScale = Math.min(scaleX, scaleY); // Maximum scale that fits
-      
+
       // Use user's scale preference - allow going beyond fit if desired
       const scaleFactor = imageScale;
-      
+
       const overlayWidth = originalWidth * scaleFactor;
       const overlayHeight = originalHeight * scaleFactor;
-      
+
       // Center the image with proper spacing and apply position offset
       const overlayX = centerX - overlayWidth / 2 + overlayPosition.x;
       const overlayY = centerY - overlayHeight / 2 + overlayPosition.y;
-      
+
       ctx.globalAlpha = 0.8;
       ctx.drawImage(preloadedImg, overlayX, overlayY, overlayWidth, overlayHeight);
       ctx.globalAlpha = 1.0;
@@ -659,14 +659,14 @@ const HaircutRecommender = () => {
       ctx.lineWidth = 3;
       ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
       drawFaceSilhouette(ctx, centerX, centerY, faceWidth, faceHeight, profile.ratios || { forehead: 0.92, cheek: 1.0, jaw: 0.78 }, shape);
-    ctx.fill();
-    ctx.stroke();
+      ctx.fill();
+      ctx.stroke();
 
-    ctx.fillStyle = '#00d4ff';
-    const fallbackLabelFontSize = Math.max(12, Math.min(20, 14 * imageScale)); // Responsive font size
-    ctx.font = `bold ${fallbackLabelFontSize}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.fillText(shape, centerX, centerY + faceHeight / 2 + 18);
+      ctx.fillStyle = '#00d4ff';
+      const fallbackLabelFontSize = Math.max(12, Math.min(20, 14 * imageScale)); // Responsive font size
+      ctx.font = `bold ${fallbackLabelFontSize}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText(shape, centerX, centerY + faceHeight / 2 + 18);
     }
   };
 
@@ -756,7 +756,7 @@ const HaircutRecommender = () => {
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('haircut_recommendations')
-        .insert([{ 
+        .insert([{
           customer_id: user?.id,
           face_shape: shape,
           recommended_styles: haircutRecommendations,
@@ -779,35 +779,35 @@ const HaircutRecommender = () => {
     'mullet': shortMulletImg, // Using short-mullet as substitute
     'burst-fade': burstFadeImg,
     'comma-hair': commaHairImg,
-    
+
     // Diamond
     'diamond-crew-cut': diamondCrewCutImg,
     'wolf-cut': wolfCutImg,
     'low-taper': lowTaperImg,
     '70-30-hair': sidePartImg, // Using side-part as substitute
     'fringe': fringeImg,
-    
+
     // Round
     'side-part': sidePartImg,
     'blowout-taper': highFadeImg, // Using high-fade as substitute
     'undercut': undercutImg,
     'slicked-back': warriorImg, // Using warrior as substitute
     'quiffs': quiffsImg,
-    
+
     // Triangle
     'short-mullet': shortMulletImg,
     'edgar': edgarImg,
     'textured-fringe': texturedFringeImg,
     'curtain': curtainImg,
     'low-fade': lowFadeImg,
-    
+
     // Rectangle
     'long-trim': longTrimImg,
     'middle-part': middlePartImg,
     'warrior-buzz-cut': warriorBuzzCutImg,
     'warrior-cut': warriorImg,
     'comma-cut': commaCutImg,
-    
+
     // Oblong
     'modern-spike': modernSpikeImg,
     'slick-back': warriorImg, // Using warrior as substitute
@@ -864,21 +864,38 @@ const HaircutRecommender = () => {
 
   return (
     <div className="container py-4">
-      {/* Header with logo */}
-      <div className="row mb-4">
+      <div className="row mb-0">
         <div className="col">
           <div className="recommender-header p-3 p-md-4 rounded shadow-sm">
-            <div className="d-flex flex-column flex-md-row align-items-center justify-content-between">
-              <div className="text-center text-md-start mb-3 mb-md-0">
-                <div className="d-flex align-items-center justify-content-center justify-content-md-start mb-2">
-                <img src={logoImage} alt="Raf & Rok" className="recommender-logo me-3" height="40" style={{ backgroundColor: '#ffffff', padding: '3px', borderRadius: '5px' }} />
+            <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+              <div className="text-start">
+                <div className="d-flex align-items-center mb-2">
+                  <img src={logoImage} alt="Raf & Rok" className="recommender-logo me-3" height="40" style={{ backgroundColor: '#ffffff', padding: '4px', borderRadius: '5px' }} />
                   <h1 className="h3 h4-md mb-0 text-white">Haircut Recommender</h1>
                 </div>
                 <p className="text-light mb-0 small"><i className="bi bi-scissors me-2"></i>Simple face shape selection for personalized haircut recommendations</p>
               </div>
-              <div>
-                <Link to="/dashboard" className="btn btn-light btn-sm"><i className="bi bi-arrow-left me-2"></i>Back to Dashboard</Link>
-            </div>
+
+              <Link
+                to="/dashboard"
+                className="btn btn-light shadow-sm fw-bold px-4 rounded-pill align-self-end align-self-md-center"
+                style={{
+                  transition: 'all 0.2s ease',
+                  border: 'none',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transformOrigin: 'right center'
+                }}
+                onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onTouchStart={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <i className="bi bi-arrow-left me-2"></i>
+                Back to Dashboard
+              </Link>
             </div>
           </div>
         </div>
@@ -924,22 +941,22 @@ const HaircutRecommender = () => {
                           </div>
                         ) : (
                           <div className="text-center">
-                             <div 
-                               ref={imageContainerRef} 
-                               className="position-relative d-inline-block mb-3 w-100" 
-                               style={{ maxWidth: '360px', aspectRatio: '9 / 16' }}
-                               onMouseMove={handleMouseMove}
-                               onMouseUp={handleMouseUp}
-                               onMouseLeave={handleMouseUp}
-                               onTouchMove={handleTouchMove}
-                               onTouchEnd={handleTouchEnd}
-                             >
+                            <div
+                              ref={imageContainerRef}
+                              className="position-relative d-inline-block mb-3 w-100"
+                              style={{ maxWidth: '360px', aspectRatio: '9 / 16' }}
+                              onMouseMove={handleMouseMove}
+                              onMouseUp={handleMouseUp}
+                              onMouseLeave={handleMouseUp}
+                              onTouchMove={handleTouchMove}
+                              onTouchEnd={handleTouchEnd}
+                            >
                               <img ref={imageRef} src={selectedImage} alt="Uploaded face" className="img-fluid rounded position-absolute top-0 start-0 w-100 h-100" style={{ objectFit: 'contain' }} />
                               {/* Overlay canvas for face shape outlines - now draggable */}
-                              <canvas 
-                                ref={overlayCanvasRef} 
-                                className="position-absolute top-0 start-0 w-100 h-100" 
-                                style={{ 
+                              <canvas
+                                ref={overlayCanvasRef}
+                                className="position-absolute top-0 start-0 w-100 h-100"
+                                style={{
                                   pointerEvents: 'auto',
                                   cursor: isDragging ? 'grabbing' : 'grab'
                                 }}
@@ -949,126 +966,131 @@ const HaircutRecommender = () => {
                               <button className="btn btn-sm btn-danger position-absolute top-0 end-0 m-2" onClick={() => { setSelectedImage(null); setFaceShape(''); setRecommendations([]); setHoveredShape(''); clearOverlay(); resetOverlayPosition(); }}><i className="bi bi-x"></i></button>
                             </div>
                             <div className="mt-3">
-                              <h6 className="mb-2">
+                              <h6 className="mb-0 text-center fw-bold" style={{ fontSize: '0.9rem', color: '#2c2c2c' }}>
                                 {window.innerWidth < 768 ? 'Tap shapes to see outlines, then tap to select' : 'Hover over shapes to see outlines, then click to select'}
                               </h6>
-                              
-                               {/* Enhanced Size Adjuster for Upload */}
-                               <div className="mb-3 p-3 bg-light rounded">
-                                 <div className="d-flex align-items-center justify-content-center mb-2">
-                                   <i className="bi bi-zoom-out me-2 text-muted"></i>
-                                   <label className="form-label mb-0 fw-bold">Overlay Size: {imageScale.toFixed(1)}x</label>
-                                   <i className="bi bi-zoom-in ms-2 text-muted"></i>
-                                 </div>
-                                 
-                                 <div className="d-flex align-items-center justify-content-center gap-3">
-                                   <button 
-                                     className="btn btn-outline-secondary btn-sm"
-                                     onClick={() => setImageScale(Math.max(0.1, imageScale - 0.1))}
-                                     disabled={imageScale <= 0.1}
-                                   >
-                                     <i className="bi bi-dash"></i>
-                                   </button>
-                                   
-                                   <input 
-                                     type="range" 
-                                     className="form-range" 
-                                     min="0.1" 
-                                     max="1.5" 
-                                     step="0.1" 
-                                     value={imageScale} 
-                                     onChange={(e) => setImageScale(parseFloat(e.target.value))}
-                                     style={{ width: '150px' }}
-                                   />
-                                   
-                                   <button 
-                                     className="btn btn-outline-secondary btn-sm"
-                                     onClick={() => setImageScale(Math.min(1.5, imageScale + 0.1))}
-                                     disabled={imageScale >= 1.5}
-                                   >
-                                     <i className="bi bi-plus"></i>
-                                   </button>
-                                 </div>
-                                 
-                                 <div className="d-flex justify-content-between mt-2">
-                                   <small className="text-muted">Small</small>
-                                   <small className="text-muted">Large</small>
-                                 </div>
-                                 
-                                 {/* Quick Size Presets */}
-                                 <div className="mt-2 d-flex justify-content-center gap-2">
-                                   <button 
-                                     className="btn btn-outline-primary btn-sm"
-                                     onClick={() => setImageScale(0.2)}
-                                   >
-                                     Small
-                                   </button>
-                                   <button 
-                                     className="btn btn-outline-primary btn-sm"
-                                     onClick={() => setImageScale(0.3)}
-                                   >
-                                     Medium
-                                   </button>
-                                   <button 
-                                     className="btn btn-outline-primary btn-sm"
-                                     onClick={() => setImageScale(0.5)}
-                                   >
-                                     Large
-                                   </button>
-                                 </div>
-                                 
-                                 {/* Position Controls */}
-                                 <div className="mt-2 d-flex justify-content-center gap-2">
-                                   <button 
-                                     className="btn btn-outline-secondary btn-sm"
-                                     onClick={resetOverlayPosition}
-                                     title="Reset overlay position to center"
-                                   >
-                                     <i className="bi bi-arrow-clockwise me-1"></i>
-                                     Reset Position
-                                   </button>
-                                 </div>
-                                 
-                                 {/* Drag Instructions */}
-                                 <div className="mt-2">
-                                   <small className="text-muted">
-                                     <i className="bi bi-hand-index me-1"></i>
-                                     Drag the overlay to position it on your face
-                                   </small>
-                                 </div>
-                               </div>
-                              <div className="d-flex flex-wrap gap-2 justify-content-center">
-                                {['Round','Diamond','Oblong','Rectangle','Triangle','Oval'].map(shape => (
+
+                              {/* Enhanced Size Adjuster for Upload */}
+                              <div className="mb-3 p-3 bg-light rounded">
+                                <div className="d-flex align-items-center justify-content-center mb-2">
+                                  <i className="bi bi-zoom-out me-2 text-muted"></i>
+                                  <label className="form-label mb-0 fw-bold">Overlay Size: {imageScale.toFixed(1)}x</label>
+                                  <i className="bi bi-zoom-in ms-2 text-muted"></i>
+                                </div>
+
+                                <div className="d-flex align-items-center justify-content-center gap-3">
+                                  <button
+                                    className="btn btn-outline-secondary btn-sm"
+                                    onClick={() => setImageScale(Math.max(0.1, imageScale - 0.1))}
+                                    disabled={imageScale <= 0.1}
+                                  >
+                                    <i className="bi bi-dash"></i>
+                                  </button>
+
+                                  <input
+                                    type="range"
+                                    className="form-range"
+                                    min="0.1"
+                                    max="1.0"
+                                    step="0.1"
+                                    value={imageScale}
+                                    onChange={(e) => setImageScale(parseFloat(e.target.value))}
+                                    style={{ width: '150px' }}
+                                  />
+
+                                  <button
+                                    className="btn btn-outline-secondary btn-sm"
+                                    onClick={() => setImageScale(Math.min(1.0, imageScale + 0.1))}
+                                    disabled={imageScale >= 1.0}
+                                  >
+                                    <i className="bi bi-plus"></i>
+                                  </button>
+                                </div>
+
+                                <div className="d-flex justify-content-between mt-2">
+                                  <small className="text-muted">Small</small>
+                                  <small className="text-muted">Large</small>
+                                </div>
+
+                                {/* Quick Size Presets */}
+                                <div className="mt-2 d-flex justify-content-center gap-2">
+                                  <button
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={() => setImageScale(0.2)}
+                                  >
+                                    Small
+                                  </button>
+                                  <button
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={() => setImageScale(0.3)}
+                                  >
+                                    Medium
+                                  </button>
+                                  <button
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={() => setImageScale(0.5)}
+                                  >
+                                    Large
+                                  </button>
+                                </div>
+
+                                {/* Position Controls */}
+                                <div className="mt-2 d-flex justify-content-center gap-2">
+                                  <button
+                                    className="btn btn-outline-secondary btn-sm"
+                                    onClick={resetOverlayPosition}
+                                    title="Reset overlay position to center"
+                                  >
+                                    <i className="bi bi-arrow-clockwise me-1"></i>
+                                    Reset Position
+                                  </button>
+                                </div>
+
+                                {/* Drag Instructions */}
+                                <div className="mt-2">
+                                  <small className="text-muted">
+                                    <i className="bi bi-hand-index me-1"></i>
+                                    Drag the overlay to position it on your face
+                                  </small>
+                                </div>
+                              </div>
+                              <div className="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                                {['Round', 'Diamond', 'Oblong', 'Rectangle', 'Triangle', 'Oval'].map(shape => (
                                   <button
                                     key={shape}
                                     type="button"
-                                    className={`btn btn-outline-primary ${window.innerWidth < 768 ? 'btn-sm' : 'btn-sm'} ${faceShape === shape ? 'active' : ''} ${hoveredShape === shape ? 'btn-primary' : ''}`}
+                                    className={`btn rounded-pill px-3 py-2 d-flex align-items-center justify-content-center transition-all ${faceShape === shape ? 'btn-dark' : 'btn-light text-dark border-0'}`}
                                     onClick={() => handleSelectShape(shape)}
                                     onMouseEnter={() => handleShapeHover(shape)}
                                     onMouseLeave={handleShapeLeave}
                                     onTouchStart={() => handleShapeHover(shape)}
                                     onTouchEnd={handleShapeLeave}
                                     disabled={loading}
-                                    style={{ minWidth: window.innerWidth < 768 ? '70px' : 'auto' }}
+                                    style={{
+                                      minWidth: '90px',
+                                      fontSize: '0.85rem',
+                                      fontWeight: '500',
+                                      backgroundColor: faceShape === shape ? '#2c2c2c' : '#f0f2f5',
+                                      opacity: loading ? 0.6 : 1
+                                    }}
                                   >
-                                    <i className={`bi bi-${
-                                      shape === 'Round' ? 'circle' :
+                                    <i className={`bi bi-${shape === 'Round' ? 'circle' :
                                       shape === 'Diamond' ? 'diamond' :
-                                      shape === 'Oblong' ? 'rectangle-vertical' :
-                                      shape === 'Rectangle' ? 'square' :
-                                      shape === 'Triangle' ? 'triangle' :
-                                      shape === 'Oval' ? 'egg' :
-                                      'circle'
-                                    } me-1`}></i>
+                                        shape === 'Oblong' ? 'rectangle-vertical' :
+                                          shape === 'Rectangle' ? 'square' :
+                                            shape === 'Triangle' ? 'triangle' :
+                                              shape === 'Oval' ? 'egg' :
+                                                'circle'
+                                      } me-2 ${faceShape === shape ? 'text-white' : 'text-muted'}`}></i>
                                     {shape}
                                   </button>
                                 ))}
                               </div>
                               {hoveredShape && (
-                            <div className="mt-2 text-info small">
-                              <i className="bi bi-eye me-1"></i>
-                              {window.innerWidth < 768 ? 'Showing' : 'Showing'} {hoveredShape} face shape outline
-                            </div>
+                                <div className="mt-2 text-info small">
+                                  <i className="bi bi-eye me-1"></i>
+                                  {window.innerWidth < 768 ? 'Showing' : 'Showing'} {hoveredShape} face shape outline
+                                </div>
                               )}
                               {loading && (
                                 <div className="mt-2 text-muted small"><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Applying filter...</div>
@@ -1081,7 +1103,7 @@ const HaircutRecommender = () => {
 
                     {activeTab === 'camera' && (
                       <div className="camera-container">
-                         <div
+                        <div
                           ref={cameraContainerRef}
                           className="position-relative mb-3 w-100"
                           style={{
@@ -1114,38 +1136,38 @@ const HaircutRecommender = () => {
                         {/* Face shape selection while in camera mode */}
                         <div className="mt-3 text-center">
                           <h6 className="mb-2">Select your face shape to guide the overlay</h6>
-                           <div className="mb-3 p-2 bg-light rounded">
-                             <small className="text-muted">
-                               <i className="bi bi-info-circle me-1"></i>
-                               Camera overlay is fixed at 0.3x for optimal alignment. Adjust size after capture.
-                             </small>
-                           </div>
-                          <div className="d-flex flex-wrap gap-2 justify-content-center">
-                            {['Round','Diamond','Oblong','Rectangle','Triangle','Oval'].map(shape => (
+                          <div className="mb-3 p-2 bg-light rounded">
+                            <small className="text-muted">
+                              <i className="bi bi-info-circle me-1"></i>
+                              Camera overlay is fixed at 0.3x for optimal alignment. Adjust size after capture.
+                            </small>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                            {['Round', 'Diamond', 'Oblong', 'Rectangle', 'Triangle', 'Oval'].map(shape => (
                               <button
                                 key={shape}
                                 type="button"
-                                className={`btn btn-outline-primary ${window.innerWidth < 768 ? 'btn-sm' : 'btn-sm'} ${faceShape === shape ? 'active' : ''} ${hoveredShape === shape ? 'btn-primary' : ''}`}
-                                onClick={() => {
-                                  // In camera mode before capture, just set the shape to adjust overlay
-                                  setFaceShape(shape);
-                                }}
+                                className={`btn rounded-pill px-3 py-2 d-flex align-items-center justify-content-center transition-all ${faceShape === shape ? 'btn-dark' : 'btn-light text-dark border-0'}`}
+                                onClick={() => setFaceShape(shape)}
                                 onMouseEnter={() => handleShapeHover(shape)}
                                 onMouseLeave={handleShapeLeave}
                                 onTouchStart={() => handleShapeHover(shape)}
                                 onTouchEnd={handleShapeLeave}
-                                disabled={loading}
-                                style={{ minWidth: window.innerWidth < 768 ? '70px' : 'auto' }}
+                                style={{
+                                  minWidth: '90px',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '500',
+                                  backgroundColor: faceShape === shape ? '#2c2c2c' : '#f0f2f5'
+                                }}
                               >
-                                <i className={`bi bi-${
-                                  shape === 'Round' ? 'circle' :
+                                <i className={`bi bi-${shape === 'Round' ? 'circle' :
                                   shape === 'Diamond' ? 'diamond' :
-                                  shape === 'Oblong' ? 'rectangle-vertical' :
-                                  shape === 'Rectangle' ? 'square' :
-                                  shape === 'Triangle' ? 'triangle' :
-                                  shape === 'Oval' ? 'egg' :
-                                  'circle'
-                                } me-1`}></i>
+                                    shape === 'Oblong' ? 'rectangle-vertical' :
+                                      shape === 'Rectangle' ? 'square' :
+                                        shape === 'Triangle' ? 'triangle' :
+                                          shape === 'Oval' ? 'egg' :
+                                            'circle'
+                                  } me-2 ${faceShape === shape ? 'text-white' : 'text-muted'}`}></i>
                                 {shape}
                               </button>
                             ))}
@@ -1170,12 +1192,12 @@ const HaircutRecommender = () => {
                         <h5 className="mb-3"><i className="bi bi-scissors me-2"></i>Recommended Haircuts</h5>
                         <div className="recommendations-list">
                           {recommendations.map((rec, index) => (
-                            <div 
-                              key={index} 
+                            <div
+                              key={index}
                               className="card recommendation-card mb-3"
-                              style={{ 
-                                transition: 'all 0.3s ease', 
-                                borderRadius: '15px', 
+                              style={{
+                                transition: 'all 0.3s ease',
+                                borderRadius: '15px',
                                 overflow: 'hidden',
                                 cursor: 'pointer',
                                 border: '2px solid #e9ecef'
@@ -1213,7 +1235,7 @@ const HaircutRecommender = () => {
                                 <div className="row g-0">
                                   {/* Square Image on the left */}
                                   <div className="col-4 col-md-3" style={{ paddingTop: '8px', paddingBottom: '8px' }}>
-                                    <div 
+                                    <div
                                       className="recommendation-image-container"
                                       style={{
                                         width: '100%',
@@ -1229,11 +1251,11 @@ const HaircutRecommender = () => {
                                         openImageModal(rec.image, rec.name);
                                       }}
                                     >
-                                      <img 
-                                        src={rec.image} 
+                                      <img
+                                        src={rec.image}
                                         alt={rec.name}
                                         className="img-fluid"
-                                        style={{ 
+                                        style={{
                                           width: '100%',
                                           height: '100%',
                                           objectFit: 'cover',
@@ -1270,9 +1292,9 @@ const HaircutRecommender = () => {
                                           }
                                         }}
                                       />
-                                      <div 
+                                      <div
                                         className="d-none"
-                                        style={{ 
+                                        style={{
                                           position: 'absolute',
                                           top: 0,
                                           left: 0,
@@ -1314,36 +1336,36 @@ const HaircutRecommender = () => {
                                       </div>
                                       <p className="text-muted small mb-3 flex-grow-1">{rec.description}</p>
                                       <div className="mt-auto">
-                                        <Link 
-                                          to="/book" 
-                                          className="btn btn-primary btn-sm w-100 rounded-pill"
+                                        <Link
+                                          to="/book"
+                                          className="btn btn-dark btn-sm w-100 rounded-pill"
                                           style={{
-                                            background: 'linear-gradient(45deg, #007bff, #0056b3)',
+                                            backgroundColor: '#2c2c2c',
                                             border: 'none',
-                                            boxShadow: '0 2px 4px rgba(0,123,255,0.3)',
-                                            transition: 'all 0.3s ease'
+                                            transition: 'all 0.2s ease',
+                                            fontWeight: '500',
+                                            height: '38px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
                                           }}
                                           onMouseEnter={(e) => {
                                             if (!isMobile) {
-                                              e.currentTarget.style.transform = 'translateY(-2px)';
-                                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,123,255,0.4)';
+                                              e.currentTarget.style.backgroundColor = '#1a1a1a';
+                                              e.currentTarget.style.transform = 'translateY(-1px)';
                                             }
                                           }}
                                           onMouseLeave={(e) => {
                                             if (!isMobile) {
+                                              e.currentTarget.style.backgroundColor = '#2c2c2c';
                                               e.currentTarget.style.transform = 'translateY(0)';
-                                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,123,255,0.3)';
                                             }
                                           }}
                                           onTouchStart={(e) => {
-                                            if (isMobile) {
-                                              e.currentTarget.style.transform = 'scale(0.95)';
-                                            }
+                                            e.currentTarget.style.transform = 'scale(0.95)';
                                           }}
                                           onTouchEnd={(e) => {
-                                            if (isMobile) {
-                                              e.currentTarget.style.transform = 'scale(1)';
-                                            }
+                                            e.currentTarget.style.transform = 'scale(1)';
                                           }}
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -1378,10 +1400,46 @@ Face Shape: ${faceShape}`
                         </div>
                       </div>
                     ) : (
-                      <div className="text-center py-5">
-                        <div className="mb-3"><i className="bi bi-scissors display-4 text-muted"></i></div>
-                        <h5>No Recommendations Yet</h5>
-                        <p className="text-muted">Manually select your face shape using the buttons below the image to see personalized haircut recommendations</p>
+                      <div className="recommendations-placeholder p-5 text-center rounded-4 shadow-sm border-0 position-relative overflow-hidden"
+                        style={{
+                          background: 'linear-gradient(135deg, #ffffff 0%, #f1f4f8 100%)',
+                          minHeight: '350px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {/* Decorative background element */}
+                        <div className="position-absolute" style={{ top: '-10%', right: '-5%', opacity: 0.03, fontSize: '200px', transform: 'rotate(15deg)', pointerEvents: 'none' }}>
+                          <i className="bi bi-scissors text-primary"></i>
+                        </div>
+                        <div className="position-absolute" style={{ bottom: '-5%', left: '-5%', opacity: 0.03, fontSize: '150px', transform: 'rotate(-15deg)', pointerEvents: 'none' }}>
+                          <i className="bi bi-stars text-primary"></i>
+                        </div>
+
+                        <div className="placeholder-icon-container mb-4 position-relative">
+                          <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center animate-pulse" style={{ width: '100px', height: '100px' }}>
+                            <i className="bi bi-person-bounding-box text-primary display-4"></i>
+                          </div>
+                          <div className="position-absolute bottom-0 end-0 bg-white shadow-sm rounded-circle p-2 d-flex align-items-center justify-content-center" style={{ width: '35px', height: '35px', transform: 'translate(10%, 10%)' }}>
+                            <i className="bi bi-search text-primary small"></i>
+                          </div>
+                        </div>
+
+                        <h5 className="fw-bold text-dark mb-2">Discover Your Best Look</h5>
+                        <p className="text-muted mx-auto mb-4" style={{ maxWidth: '320px', lineHeight: '1.6' }}>
+                          Select your face shape below to view personalized haircut recommendations tailored just for you.
+                        </p>
+
+                        <div className="d-flex flex-wrap justify-content-center gap-2 mt-2">
+                          <span className="badge bg-white text-dark shadow-sm rounded-pill px-3 py-2 border border-light">
+                            <i className="bi bi-check2-circle text-success me-1"></i> Style Analysis
+                          </span>
+                          <span className="badge bg-white text-dark shadow-sm rounded-pill px-3 py-2 border border-light">
+                            <i className="bi bi-sparkles text-warning me-1"></i> Pro Advice
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1396,7 +1454,7 @@ Face Shape: ${faceShape}`
                           <i className="bi bi-info-circle me-2"></i>
                           Haircut Details
                         </h6>
-                        <button 
+                        <button
                           className="btn btn-sm btn-light"
                           onClick={() => {
                             setShowDetailsPanel(false);
@@ -1408,11 +1466,11 @@ Face Shape: ${faceShape}`
                       </div>
                       <div className="card-body">
                         <div className="text-center mb-3">
-                          <img 
-                            src={selectedRecommendation.image} 
+                          <img
+                            src={selectedRecommendation.image}
                             alt={selectedRecommendation.name}
                             className="img-fluid rounded"
-                            style={{ 
+                            style={{
                               maxHeight: '250px',
                               width: '100%',
                               objectFit: 'cover',
@@ -1426,7 +1484,7 @@ Face Shape: ${faceShape}`
                         </div>
                         <h5 className="fw-bold mb-3">{selectedRecommendation.name}</h5>
                         <p className="text-muted mb-4">{selectedRecommendation.description}</p>
-                        
+
                         <div className="row g-3 mb-4">
                           <div className="col-6">
                             <div className="text-center p-3 bg-light rounded">
@@ -1462,13 +1520,29 @@ Face Shape: ${faceShape}`
                           </div>
                         </div>
 
-                        <Link 
-                          to="/book" 
-                          className="btn btn-primary w-100 rounded-pill"
+                        <Link
+                          to="/book"
+                          className="btn btn-dark w-100 rounded-pill"
                           style={{
-                            background: 'linear-gradient(45deg, #007bff, #0056b3)',
+                            backgroundColor: '#2c2c2c',
                             border: 'none',
-                            boxShadow: '0 4px 8px rgba(0,123,255,0.3)'
+                            transition: 'all 0.2s ease',
+                            fontWeight: '500',
+                            padding: '12px'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1a1a1a';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#2c2c2c';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }}
+                          onTouchStart={(e) => {
+                            e.currentTarget.style.transform = 'scale(0.95)';
+                          }}
+                          onTouchEnd={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
                           }}
                           onClick={() => {
                             const haircutStyle = {
@@ -1505,87 +1579,91 @@ Face Shape: ${faceShape}`
             <div className="card-header bg-light">
               <div className="d-flex justify-content-between align-items-center">
                 <h5 className="mb-0"><i className="bi bi-clock-history me-2"></i>Your Previous Bookings</h5>
-                {previousRecommendations.length > 0 && (
-                  <div className="d-flex align-items-center">
-                    <label className="form-label me-2 mb-0 small">Filter by Face Shape:</label>
-                    <select 
-                      className="form-select form-select-sm" 
-                      style={{ width: 'auto' }}
-                      value={selectedFaceShapeFilter}
-                      onChange={(e) => setSelectedFaceShapeFilter(e.target.value)}
-                    >
-                      <option value="all">All Shapes</option>
-                      <option value="Oval">Oval</option>
-                      <option value="Round">Round</option>
-                      <option value="Diamond">Diamond</option>
-                      <option value="Oblong">Oblong</option>
-                      <option value="Rectangle">Rectangle</option>
-                      <option value="Triangle">Triangle</option>
-                    </select>
-                  </div>
-                )}
               </div>
             </div>
             <div className="card-body">
               {previousRecommendations.length > 0 ? (
                 <div className="row">
                   {previousRecommendations
-                    .filter(prev => selectedFaceShapeFilter === 'all' || prev.faceShape === selectedFaceShapeFilter)
                     .map((prev) => (
-                    <div key={prev.id} className="col-md-6 mb-3">
-                      <div className="card border-0 bg-light">
-                        <div className="card-body p-3">
-                          <div className="d-flex justify-content-between align-items-center mb-2">
-                            <div className="d-flex align-items-center">
-                              <i className={`bi bi-${prev.faceShape === 'Round' ? 'circle' : prev.faceShape === 'Diamond' ? 'diamond' : prev.faceShape === 'Oblong' ? 'rectangle-vertical' : prev.faceShape === 'Rectangle' ? 'square' : prev.faceShape === 'Triangle' ? 'triangle' : prev.faceShape === 'Oval' ? 'egg' : 'circle'} me-2 text-primary`}></i>
-                              <strong>{prev.faceShape}</strong>
+                      <div key={prev.id} className="col-md-6 mb-3">
+                        <div className="card border-0 bg-light">
+                          <div className="card-body p-3">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <div className="d-flex align-items-center">
+                                <i className={`bi bi-${prev.faceShape === 'Round' ? 'circle' : prev.faceShape === 'Diamond' ? 'diamond' : prev.faceShape === 'Oblong' ? 'rectangle-vertical' : prev.faceShape === 'Rectangle' ? 'square' : prev.faceShape === 'Triangle' ? 'triangle' : prev.faceShape === 'Oval' ? 'egg' : 'circle'} me-2 text-primary`}></i>
+                                <strong>{prev.faceShape}</strong>
+                              </div>
+                              <small className="text-muted">{new Date(prev.createdAt).toLocaleDateString()}</small>
                             </div>
-                            <small className="text-muted">{new Date(prev.createdAt).toLocaleDateString()}</small>
-                          </div>
-                          <div className="mb-2">
-                            <strong className="text-primary">{prev.style}</strong>
-                            <p className="text-muted mb-1 small">{prev.description}</p>
-                          </div>
-                          <div className="d-flex justify-content-between align-items-center">
-                            <div className="d-flex flex-column">
-                              <small className="text-muted">
-                                <i className="bi bi-person me-1"></i>
-                                {prev.barberName}
-                              </small>
-                              <small className="text-muted">
-                                <i className="bi bi-calendar me-1"></i>
-                                {new Date(prev.appointmentDate).toLocaleDateString()}
-                              </small>
+                            <div className="mb-2">
+                              <strong className="text-primary">{prev.style}</strong>
+                              <p className="text-muted mb-1 small">{prev.description}</p>
                             </div>
-                            <Link 
-                              to="/book" 
-                              className="btn btn-primary btn-sm"
-                              onClick={() => {
-                                // Save haircut style to localStorage for booking
-                                const haircutStyle = {
-                                  name: prev.style,
-                                  description: prev.description,
-                                  faceShape: prev.faceShape,
-                                  timestamp: new Date().toISOString(),
-                                  // Formatted note for booking
-                                  bookingNote: `HAIRCUT RECOMMENDATION:
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div className="d-flex flex-column">
+                                <small className="text-muted">
+                                  <i className="bi bi-person me-1"></i>
+                                  {prev.barberName}
+                                </small>
+                                <small className="text-muted">
+                                  <i className="bi bi-calendar me-1"></i>
+                                  {new Date(prev.appointmentDate).toLocaleDateString()}
+                                </small>
+                              </div>
+                              <Link
+                                to="/book"
+                                className="btn btn-dark btn-sm rounded-pill px-4"
+                                style={{
+                                  backgroundColor: '#2c2c2c',
+                                  border: 'none',
+                                  transition: 'all 0.2s ease',
+                                  fontWeight: '500'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isMobile) {
+                                    e.currentTarget.style.backgroundColor = '#1a1a1a';
+                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isMobile) {
+                                    e.currentTarget.style.backgroundColor = '#2c2c2c';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                  }
+                                }}
+                                onTouchStart={(e) => {
+                                  e.currentTarget.style.transform = 'scale(0.95)';
+                                }}
+                                onTouchEnd={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                                onClick={() => {
+                                  // Save haircut style to localStorage for booking
+                                  const haircutStyle = {
+                                    name: prev.style,
+                                    description: prev.description,
+                                    faceShape: prev.faceShape,
+                                    timestamp: new Date().toISOString(),
+                                    // Formatted note for booking
+                                    bookingNote: `HAIRCUT RECOMMENDATION:
 Style: ${prev.style}
 Description: ${prev.description}
 Face Shape: ${prev.faceShape}`
-                                };
-                                localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
-                                // Also save directly to special request for easy access
-                                localStorage.setItem('specialRequest', haircutStyle.bookingNote);
-                              }}
-                            >
-                              <i className="bi bi-calendar-plus me-1"></i>
-                              Book Again
-                            </Link>
+                                  };
+                                  localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
+                                  // Also save directly to special request for easy access
+                                  localStorage.setItem('specialRequest', haircutStyle.bookingNote);
+                                }}
+                              >
+                                <i className="bi bi-calendar-plus me-1"></i>
+                                Book Again
+                              </Link>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               ) : (
                 <div className="text-center py-4">
@@ -1596,200 +1674,219 @@ Face Shape: ${prev.faceShape}`
               )}
             </div>
           </div>
-         </div>
-       </div>
+        </div>
+      </div>
 
-       {/* Details Panel Modal - Mobile */}
-       {showDetailsPanel && selectedRecommendation && isMobile && (
-         <div 
-           className="modal show d-block" 
-           style={{ 
-             position: 'fixed',
-             top: 0,
-             left: 0,
-             right: 0,
-             bottom: 0,
-             backgroundColor: 'rgba(0,0,0,0.5)',
-             zIndex: 1050
-           }}
-           onClick={() => {
-             setShowDetailsPanel(false);
-             setSelectedRecommendation(null);
-           }}
-         >
-           <div 
-             className="modal-dialog"
-             style={{
-               position: 'fixed',
-               bottom: 0,
-               left: 0,
-               right: 0,
-               margin: 0,
-               maxWidth: '100%'
-             }}
-             onClick={(e) => e.stopPropagation()}
-           >
-             <div className="modal-content" style={{ borderTopLeftRadius: '20px', borderTopRightRadius: '20px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
-               <div className="modal-header bg-primary text-white d-flex justify-content-between align-items-center">
-                 <h6 className="mb-0">
-                   <i className="bi bi-info-circle me-2"></i>
-                   Haircut Details
-                 </h6>
-                 <button 
-                   type="button"
-                   className="btn-close btn-close-white"
-                   onClick={() => {
-                     setShowDetailsPanel(false);
-                     setSelectedRecommendation(null);
-                   }}
-                   aria-label="Close"
-                 ></button>
-               </div>
-               <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                 <div className="text-center mb-3">
-                   <img 
-                     src={selectedRecommendation.image} 
-                     alt={selectedRecommendation.name}
-                     className="img-fluid rounded"
-                     style={{ 
-                       maxHeight: '200px',
-                       width: '100%',
-                       objectFit: 'cover',
-                       cursor: 'pointer'
-                     }}
-                     onClick={() => {
-                       setShowDetailsPanel(false);
-                       openImageModal(selectedRecommendation.image, selectedRecommendation.name);
-                     }}
-                     onError={(e) => {
-                       e.target.style.display = 'none';
-                     }}
-                   />
-                 </div>
-                 <h5 className="fw-bold mb-3">{selectedRecommendation.name}</h5>
-                 <p className="text-muted mb-4">{selectedRecommendation.description}</p>
-                 
-                 <div className="row g-3 mb-4">
-                   <div className="col-6">
-                     <div className="text-center p-3 bg-light rounded">
-                       <i className="bi bi-tools text-warning fs-4 d-block mb-2"></i>
-                       <div className="small fw-medium text-muted mb-1">Difficulty</div>
-                       <span className={`badge ${selectedRecommendation.difficulty === 'Low' ? 'bg-success' : selectedRecommendation.difficulty === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
-                         {selectedRecommendation.difficulty}
-                       </span>
-                     </div>
-                   </div>
-                   <div className="col-6">
-                     <div className="text-center p-3 bg-light rounded">
-                       <i className="bi bi-clock text-info fs-4 d-block mb-2"></i>
-                       <div className="small fw-medium text-muted mb-1">Maintenance</div>
-                       <span className={`badge ${selectedRecommendation.maintenance === 'Low' ? 'bg-success' : selectedRecommendation.maintenance === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
-                         {selectedRecommendation.maintenance}
-                       </span>
-                     </div>
-                   </div>
-                 </div>
+      {/* Details Panel Modal - Mobile */}
+      {
+        showDetailsPanel && selectedRecommendation && isMobile && (
+          <div
+            className="modal show d-block"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 1050
+            }}
+            onClick={() => {
+              setShowDetailsPanel(false);
+              setSelectedRecommendation(null);
+            }}
+          >
+            <div
+              className="modal-dialog"
+              style={{
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                margin: 0,
+                maxWidth: '100%'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-content" style={{ borderTopLeftRadius: '20px', borderTopRightRadius: '20px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+                <div className="modal-header bg-primary text-white d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0">
+                    <i className="bi bi-info-circle me-2"></i>
+                    Haircut Details
+                  </h6>
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={() => {
+                      setShowDetailsPanel(false);
+                      setSelectedRecommendation(null);
+                    }}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                  <div className="text-center mb-3">
+                    <img
+                      src={selectedRecommendation.image}
+                      alt={selectedRecommendation.name}
+                      className="img-fluid rounded"
+                      style={{
+                        maxHeight: '200px',
+                        width: '100%',
+                        objectFit: 'cover',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => {
+                        setShowDetailsPanel(false);
+                        openImageModal(selectedRecommendation.image, selectedRecommendation.name);
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <h5 className="fw-bold mb-3">{selectedRecommendation.name}</h5>
+                  <p className="text-muted mb-4">{selectedRecommendation.description}</p>
 
-                 <div className="mb-4">
-                   <div className="small fw-medium mb-2">
-                     <i className="bi bi-tags me-1"></i>
-                     Style Tags
-                   </div>
-                   <div className="d-flex flex-wrap gap-2">
-                     {selectedRecommendation.tags.map((tag, tagIndex) => (
-                       <span key={tagIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
-                         {tag}
-                       </span>
-                     ))}
-                   </div>
-                 </div>
+                  <div className="row g-3 mb-4">
+                    <div className="col-6">
+                      <div className="text-center p-3 bg-light rounded">
+                        <i className="bi bi-tools text-warning fs-4 d-block mb-2"></i>
+                        <div className="small fw-medium text-muted mb-1">Difficulty</div>
+                        <span className={`badge ${selectedRecommendation.difficulty === 'Low' ? 'bg-success' : selectedRecommendation.difficulty === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
+                          {selectedRecommendation.difficulty}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="text-center p-3 bg-light rounded">
+                        <i className="bi bi-clock text-info fs-4 d-block mb-2"></i>
+                        <div className="small fw-medium text-muted mb-1">Maintenance</div>
+                        <span className={`badge ${selectedRecommendation.maintenance === 'Low' ? 'bg-success' : selectedRecommendation.maintenance === 'Medium' ? 'bg-warning' : 'bg-danger'}`}>
+                          {selectedRecommendation.maintenance}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                 <Link 
-                   to="/book" 
-                   className="btn btn-primary w-100 rounded-pill"
-                   style={{
-                     background: 'linear-gradient(45deg, #007bff, #0056b3)',
-                     border: 'none',
-                     boxShadow: '0 4px 8px rgba(0,123,255,0.3)'
-                   }}
-                   onClick={() => {
-                     const haircutStyle = {
-                       name: selectedRecommendation.name,
-                       description: selectedRecommendation.description,
-                       difficulty: selectedRecommendation.difficulty,
-                       maintenance: selectedRecommendation.maintenance,
-                       tags: selectedRecommendation.tags,
-                       image: selectedRecommendation.image,
-                       faceShape: faceShape,
-                       timestamp: new Date().toISOString(),
-                       bookingNote: `HAIRCUT RECOMMENDATION:
+                  <div className="mb-4">
+                    <div className="small fw-medium mb-2">
+                      <i className="bi bi-tags me-1"></i>
+                      Style Tags
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {selectedRecommendation.tags.map((tag, tagIndex) => (
+                        <span key={tagIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Link
+                    to="/book"
+                    className="btn btn-dark w-100 rounded-pill py-3"
+                    style={{
+                      backgroundColor: '#2c2c2c',
+                      border: 'none',
+                      transition: 'all 0.2s ease',
+                      fontWeight: '600'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#1a1a1a';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#2c2c2c';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                    onTouchStart={(e) => {
+                      e.currentTarget.style.transform = 'scale(0.95)';
+                    }}
+                    onTouchEnd={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    onClick={() => {
+                      const haircutStyle = {
+                        name: selectedRecommendation.name,
+                        description: selectedRecommendation.description,
+                        difficulty: selectedRecommendation.difficulty,
+                        maintenance: selectedRecommendation.maintenance,
+                        tags: selectedRecommendation.tags,
+                        image: selectedRecommendation.image,
+                        faceShape: faceShape,
+                        timestamp: new Date().toISOString(),
+                        bookingNote: `HAIRCUT RECOMMENDATION:
 Style: ${selectedRecommendation.name}
 Description: ${selectedRecommendation.description}
 Face Shape: ${faceShape}`
-                     };
-                     localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
-                     localStorage.setItem('specialRequest', haircutStyle.bookingNote);
-                   }}
-                 >
-                   <i className="bi bi-calendar-plus me-2"></i>
-                   Book This Haircut
-                 </Link>
-               </div>
-             </div>
-           </div>
-         </div>
-       )}
+                      };
+                      localStorage.setItem('selectedHaircutStyle', JSON.stringify(haircutStyle));
+                      localStorage.setItem('specialRequest', haircutStyle.bookingNote);
+                    }}
+                  >
+                    <i className="bi bi-calendar-plus me-2"></i>
+                    Book This Haircut
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
-       {/* Image Modal */}
-       {showImageModal && (
-         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
-           <div className="modal-dialog modal-lg modal-dialog-centered">
-             <div className="modal-content">
-               <div className="modal-header">
-                 <h5 className="modal-title">{selectedModalTitle}</h5>
-                 <button 
-                   type="button" 
-                   className="btn-close" 
-                   onClick={closeImageModal}
-                   aria-label="Close"
-                 ></button>
-               </div>
-               <div className="modal-body text-center">
-                 <img 
-                   src={selectedModalImage} 
-                   alt={selectedModalTitle}
-                   className="img-fluid"
-                   style={{ 
-                     maxHeight: '70vh',
-                     maxWidth: '100%',
-                     borderRadius: '8px',
-                     boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
-                   }}
-                 />
-                 <div className="mt-3 p-3 bg-light rounded">
-                   <div className="d-flex align-items-center justify-content-center">
-                     <i className="bi bi-camera me-2 text-primary"></i>
-                     <small className="text-muted fw-medium">
-                       <strong>Note:</strong> If you want this style, take a screenshot to show your barber
-                     </small>
-                   </div>
-                 </div>
-               </div>
-               <div className="modal-footer">
-                 <button 
-                   type="button" 
-                   className="btn btn-secondary" 
-                   onClick={closeImageModal}
-                 >
-                   Close
-                 </button>
-               </div>
-             </div>
-           </div>
-         </div>
-       )}
-     </div>
-   );
- };
- 
- export default HaircutRecommender;
+      {/* Image Modal */}
+      {
+        showImageModal && (
+          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+            <div className="modal-dialog modal-lg modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">{selectedModalTitle}</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={closeImageModal}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body text-center">
+                  <img
+                    src={selectedModalImage}
+                    alt={selectedModalTitle}
+                    className="img-fluid"
+                    style={{
+                      maxHeight: '70vh',
+                      maxWidth: '100%',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                  <div className="mt-3 p-3 bg-light rounded">
+                    <div className="d-flex align-items-center justify-content-center">
+                      <i className="bi bi-camera me-2 text-primary"></i>
+                      <small className="text-muted fw-medium">
+                        <strong>Note:</strong> If you want this style, take a screenshot to show your barber
+                      </small>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={closeImageModal}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
+  );
+};
+
+export default HaircutRecommender;

@@ -6,7 +6,7 @@
  * that haven't been accepted/claimed within the day they were scheduled
  */
 
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class AutoCancelService {
   /**

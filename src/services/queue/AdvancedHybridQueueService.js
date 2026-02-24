@@ -12,8 +12,8 @@
  * @version 2.0.0
  */
 
-import { supabase } from '../supabaseClient';
-import { APPOINTMENT_FIELDS, BOOKING_STATUS, BOOKING_TYPES } from '../constants/booking.constants';
+import { supabase } from '../../supabaseClient';
+import { APPOINTMENT_FIELDS, BOOKING_STATUS, BOOKING_TYPES } from '../../constants/booking.constants';
 
 const ACTIVE_STATUSES = [
   BOOKING_STATUS.PENDING,

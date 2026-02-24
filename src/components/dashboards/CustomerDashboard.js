@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import NotificationPermission from '../common/NotificationPermission';
-import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
+import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 
 // Helper function to convert 24-hour format to 12-hour format
@@ -46,7 +46,7 @@ const CustomerDashboard = () => {
 
   useEffect(() => {
     getCurrentUser();
-    
+
     setTimeout(() => {
       setAnimateCards(true);
       setTimeout(() => {
@@ -59,17 +59,17 @@ const CustomerDashboard = () => {
     if (user) {
       fetchCustomerData();
       fetchLiveQueueStatus();
-      
+
       // Set up real-time subscription for appointments
       const subscription = supabase
         .channel('customer-appointments')
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
+        .on('postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
             table: 'appointments',
             filter: `customer_id=eq.${user.id}`
-          }, 
+          },
           () => {
             if (realTimeUpdates) {
               debouncedRefresh();
@@ -77,7 +77,7 @@ const CustomerDashboard = () => {
           }
         )
         .subscribe();
-      
+
       // Set up interval for queue position updates
       const interval = setInterval(() => {
         if (realTimeUpdates) {
@@ -85,7 +85,7 @@ const CustomerDashboard = () => {
           fetchLiveQueueStatus();
         }
       }, 30000); // Update every 30 seconds
-      
+
       return () => {
         subscription.unsubscribe();
         clearInterval(interval);
@@ -103,14 +103,14 @@ const CustomerDashboard = () => {
     if (debounceTimeout) {
       clearTimeout(debounceTimeout);
     }
-    
+
     const timeout = setTimeout(() => {
       if (realTimeUpdates) {
         fetchCustomerData();
         fetchLiveQueueStatus();
       }
     }, 1000); // 1 second debounce
-    
+
     setDebounceTimeout(timeout);
   };
 
@@ -118,41 +118,41 @@ const CustomerDashboard = () => {
   window.debugAppointments = async () => {
     try {
       console.log('🔍 Debugging appointments...');
-      
+
       // Check current user
       const { data: { user } } = await supabase.auth.getUser();
       console.log('👤 Current user:', user?.id);
-      
+
       if (!user) {
         console.error('❌ No authenticated user');
         return;
       }
-      
+
       // Check status values in database
       const { data: appointments, error } = await supabase
         .from('appointments')
         .select('status')
         .eq('customer_id', user.id)
         .limit(10);
-      
+
       if (error) {
         console.error('❌ Error fetching appointments:', error);
         return;
       }
-      
+
       const uniqueStatuses = [...new Set(appointments.map(apt => apt.status))];
       console.log('📊 Status values found:', uniqueStatuses);
-      
+
       const expectedStatuses = ['pending', 'scheduled', 'confirmed', 'ongoing', 'completed', 'cancelled'];
       const invalidStatuses = uniqueStatuses.filter(status => !expectedStatuses.includes(status));
-      
+
       if (invalidStatuses.length > 0) {
         console.warn('⚠️ Invalid status values:', invalidStatuses);
         console.log('💡 Run the SQL fix script to update these values');
       } else {
         console.log('✅ All status values are valid');
       }
-      
+
     } catch (error) {
       console.error('❌ Debug error:', error);
     }
@@ -160,19 +160,19 @@ const CustomerDashboard = () => {
 
   const fetchCustomerData = async () => {
     if (isFetchingData) return; // Prevent multiple simultaneous calls
-    
+
     try {
       setIsFetchingData(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return;
 
       // Fetch upcoming appointments with all related data in one query
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Try to fetch with priority request fields, fallback if they don't exist
       let appointments, appointmentsError;
-      
+
       try {
         const result = await supabase
           .from('appointments')
@@ -186,14 +186,14 @@ const CustomerDashboard = () => {
           .in('status', ['scheduled', 'ongoing', 'pending', 'confirmed'])
           .order('appointment_date')
           .order('queue_position', { ascending: true });
-        
+
         appointments = result.data;
         appointmentsError = result.error;
-        
+
         // If error is about missing columns, that's okay - fields will be undefined
-        if (appointmentsError && appointmentsError.message && 
-            appointmentsError.message.includes('column') && 
-            appointmentsError.message.includes('does not exist')) {
+        if (appointmentsError && appointmentsError.message &&
+          appointmentsError.message.includes('column') &&
+          appointmentsError.message.includes('does not exist')) {
           // Retry without the problematic fields (they'll be undefined)
           const retryResult = await supabase
             .from('appointments')
@@ -207,7 +207,7 @@ const CustomerDashboard = () => {
             .in('status', ['scheduled', 'ongoing', 'pending', 'confirmed'])
             .order('appointment_date')
             .order('queue_position', { ascending: true });
-          
+
           appointments = retryResult.data;
           appointmentsError = retryResult.error;
         }
@@ -229,10 +229,10 @@ const CustomerDashboard = () => {
           is_urgent: apt.is_urgent,
           priority_request_status: apt.priority_request_status,
           queue_position: apt.queue_position,
-          canRequestPriority: ['scheduled', 'confirmed', 'pending'].includes(apt.status) && 
-                            !apt.is_urgent && 
-                            (apt.priority_request_status === null || apt.priority_request_status === undefined || apt.priority_request_status === '') &&
-                            apt.queue_position !== null
+          canRequestPriority: ['scheduled', 'confirmed', 'pending'].includes(apt.status) &&
+            !apt.is_urgent &&
+            (apt.priority_request_status === null || apt.priority_request_status === undefined || apt.priority_request_status === '') &&
+            apt.queue_position !== null
         })));
       }
 
@@ -257,19 +257,19 @@ const CustomerDashboard = () => {
           .from('appointments')
           .select('*', { count: 'exact', head: true })
           .eq('customer_id', user.id),
-        
+
         supabase
           .from('appointments')
           .select('total_price, service:service_id(price), is_urgent')
           .eq('customer_id', user.id)
           .eq('status', 'completed'),
-        
+
         supabase
           .from('appointments')
           .select('barber_id, barber:barber_id(full_name)')
           .eq('customer_id', user.id)
           .eq('status', 'completed'),
-        
+
         supabase
           .from('appointments')
           .select('appointment_date')
@@ -277,7 +277,7 @@ const CustomerDashboard = () => {
           .eq('status', 'completed')
           .order('appointment_date', { ascending: false })
           .limit(1),
-        
+
         // Fetch only completed orders for the customer (picked_up status)
         supabase
           .from('orders')
@@ -314,7 +314,7 @@ const CustomerDashboard = () => {
         barberCounts[apt.barber_id] = (barberCounts[apt.barber_id] || 0) + 1;
       });
 
-      const favoriteBarber = Object.keys(barberCounts).reduce((a, b) => 
+      const favoriteBarber = Object.keys(barberCounts).reduce((a, b) =>
         barberCounts[a] > barberCounts[b] ? a : b, null);
 
       const favoriteBarberInfo = appointmentsByBarber.find(apt => apt.barber_id === favoriteBarber)?.barber;
@@ -338,12 +338,12 @@ const CustomerDashboard = () => {
   const updateQueuePositions = async (appointments = upcomingAppointments) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const todayAppointments = appointments.filter(apt => 
+      const todayAppointments = appointments.filter(apt =>
         apt.appointment_date === today && apt.status === 'scheduled'
       );
 
       const positions = {};
-      
+
       for (const appointment of todayAppointments) {
         const { data: queueData, error } = await supabase
           .from('appointments')
@@ -357,17 +357,17 @@ const CustomerDashboard = () => {
           const currentIndex = queueData.findIndex(apt => apt.id === appointment.id);
           const position = currentIndex + 1;
           const estimatedWait = currentIndex * 35; // 35 minutes average per customer
-          
+
           positions[appointment.id] = {
             position,
             totalInQueue: queueData.length,
-            estimatedWait: estimatedWait < 60 ? `${estimatedWait} min` : 
-                          `${Math.floor(estimatedWait / 60)}h ${estimatedWait % 60}m`,
+            estimatedWait: estimatedWait < 60 ? `${estimatedWait} min` :
+              `${Math.floor(estimatedWait / 60)}h ${estimatedWait % 60}m`,
             customersAhead: queueData.slice(0, currentIndex).map(apt => apt.customer.full_name)
           };
         }
       }
-      
+
       setQueuePositions(positions);
     } catch (err) {
       console.error('Error fetching queue positions:', err);
@@ -376,11 +376,11 @@ const CustomerDashboard = () => {
 
   const fetchLiveQueueStatus = async () => {
     if (isFetchingQueue) return; // Prevent multiple simultaneous calls
-    
+
     try {
       setIsFetchingQueue(true);
       if (!user) return;
-      
+
       // Get all barbers that the customer has appointments with
       const { data: barberData, error: barberError } = await supabase
         .from('appointments')
@@ -393,15 +393,15 @@ const CustomerDashboard = () => {
 
       // Get unique barbers
       const uniqueBarbers = [...new Map(barberData.map(item => [item.barber_id, item.barber])).values()];
-      
+
       const queueStatusData = {};
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Fetch queue status for all barbers in parallel
       const queuePromises = uniqueBarbers.map(async (barber) => {
         try {
           const queueData = await AdvancedHybridQueueService.getUnifiedQueue(barber.id, today);
-          
+
           if (queueData && queueData.timeline) {
             // Filter out customer names for privacy
             const sanitizedTimeline = queueData.timeline.map(apt => ({
@@ -421,7 +421,7 @@ const CustomerDashboard = () => {
               // Remove customer name for privacy
               customer_name: apt.appointment_type === 'queue' ? `Customer #${apt.queue_position || apt.timeline_position}` : 'Scheduled Customer'
             }));
-            
+
             return {
               barberId: barber.id,
               data: {
@@ -438,16 +438,16 @@ const CustomerDashboard = () => {
           return null;
         }
       });
-      
+
       const queueResults = await Promise.all(queuePromises);
-      
+
       // Process results
       queueResults.forEach(result => {
         if (result) {
           queueStatusData[result.barberId] = result.data;
         }
       });
-      
+
       setLiveQueueStatus(queueStatusData);
     } catch (err) {
       console.error('Error fetching live queue status:', err);
@@ -474,7 +474,7 @@ const CustomerDashboard = () => {
     try {
       const { error } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           priority_request_status: 'pending',
           priority_requested_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -485,9 +485,9 @@ const CustomerDashboard = () => {
 
       // Send notification to managers
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         const appointment = upcomingAppointments.find(apt => apt.id === appointmentId);
-        
+
         // Get all managers
         const { data: managers } = await supabase
           .from('users')
@@ -495,7 +495,7 @@ const CustomerDashboard = () => {
           .eq('role', 'manager');
 
         if (managers && managers.length > 0) {
-          await Promise.all(managers.map(manager => 
+          await Promise.all(managers.map(manager =>
             centralizedNotificationService.createNotification({
               userId: manager.id,
               title: 'Priority Request',
@@ -536,13 +536,13 @@ const CustomerDashboard = () => {
     try {
       // Find appointment details
       const appointment = upcomingAppointments.find(apt => apt.id === appointmentId);
-      
+
       // Store original queue position before updating
       const originalQueuePosition = appointment?.queue_position;
 
       const { error: cancelError } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           status: 'cancelled',
           updated_at: new Date().toISOString(),
           queue_position: null,
@@ -556,7 +556,7 @@ const CustomerDashboard = () => {
       if (appointment && originalQueuePosition != null) {
         try {
           console.log(`🔄 Collapsing queue positions after cancelling position ${originalQueuePosition}`);
-          
+
           const { data: affected, error: fetchErr } = await supabase
             .from('appointments')
             .select('id, queue_position')
@@ -568,20 +568,20 @@ const CustomerDashboard = () => {
 
           if (!fetchErr && Array.isArray(affected) && affected.length) {
             console.log(`📝 Found ${affected.length} appointments to update positions`);
-            
+
             for (const apt of affected) {
               const newPosition = apt.queue_position - 1;
               console.log(`📝 Updating appointment ${apt.id} from position ${apt.queue_position} to ${newPosition}`);
-              
+
               await supabase
                 .from('appointments')
-                .update({ 
+                .update({
                   queue_position: newPosition,
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', apt.id);
             }
-            
+
             console.log('✅ Queue positions collapsed successfully');
           } else {
             console.log('ℹ️ No appointments found to collapse positions');
@@ -594,7 +594,7 @@ const CustomerDashboard = () => {
       // Create notification for barber using centralized service (prevents duplicates)
       if (appointment) {
         try {
-          const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
           await centralizedNotificationService.createNotification({
             userId: appointment.barber_id,
             title: 'Appointment Cancelled',
@@ -628,15 +628,15 @@ const CustomerDashboard = () => {
 
   const getServicesDisplay = (appointment) => {
     const services = [];
-    
+
     if (appointment.service) {
       services.push(appointment.service.name);
     }
-    
+
     if (appointment.services_data) {
       try {
         let serviceIds;
-        
+
         // Check if services_data is already an array (object)
         if (Array.isArray(appointment.services_data)) {
           serviceIds = appointment.services_data;
@@ -647,7 +647,7 @@ const CustomerDashboard = () => {
           // Handle other data types
           serviceIds = [appointment.services_data];
         }
-        
+
         if (Array.isArray(serviceIds) && serviceIds.length > 1) {
           services.push(`+${serviceIds.length - 1} more`);
         }
@@ -655,14 +655,14 @@ const CustomerDashboard = () => {
         console.error('Error parsing services data:', e);
         console.log('Raw services_data:', appointment.services_data);
         console.log('Type of services_data:', typeof appointment.services_data);
-        
+
         // Fallback: treat as single service ID
         if (typeof appointment.services_data === 'string' && appointment.services_data.length > 0) {
           services.push('+1 more');
         }
       }
     }
-    
+
     return services.join(', ');
   };
 
@@ -677,20 +677,14 @@ const CustomerDashboard = () => {
   const getBarberStatusColor = (status) => {
     switch (status) {
       case 'available': return 'success';
-      case 'busy': return 'warning';
-      case 'break': return 'info';
-      case 'offline': return 'secondary';
-      default: return 'primary';
+      default: return 'secondary';
     }
   };
 
   const getBarberStatusText = (status) => {
     switch (status) {
       case 'available': return 'Available';
-      case 'busy': return 'Busy';
-      case 'break': return 'On Break';
-      case 'offline': return 'Offline';
-      default: return 'Unknown';
+      default: return 'not available';
     }
   };
 
@@ -707,7 +701,7 @@ const CustomerDashboard = () => {
   return (
     <div className="container-fluid py-4 dashboard-container">
       {/* Notification Permission Banner */}
-      <div className="row mb-4">
+      <div className="row mb-0">
         <div className="col">
           <NotificationPermission />
         </div>
@@ -728,56 +722,39 @@ const CustomerDashboard = () => {
       )}
 
       {/* Customer Welcome Header */}
-      <div className="row mb-4">
+      <div className="row mb-0">
         <div className="col">
-          <div className="customer-welcome-header rounded shadow-sm d-flex align-items-center" style={{ padding: 'clamp(1rem, 3vw, 1.5rem)' }}>
+          <div className="customer-welcome-header rounded shadow-sm d-flex align-items-center" style={{ padding: 'clamp(0.5rem, 2vw, 0.75rem)' }}>
             <div>
-              <div className="d-flex align-items-center mb-2">
-                <img 
-                  src={logoImage} 
-                  alt="Raf & Rok" 
-                  className="dashboard-logo me-3" 
+              <div className="d-flex align-items-center mb-1">
+                <img
+                  src={logoImage}
+                  alt="Raf & Rok"
+                  className="dashboard-logo me-3"
                   style={{
-                    height: 'clamp(30px, 5vw, 40px)',
+                    height: 'clamp(25px, 4vw, 35px)',
                     backgroundColor: '#ffffff',
                     padding: '3px',
                     borderRadius: '5px'
                   }}
                 />
-                <h1 className="mb-0 text-white" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>Welcome back!</h1>
+                <h1 className="mb-0 text-white" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>
+                  Welcome back, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'}!
+                </h1>
               </div>
-              <p className="text-light mb-0" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}>
-                <i className="bi bi-calendar3 me-2"></i>
-                Your appointments and queue status
-              </p>
             </div>
             <div className="ms-auto text-end text-light">
               <div className="mb-0" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1.25rem)', fontWeight: '600' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-              <div className="text-light d-flex align-items-center justify-content-end">
-                <div className="form-check form-switch">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="realTimeToggle"
-                    checked={realTimeUpdates}
-                    onChange={(e) => setRealTimeUpdates(e.target.checked)}
-                  />
-                  <label className="form-check-label text-light" htmlFor="realTimeToggle" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)' }}>
-                    <i className="bi bi-broadcast me-1"></i>
-                    Live Updates
-                  </label>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="quick-actions-container mb-4">
+      <div className="quick-actions-container mb-0">
         <div className="quick-actions-grid">
-          <Link 
-            to="/book" 
+          <Link
+            to="/book"
             className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.1s' }}
           >
@@ -787,9 +764,9 @@ const CustomerDashboard = () => {
             <span className="quick-action-name">Book</span>
             <span className="quick-action-description d-none d-md-block">Schedule your next visit</span>
           </Link>
-          
-          <Link 
-            to="/haircut-recommender" 
+
+          <Link
+            to="/haircut-recommender"
             className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.2s' }}
           >
@@ -799,9 +776,9 @@ const CustomerDashboard = () => {
             <span className="quick-action-name">Style</span>
             <span className="quick-action-description d-none d-md-block">Get personalized suggestions</span>
           </Link>
-          
-          <Link 
-            to="/appointments" 
+
+          <Link
+            to="/appointments"
             className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.3s' }}
           >
@@ -812,8 +789,8 @@ const CustomerDashboard = () => {
             <span className="quick-action-description d-none d-md-block">View appointment history</span>
           </Link>
 
-          <Link 
-            to="/products" 
+          <Link
+            to="/products"
             className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.4s' }}
           >
@@ -824,8 +801,8 @@ const CustomerDashboard = () => {
             <span className="quick-action-description d-none d-md-block">Browse our products</span>
           </Link>
 
-          <Link 
-            to="/orders" 
+          <Link
+            to="/orders"
             className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
             style={{ animationDelay: '0.5s' }}
           >
@@ -839,9 +816,9 @@ const CustomerDashboard = () => {
       </div>
 
       {/* Stats Cards - 2x2 Grid */}
-      <div className="row mb-4 g-3">
-        <div className="col-6 col-md-6 mb-3">
-          <div 
+      <div className="row mb-3 g-3">
+        <div className="col-6 col-md-6 mb-0">
+          <div
             className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.1s' }}
           >
@@ -856,9 +833,9 @@ const CustomerDashboard = () => {
             </div>
           </div>
         </div>
-        
-        <div className="col-6 col-md-6 mb-3">
-          <div 
+
+        <div className="col-6 col-md-6 mb-0">
+          <div
             className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.2s' }}
           >
@@ -875,9 +852,9 @@ const CustomerDashboard = () => {
             </div>
           </div>
         </div>
-        
-        <div className="col-6 col-md-6 mb-3">
-          <div 
+
+        <div className="col-6 col-md-6 mb-0">
+          <div
             className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.3s' }}
           >
@@ -893,8 +870,8 @@ const CustomerDashboard = () => {
           </div>
         </div>
 
-        <div className="col-6 col-md-6 mb-3">
-          <div 
+        <div className="col-6 col-md-6 mb-0">
+          <div
             className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
             style={{ animationDelay: '0.4s' }}
           >
@@ -915,7 +892,7 @@ const CustomerDashboard = () => {
 
       {/* Pending Requests Alert */}
       {pendingRequests.length > 0 && (
-        <div className="alert alert-warning shadow-sm mb-4" role="alert">
+        <div className="alert alert-warning shadow-sm mb-0" role="alert">
           <div className="d-flex align-items-center">
             <div className="me-3">
               <i className="bi bi-clock-fill fs-4"></i>
@@ -935,16 +912,16 @@ const CustomerDashboard = () => {
 
       <div className="row">
         {/* Upcoming Appointments */}
-        <div className="col-md-8 mb-4">
+        <div className="col-md-8 mb-0">
           <div className="card shadow-sm appointments-card">
             <div className="card-header d-flex justify-content-between align-items-center">
               <div className="d-flex align-items-center">
                 <i className="bi bi-calendar-week me-2 header-icon"></i>
-                <h5 className="card-title mb-0">Upcoming Appointments</h5>
+                <h4 className="card-title mb-0">Upcoming Appointments</h4>
               </div>
-              <Link to="/book" className="btn btn-primary btn-sm">
-                <i className="bi bi-plus-lg me-1"></i>
-                Book New
+              <Link to="/book" className="btn btn-primary btn-sm d-inline-flex align-items-center px-3">
+                <i className="bi bi-calendar-plus me-2"></i>
+                Create
               </Link>
             </div>
             <div className="card-body">
@@ -955,10 +932,10 @@ const CustomerDashboard = () => {
                   </div>
                   <h5>No Upcoming Appointments</h5>
                   <p className="text-muted mb-4">You don't have any appointments scheduled yet.</p>
-              <Link to="/book" className="btn btn-primary me-2">
-                <i className="bi bi-calendar-plus me-2"></i>
-                Book Your First Appointment
-              </Link>
+                  <Link to="/book" className="btn btn-primary me-2">
+                    <i className="bi bi-calendar-plus me-2"></i>
+                    Book An Appointment
+                  </Link>
                 </div>
               ) : (
                 <div className="row">
@@ -1048,11 +1025,11 @@ const CustomerDashboard = () => {
 
                           {/* Debug info - remove after testing */}
                           {process.env.NODE_ENV === 'development' && (
-                            <div className="alert alert-light py-1 mb-2" style={{fontSize: '0.7rem'}}>
+                            <div className="alert alert-light py-1 mb-2" style={{ fontSize: '0.7rem' }}>
                               <small>
-                                Debug: status={appointment.status}, 
-                                is_urgent={String(appointment.is_urgent)}, 
-                                priority_request_status={appointment.priority_request_status || 'null'}, 
+                                Debug: status={appointment.status},
+                                is_urgent={String(appointment.is_urgent)},
+                                priority_request_status={appointment.priority_request_status || 'null'},
                                 queue_position={appointment.queue_position}
                               </small>
                             </div>
@@ -1065,21 +1042,21 @@ const CustomerDashboard = () => {
                                 - Not already urgent
                                 - No pending/approved/rejected priority request exists
                                 - Has a queue position (is in queue) */}
-                            {['scheduled', 'confirmed', 'pending'].includes(appointment.status) && 
-                             !appointment.is_urgent && 
-                             (appointment.priority_request_status === null || 
-                              appointment.priority_request_status === undefined ||
-                              appointment.priority_request_status === '') &&
-                             appointment.queue_position !== null && (
-                              <button
-                                className="btn btn-sm btn-warning"
-                                onClick={() => openPriorityRequestModal(appointment)}
-                                title="Request Priority (₱100 fee if approved)"
-                              >
-                                <i className="bi bi-lightning-fill me-1"></i>
-                                Request Priority
-                              </button>
-                            )}
+                            {['scheduled', 'confirmed', 'pending'].includes(appointment.status) &&
+                              !appointment.is_urgent &&
+                              (appointment.priority_request_status === null ||
+                                appointment.priority_request_status === undefined ||
+                                appointment.priority_request_status === '') &&
+                              appointment.queue_position !== null && (
+                                <button
+                                  className="btn btn-sm btn-warning"
+                                  onClick={() => openPriorityRequestModal(appointment)}
+                                  title="Request Priority (₱100 fee if approved)"
+                                >
+                                  <i className="bi bi-lightning-fill me-1"></i>
+                                  Request Priority
+                                </button>
+                              )}
                             {['scheduled', 'confirmed', 'pending'].includes(appointment.status) && (
                               <button
                                 className="btn btn-sm btn-outline-danger"
@@ -1101,7 +1078,7 @@ const CustomerDashboard = () => {
         </div>
 
         {/* Simplified Queue Status */}
-        <div className="col-md-4 mb-4">
+        <div className="col-md-4 mt-3">
           <div className="card shadow-sm border-0">
             <div className="card-header bg-white border-0">
               <h6 className="mb-0 text-dark fw-bold">
@@ -1117,17 +1094,16 @@ const CustomerDashboard = () => {
                       <h6 className="mb-0 fw-bold text-dark">{queueData.barber_name}</h6>
                       <span className="badge bg-primary">{queueData.total} waiting</span>
                     </div>
-                    
+
                     <div className="queue-simple">
                       {queueData.timeline.map((appointment, index) => (
-                        <div key={appointment.id} className={`d-flex align-items-center justify-content-between p-2 mb-2 rounded ${
-                          appointment.status === 'ongoing' ? 'bg-success text-white' :
+                        <div key={appointment.id} className={`d-flex align-items-center justify-content-between p-2 mb-2 rounded ${appointment.status === 'ongoing' ? 'bg-success text-white' :
                           appointment.status === 'scheduled' ? 'bg-primary text-white' :
-                          'bg-light'
-                        }`}>
+                            'bg-light'
+                          }`}>
                           <div className="d-flex align-items-center">
                             <span className="fw-bold me-2">
-                              {appointment.appointment_type === 'queue' 
+                              {appointment.appointment_type === 'queue'
                                 ? `#${appointment.queue_position || appointment.timeline_position}`
                                 : 'Scheduled'
                               }
@@ -1138,7 +1114,7 @@ const CustomerDashboard = () => {
                           </div>
                           <small>
                             {appointment.status === 'ongoing' ? 'Now' :
-                             appointment.estimated_time ? convertTo12Hour(appointment.estimated_time) : 'TBD'}
+                              appointment.estimated_time ? convertTo12Hour(appointment.estimated_time) : 'TBD'}
                           </small>
                         </div>
                       ))}

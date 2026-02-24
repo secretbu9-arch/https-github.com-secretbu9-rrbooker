@@ -1,5 +1,5 @@
 // services/OrdersService.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 /**
  * Orders Service for Shop Products with Pickup Functionality
@@ -309,7 +309,7 @@ class OrdersService {
   async verifyOrder(orderId, verificationCode) {
     try {
       const result = await this.scamPrevention.verifyOrder(orderId, verificationCode);
-      
+
       if (result) {
         // Update order to confirmed if verification successful
         await this.updateOrderStatus(orderId, 'confirmed');
@@ -432,7 +432,7 @@ class OrdersService {
       };
 
       let completedOrdersCount = 0;
-      
+
       orders.forEach(order => {
         // Status distribution
         stats.byStatus[order.status] = (stats.byStatus[order.status] || 0) + 1;
@@ -486,6 +486,9 @@ class OrdersService {
 
       if (managers) {
         for (const manager of managers) {
+          // Skip if the manager is the customer who placed the order
+          if (manager.id === order.customer_id) continue;
+
           await this.sendNotification(manager.id, {
             order_id: order.id,
             notification_type: 'new_order',
@@ -536,7 +539,7 @@ class OrdersService {
     try {
       // Create order notification using centralized service
       const { default: centralizedNotificationService } = await import('./CentralizedNotificationService');
-      
+
       // Determine category based on notification type
       let category = 'status_update';
       if (notificationData.notification_type) {

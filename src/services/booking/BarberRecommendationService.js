@@ -1,5 +1,5 @@
 // services/BarberRecommendationService.js
-import { supabase } from '../supabaseClient';
+import { supabase } from '../../supabaseClient';
 
 class BarberRecommendationService {
   

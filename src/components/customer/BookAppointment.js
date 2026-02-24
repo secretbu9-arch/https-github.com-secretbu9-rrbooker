@@ -2,27 +2,50 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-// REMOVED: PushService import - use only CentralizedNotificationService
-import { barberRecommendationService } from '../../services/BarberRecommendationService';
-import addOnsService from '../../services/AddOnsService';
-import CapacityService from '../../services/CapacityService';
-import OverbookingPreventionService from '../../services/OverbookingPreventionService';
-import QueueSchedulingAlgorithm from '../../services/QueueSchedulingAlgorithm';
-import UnifiedSlotBookingService from '../../services/UnifiedSlotBookingService';
-import AdvancedHybridQueueService from '../../services/AdvancedHybridQueueService';
-import EnhancedQueueTimeCalculator from '../../services/EnhancedQueueTimeCalculator';
-import BarberAvailabilityService from '../../services/BarberAvailabilityService';
-import { friendBookingOTPService } from '../../services/FriendBookingOTPService';
-import { 
-  BOOKING_STATUS, 
-  APPOINTMENT_FIELDS, 
-  PRIORITY_LEVELS 
+
+import UnifiedSlotBookingService from '../../services/booking/UnifiedSlotBookingService';
+import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
+import EnhancedQueueTimeCalculator from '../../services/queue/EnhancedQueueTimeCalculator';
+import BarberAvailabilityService from '../../services/booking/BarberAvailabilityService';
+import { friendBookingOTPService } from '../../services/auth/FriendBookingOTPService';
+import {
+  BOOKING_STATUS,
+  APPOINTMENT_FIELDS,
+  PRIORITY_LEVELS
 } from '../../constants/booking.constants';
 import { formatPrice } from '../utils/helpers';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 
 // Helper constants for friend email validation and initial verification state
 const FRIEND_EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+
+// Legacy mappings for add-on durations and prices
+const LEGACY_DURATION_MAPPING = {
+  'addon1': 15, // Beard Trim
+  'addon2': 10, // Hot Towel Treatment
+  'addon3': 20, // Scalp Massage
+  'addon4': 15, // Hair Wash
+  'addon5': 10, // Styling
+  'addon6': 15, // Hair Wax Application
+  'addon7': 10, // Eyebrow Trim
+  'addon8': 10, // Mustache Trim
+  'addon9': 15, // Face Mask
+  'addon10': 20  // Hair Treatment
+};
+
+const LEGACY_PRICE_MAPPING = {
+  'addon1': 50.00,
+  'addon2': 30.00,
+  'addon3': 80.00,
+  'addon4': 40.00,
+  'addon5': 25.00,
+  'addon6': 35.00,
+  'addon7': 20.00,
+  'addon8': 20.00,
+  'addon9': 45.00,
+  'addon10': 60.00
+};
+
 
 const createInitialFriendVerificationState = () => ({
   email: '',
@@ -44,518 +67,11 @@ const convertTo12Hour = (time24) => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
-// Get intelligent queue slot suggestions
-const getIntelligentQueueSlots = async (barberId, date, serviceDuration) => {
-  try {
-    console.log('🧠 Getting intelligent queue slots for:', { barberId, date, serviceDuration });
-    
-    // Check if AdvancedHybridQueueService is available
-    if (!AdvancedHybridQueueService || typeof AdvancedHybridQueueService.getIntelligentQueueSlots !== 'function') {
-      console.warn('AdvancedHybridQueueService.getIntelligentQueueSlots not available, returning empty array');
-      return [];
-    }
-    
-    const suggestions = await AdvancedHybridQueueService.getIntelligentQueueSlots(barberId, date, serviceDuration);
-    
-    // Ensure suggestions is an array
-    if (!Array.isArray(suggestions)) {
-      console.warn('getIntelligentQueueSlots returned non-array:', suggestions);
-      return [];
-    }
-    
-    // Convert suggestions to slot format for display
-    const intelligentSlots = suggestions.map(suggestion => ({
-      time: suggestion.time,
-      display: suggestion.time ? convertTo12Hour(suggestion.time) : 'Queue Position',
-      duration: serviceDuration,
-      endTime: suggestion.end_time ? convertTo12Hour(suggestion.end_time) : 'TBD',
-      type: suggestion.type,
-      description: suggestion.description,
-      priority: suggestion.priority,
-      efficiency: suggestion.efficiency,
-      beforeAppointment: suggestion.before_appointment,
-      afterAppointment: suggestion.after_appointment,
-      gapDuration: suggestion.gap_duration,
-      position: suggestion.position,
-      estimatedWait: suggestion.estimated_wait
-    }));
-    
-    console.log('🎯 Intelligent slots generated:', intelligentSlots);
-    return intelligentSlots;
-  } catch (error) {
-    console.error('Error getting intelligent queue slots:', error);
-    return [];
-  }
-};
 
-// Intelligent Queue Slots Component
-const IntelligentQueueSlotsComponent = ({ barberId, date, serviceDuration, recommendations = [], conflictInfo = null, onSlotSelect }) => {
-  const [slots, setSlots] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const loadSlots = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout loading intelligent slots')), 10000)
-        );
-        
-        const slotsPromise = getIntelligentQueueSlots(barberId, date, serviceDuration);
-        
-        const intelligentSlots = await Promise.race([slotsPromise, timeoutPromise]);
-        setSlots(intelligentSlots || []);
-      } catch (err) {
-        console.error('Error loading intelligent queue slots:', err);
-        setError('Failed to load intelligent slot suggestions. Using standard queue options.');
-        setSlots([]); // Set empty array instead of leaving in loading state
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    if (barberId && date && serviceDuration) {
-      loadSlots();
-    } else {
-      setLoading(false);
-    }
-  }, [barberId, date, serviceDuration]);
 
-  if (loading) {
-    return (
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="card border">
-            <div className="card-body text-center">
-              <div className="spinner-border spinner-border-sm me-2" role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
-              <span className="text-muted">Loading available slots...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  if (error) {
-    return (
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="alert alert-warning border">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-            <div className="mt-2">
-              <small className="text-muted">
-                You can still proceed with standard booking.
-              </small>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (slots.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="row mb-4">
-      <div className="col-12">
-        <div className="card border">
-          <div className="card-header bg-light border-bottom">
-            <h6 className="mb-0 text-dark">
-              <i className="bi bi-clock me-2"></i>
-              Available Time Slots
-            </h6>
-            <small className="text-muted">
-              Best options for your {serviceDuration}-minute service
-            </small>
-          </div>
-          <div className="card-body">
-            {/* Show conflict warnings and recommendations */}
-            {conflictInfo?.hasConflict && (
-              <div className="alert alert-warning mb-3">
-                <i className="bi bi-exclamation-triangle me-2"></i>
-                <strong>Time Conflict Detected:</strong> {conflictInfo.conflictMessage}
-                {conflictInfo.recommendedSlots && conflictInfo.recommendedSlots.length > 0 && (
-                  <div className="mt-2">
-                    <small className="text-muted">Recommended alternatives:</small>
-                    <div className="mt-1">
-                      {conflictInfo.recommendedSlots.slice(0, 3).map((slot, idx) => (
-                        <button
-                          key={idx}
-                          className="btn btn-outline-primary btn-sm me-1 mb-1"
-                          onClick={() => onSlotSelect({ type: 'intelligent_gap', time: slot.time })}
-                        >
-                          {slot.display}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Show recommendations */}
-            {recommendations.length > 0 && (
-              <div className="alert alert-info mb-3">
-                <i className="bi bi-lightbulb me-2"></i>
-                <strong>Smart Recommendations:</strong>
-                <ul className="mb-0 mt-2">
-                  {recommendations.map((rec, idx) => (
-                    <li key={idx}>
-                      <small>{rec.message}</small>
-                      {rec.suggestion && <><br /><small className="text-muted">{rec.suggestion}</small></>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="row g-3">
-              {slots.map((slot, index) => (
-                <div key={index} className="col-md-6 col-lg-4">
-                  <div 
-                    className={`card h-100 border ${slot.type === 'intelligent_gap' ? 'cursor-pointer' : ''}`}
-                    style={{ cursor: slot.type === 'intelligent_gap' ? 'pointer' : 'default' }}
-                    onClick={() => slot.type === 'intelligent_gap' && onSlotSelect(slot)}
-                  >
-                    <div className="card-body p-3">
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h6 className="mb-0 text-dark">
-                          {slot.type === 'intelligent_gap' ? (
-                            <>
-                              <i className="bi bi-clock me-1"></i>
-                              {slot.display}
-                            </>
-                          ) : (
-                            <>
-                              <i className="bi bi-people me-1"></i>
-                              Queue #{slot.position}
-                            </>
-                          )}
-                        </h6>
-                        {slot.priority === 'high' && (
-                          <span className="badge bg-success">Recommended</span>
-                        )}
-                      </div>
-                      
-                      {slot.type === 'intelligent_gap' ? (
-                        <>
-                          <p className="mb-3 small text-muted">
-                            {slot.description}
-                          </p>
-                          <div className="mb-3">
-                            <div className="row g-2 small">
-                              <div className="col-6">
-                                <div className="text-muted">Before:</div>
-                                <div className="fw-medium">{slot.beforeAppointment}</div>
-                            </div>
-                              <div className="col-6">
-                                <div className="text-muted">After:</div>
-                                <div className="fw-medium">{slot.afterAppointment}</div>
-                            </div>
-                            </div>
-                          </div>
-                            <button 
-                            className="btn btn-primary btn-sm w-100"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSlotSelect(slot);
-                              }}
-                            >
-                              Book This Time
-                            </button>
-                        </>
-                      ) : (
-                        <>
-                          <p className="mb-3 small text-muted">
-                            Estimated wait: {slot.estimatedWait} minutes
-                          </p>
-                            <button 
-                            className="btn btn-outline-primary btn-sm w-100"
-                              onClick={() => onSlotSelect(slot)}
-                            >
-                              Join Queue
-                            </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-3">
-              <small className="text-muted">
-                <i className="bi bi-info-circle me-1"></i>
-                Select a time slot to optimize your appointment timing.
-              </small>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Helper function for estimated arrival time based on service durations
-const getEstimatedArrivalTime = async (barberId, barberQueues, timeSlots, selectedDate = null) => {
-  const queue = barberQueues[barberId];
-  if (!queue) return 'N/A';
-  
-  try {
-    const queueCount = queue.queueCount || 0;
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 5);
-    const today = now.toISOString().split('T')[0];
-    
-    // Use selectedDate if provided, otherwise default to today
-    const targetDate = selectedDate || today;
-    const isTargetToday = targetDate === today;
-    
-    console.log('🕐 Calculating estimated arrival time...');
-    console.log('  - Barber ID:', barberId);
-    console.log('  - Target Date:', targetDate);
-    console.log('  - Queue Count:', queueCount);
-    console.log('  - Current Time:', currentTime);
-    
-    // Test case: If this is the specific barber and date from your example
-    if (barberId === 'f5c19b20-d74c-4afc-8e0e-4848f2f29049' && targetDate === '2025-10-04') {
-      console.log('🎯 TEST CASE: Processing your specific scenario');
-      console.log('  - Expected: 8:00 AM + 45 minutes = 8:45 AM');
-      console.log('  - Database should show: total_duration = 45');
-    }
-    
-    // Get all appointments for the target date (both queue and scheduled)
-    const { data: allAppointments, error: appointmentsError } = await supabase
-      .from('appointments')
-      .select(`
-        id,
-        appointment_time,
-        appointment_type,
-        status,
-        total_duration,
-        queue_position,
-        service_id,
-        add_ons_data,
-        service:service_id(duration)
-      `)
-      .eq('barber_id', barberId)
-      .eq('appointment_date', targetDate)
-      .in('status', ['scheduled', 'confirmed', 'ongoing'])
-      .order('appointment_time', { ascending: true });
-    
-    console.log('🔍 Database query results:');
-    console.log('  - Query error:', appointmentsError);
-    console.log('  - Appointments found:', allAppointments?.length || 0);
-    if (allAppointments && allAppointments.length > 0) {
-      console.log('  - First appointment:', allAppointments[0]);
-    }
-    
-    if (appointmentsError) {
-      console.error('Error fetching appointments:', appointmentsError);
-      return 'N/A';
-    }
-    
-    // Define working hours
-    const workingHours = {
-      start: '08:00:00', // 8:00 AM - Start of morning session
-      end: '17:00:00'    // 5:00 PM - End of afternoon session
-    };
-    
-    // Convert time string to minutes for easier calculation
-    const timeToMinutes = (timeStr) => {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      return hours * 60 + minutes;
-    };
-    
-    // Local minutesToTime function for this scope
-    const minutesToTime = (minutes) => {
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-    };
-    
-    // Convert time to 12-hour format for display
-    const convertTo12Hour = (time24) => {
-      const [hours, minutes] = time24.split(':').map(Number);
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-      return `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-    };
-    
-    // Calculate add-ons duration (same logic as in BookAppointment)
-    const calculateAddOnsDuration = (addOnsData) => {
-      try {
-        if (!addOnsData) return 0;
-        
-        let addOnItems;
-        if (Array.isArray(addOnsData)) {
-          addOnItems = addOnsData;
-        } else {
-          addOnItems = JSON.parse(addOnsData);
-        }
-        
-        if (!Array.isArray(addOnItems) || addOnItems.length === 0) return 0;
-        
-        const legacyDurationMapping = {
-          'addon1': 20, 'addon2':20, 'addon3': 10, 'addon4': 30, 'addon5': 60,
-        };
-        
-        let totalDuration = 0;
-        addOnItems.forEach(item => {
-          if (legacyDurationMapping[item]) {
-            totalDuration += legacyDurationMapping[item];
-          }
-        });
-        
-        return totalDuration;
-      } catch (error) {
-        console.error('Error calculating add-ons duration:', error);
-        return 0;
-      }
-    };
-    
-    const lunchStartMinutes = timeToMinutes('12:00:00');
-    const lunchEndMinutes = timeToMinutes('13:00:00');
-    
-    // Start from working hours or current time (whichever is later)
-    let currentTimeMinutes = timeToMinutes(workingHours.start);
-    if (isTargetToday) {
-      const currentTimeMinutesToday = timeToMinutes(currentTime);
-      currentTimeMinutes = Math.max(currentTimeMinutes, currentTimeMinutesToday);
-      
-      // If current time is during lunch break, start after lunch
-      if (currentTimeMinutes >= lunchStartMinutes && currentTimeMinutes < lunchEndMinutes) {
-        console.log('🍽️ Current time is during lunch break, starting after lunch at 1:00 PM');
-        currentTimeMinutes = lunchEndMinutes;
-      }
-    }
-    
-    console.log('📅 Processing appointments...');
-    console.log('  - Total appointments:', allAppointments?.length || 0);
-    console.log('  - Starting time:', minutesToTime(currentTimeMinutes));
-    console.log('  - Raw appointments data:', allAppointments);
-    
-    // If no appointments, return the start time
-    if (!allAppointments || allAppointments.length === 0) {
-      console.log('  - No appointments found, returning start time:', minutesToTime(currentTimeMinutes));
-      const estimatedArrivalTime24 = minutesToTime(currentTimeMinutes);
-      const estimatedArrivalTime12 = convertTo12Hour(estimatedArrivalTime24);
-      return estimatedArrivalTime12;
-    }
-    
-    // Process all appointments in chronological order
-    for (const appointment of allAppointments) {
-      if (!appointment.appointment_time) {
-        console.log('  - Skipping appointment without time:', appointment.id);
-        continue;
-      }
-      
-      const appointmentStartMinutes = timeToMinutes(appointment.appointment_time);
-      
-      // Calculate appointment duration
-      console.log(`  - Raw appointment data:`, {
-        id: appointment.id,
-        appointment_time: appointment.appointment_time,
-        total_duration: appointment.total_duration,
-        service_duration: appointment.service?.duration,
-        add_ons_data: appointment.add_ons_data
-      });
-      
-      // Handle both string and number duration values
-      let appointmentDuration = parseInt(appointment.total_duration) || 30; // Default 30 minutes
-      
-      // Special test case for your scenario
-      if (barberId === 'f5c19b20-d74c-4afc-8e0e-4848f2f29049' && targetDate === '2025-10-04') {
-        console.log(`🎯 TEST CASE - Appointment ${appointment.id}:`);
-        console.log(`  - Raw total_duration: "${appointment.total_duration}" (type: ${typeof appointment.total_duration})`);
-        console.log(`  - Parsed duration: ${appointmentDuration}`);
-        console.log(`  - Should be 45 minutes for 8:00 AM appointment`);
-      }
-      
-      if (!appointment.total_duration || appointment.total_duration === 0 || appointmentDuration === 0) {
-        // Fallback calculation
-        const serviceDuration = appointment.service?.duration || 30;
-        const addOnsDuration = calculateAddOnsDuration(appointment.add_ons_data);
-        appointmentDuration = serviceDuration + addOnsDuration;
-        console.log(`  - Fallback calculation: service=${serviceDuration}min, addons=${addOnsDuration}min, total=${appointmentDuration}min`);
-    } else {
-        console.log(`  - Using database duration: ${appointmentDuration}min`);
-      }
-      
-      const appointmentEndMinutes = appointmentStartMinutes + appointmentDuration;
-      
-      console.log(`  - Processing appointment: ${appointment.appointment_time} (${appointmentDuration}min) - ends at ${minutesToTime(appointmentEndMinutes)}`);
-      console.log(`  - Current time before: ${minutesToTime(currentTimeMinutes)}`);
-      
-      // Special test case for your scenario
-      if (barberId === 'f5c19b20-d74c-4afc-8e0e-4848f2f29049' && targetDate === '2025-10-04' && appointment.appointment_time === '08:00:00') {
-        console.log(`🎯 TEST CASE - 8:00 AM appointment calculation:`);
-        console.log(`  - Start time: ${appointment.appointment_time} = ${appointmentStartMinutes} minutes`);
-        console.log(`  - Duration: ${appointmentDuration} minutes`);
-        console.log(`  - End time: ${appointmentStartMinutes} + ${appointmentDuration} = ${appointmentEndMinutes} minutes`);
-        console.log(`  - End time (formatted): ${minutesToTime(appointmentEndMinutes)}`);
-        console.log(`  - Expected: 8:00 AM + 45 minutes = 8:45 AM`);
-      }
-      
-      // If this appointment starts after current time, update current time
-      if (appointmentStartMinutes > currentTimeMinutes) {
-        console.log(`  - Appointment starts after current time, updating to: ${minutesToTime(appointmentStartMinutes)}`);
-        currentTimeMinutes = appointmentStartMinutes;
-      }
-      
-      // Move current time to after this appointment
-      currentTimeMinutes = appointmentEndMinutes;
-      console.log(`  - Current time after: ${minutesToTime(currentTimeMinutes)}`);
-      
-      // Check if we need to account for lunch break
-      if (currentTimeMinutes < lunchEndMinutes && currentTimeMinutes > lunchStartMinutes) {
-        console.log(`  - Current time crosses lunch break, moving to: ${minutesToTime(lunchEndMinutes)}`);
-        currentTimeMinutes = lunchEndMinutes;
-      }
-    }
-    
-    // Calculate estimated arrival time for the new customer
-    const estimatedArrivalMinutes = currentTimeMinutes;
-    const estimatedArrivalTime24 = minutesToTime(estimatedArrivalMinutes);
-    const estimatedArrivalTime12 = convertTo12Hour(estimatedArrivalTime24);
-    
-    console.log('✅ Final calculation:');
-    console.log('  - Current time minutes:', currentTimeMinutes);
-    console.log('  - Estimated arrival (24h):', estimatedArrivalTime24);
-    console.log('  - Estimated arrival (12h):', estimatedArrivalTime12);
-    console.log('  - Working hours start:', workingHours.start);
-    console.log('  - Working hours end:', workingHours.end);
-    
-    // Add date indicator if not today
-    if (targetDate !== today) {
-      const targetDateObj = new Date(targetDate);
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      if (targetDate === tomorrow) {
-        return `${estimatedArrivalTime12} (Tomorrow)`;
-      } else {
-      const dayName = targetDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-      const monthDay = targetDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `${estimatedArrivalTime12} (${dayName}, ${monthDay})`;
-      }
-    }
-    
-    return estimatedArrivalTime12;
-    
-  } catch (error) {
-    console.error('Error calculating estimated arrival time:', error);
-    return 'N/A';
-  }
-};
 const BookAppointment = () => {
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
@@ -581,28 +97,23 @@ const BookAppointment = () => {
   const [barberQueues, setBarberQueues] = useState({});
   const [barberRecommendations, setBarberRecommendations] = useState([]);
   const [showRecommendations, setShowRecommendations] = useState(false);
-  
+
   // UI states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [user, setUser] = useState(null);
   const [animateForm, setAnimateForm] = useState(false);
-  
+
   // Rebooking states
   const [isRebooking, setIsRebooking] = useState(false);
   const [rebookingAppointment, setRebookingAppointment] = useState(null);
-  
+
   // Additional states
   const [existingAppointment, setExistingAppointment] = useState(null);
-  const [bookedTimeSlots, setBookedTimeSlots] = useState([]);
-  const [timeSlots, setTimeSlots] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Alternative times modal states
-  const [alternativeTimes, setAlternativeTimes] = useState([]);
-  const [showAlternativeTimesModal, setShowAlternativeTimesModal] = useState(false);
-  
+
+
   const [friendVerification, setFriendVerification] = useState(() => createInitialFriendVerificationState());
 
   const resetFriendVerification = useCallback(() => {
@@ -696,46 +207,21 @@ const BookAppointment = () => {
 
   const navigate = useNavigate();
 
-  // Function to show alternative times modal
-  const openAlternativeTimesModal = () => {
-    setShowAlternativeTimesModal(true);
-  };
 
-  // Debug function to test booking data
-  const debugBookingData = () => {
-    console.log('🔍 DEBUGGING BOOKING DATA:');
-    console.log('User:', user);
-    console.log('Booking Data:', bookingData);
-    console.log('Barbers:', barbers);
-    console.log('Services:', services);
-    console.log('Add-ons:', addOns);
-    console.log('Barber Queues:', barberQueues);
-    console.log('Is Rebooking:', isRebooking);
-    console.log('Rebooking Appointment:', rebookingAppointment);
-    
-    // Test validation
-    const validationErrors = [];
-    if (!user) validationErrors.push('No user logged in');
-    if (!bookingData.selectedBarber) validationErrors.push('No barber selected');
-    if (!bookingData.selectedDate) validationErrors.push('No date selected');
-    // No time slot validation needed - queue appointments don't require time slots
-    if (bookingData.selectedServices.length === 0) validationErrors.push('No services selected');
-    
-    console.log('Validation Errors:', validationErrors);
-    return validationErrors;
-  };
+
+
 
   // Handle URL parameters for re-appointment
   useEffect(() => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const rebookId = urlParams.get('rebook');
+    const urlParams = new URLSearchParams(window.location.search);
+    const rebookId = urlParams.get('rebook');
     const barberId = urlParams.get('barber');
     const serviceId = urlParams.get('service');
     const servicesData = urlParams.get('services');
     const addonsData = urlParams.get('addons');
     const notes = urlParams.get('notes');
 
-      if (rebookId) {
+    if (rebookId) {
       // Handle rebooking existing appointment
       handleRebookAppointment(rebookId);
     } else if (barberId || serviceId || servicesData || addonsData || notes) {
@@ -776,7 +262,7 @@ const BookAppointment = () => {
     try {
       console.log('🔄 Loading appointment for rebooking:', appointmentId);
       setLoading(true);
-      
+
       const { data: appointment, error } = await supabase
         .from('appointments')
         .select(`
@@ -801,7 +287,7 @@ const BookAppointment = () => {
       // Pre-fill booking data
       const today = new Date().toISOString().split('T')[0];
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
+
       updateBookingData({
         selectedDate: tomorrow, // Default to tomorrow for rebooking
         appointmentType: 'queue', // Always queue - no scheduled appointments
@@ -815,7 +301,7 @@ const BookAppointment = () => {
 
       setSuccess(`Re-booking appointment with ${appointment.barber?.full_name || 'your barber'}`);
       console.log('✅ Rebooking data loaded:', appointment);
-      
+
     } catch (error) {
       console.error('❌ Error loading appointment for rebooking:', error);
       setError('Failed to load appointment for rebooking');
@@ -828,14 +314,14 @@ const BookAppointment = () => {
   const handleCloneAppointment = (appointmentData) => {
     try {
       console.log('🔄 Cloning appointment with data:', appointmentData);
-      
+
       // Pre-fill booking data
       const today = new Date().toISOString().split('T')[0];
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
+
       let selectedServices = [];
       let selectedAddOns = [];
-      
+
       // Parse services data
       if (appointmentData.services_data) {
         try {
@@ -855,7 +341,7 @@ const BookAppointment = () => {
       } else if (appointmentData.service_id) {
         selectedServices = [appointmentData.service_id];
       }
-      
+
       // Parse add-ons data
       if (appointmentData.add_ons_data) {
         try {
@@ -873,7 +359,7 @@ const BookAppointment = () => {
           selectedAddOns = [];
         }
       }
-      
+
       updateBookingData({
         selectedDate: tomorrow, // Default to tomorrow for new appointment
         appointmentType: 'queue', // Always queue - no scheduled appointments
@@ -887,30 +373,14 @@ const BookAppointment = () => {
 
       setSuccess('Appointment data pre-filled. Please review and confirm your booking.');
       console.log('✅ Clone appointment data loaded');
-      
+
     } catch (error) {
       console.error('❌ Error cloning appointment:', error);
       setError('Failed to pre-fill appointment data');
     }
   };
 
-  // Generate time slots
-  const generateTimeSlots = () => {
-    const slots = [];
-    const startHour = 8;
-    const endHour = 16;
-    // Use actual service duration instead of fixed 30-minute slots
-    const slotDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns) || 30;
 
-    for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += slotDuration) {
-        if (hour === endHour && minute >= 30) break; // Stop at 4:30 PM
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        slots.push(timeString);
-      }
-    }
-    return slots;
-  };
 
   // Check for existing appointment
   const checkExistingAppointment = async (date) => {
@@ -961,267 +431,7 @@ const BookAppointment = () => {
   };
 
   // Get booked time slots for a specific date and barber (with duration-based blocking)
-  const getBookedTimeSlots = async (date, barberId) => {
-    try {
-      console.log('🔍 Fetching booked time slots with duration blocking for:', date, 'barber:', barberId);
-      
-      // Get ALL appointments for this barber on this date with duration info
-      const { data: booked, error } = await supabase
-        .from('appointments')
-        .select('appointment_time, appointment_type, status, queue_position, total_duration, services_data, add_ons_data, estimated_wait_time')
-        .eq('appointment_date', date)
-        .eq('barber_id', barberId)
-        .in('status', ['scheduled', 'confirmed', 'ongoing']);
 
-      if (error) throw error;
-      
-      console.log('📅 Raw appointment data:', booked);
-      
-      // Generate all possible time slots
-      const allTimeSlots = generateTimeSlotsWithIntervals();
-      const blockedSlots = new Set();
-      
-      // Separate scheduled and queue appointments
-      const scheduledAppointments = (booked || []).filter(apt => 
-        apt.appointment_type === 'scheduled' && apt.appointment_time
-      );
-      // Only accepted queue appointments should block slots
-      const queueAppointments = (booked || []).filter(apt => 
-        apt.appointment_type === 'queue' && apt.status === 'scheduled' && (apt.queue_position !== null && apt.queue_position !== undefined)
-      );
-
-      console.log('📅 Scheduled appointments:', scheduledAppointments.length);
-      console.log('📅 Queue appointments:', queueAppointments.length);
-
-      // Process scheduled appointments and block slots based on duration
-      for (const apt of scheduledAppointments) {
-        const startTime = apt.appointment_time?.slice(0, 5); // Convert '08:00:00' to '08:00'
-        if (!startTime) continue;
-        
-        // Calculate service duration
-        let duration = apt.total_duration || 30; // Default 30 minutes
-        
-        // If no total_duration, calculate from services and add-ons
-        if (!apt.total_duration && (apt.services_data || apt.add_ons_data)) {
-          try {
-            const services = apt.services_data ? JSON.parse(apt.services_data) : [];
-            const addons = apt.add_ons_data ? JSON.parse(apt.add_ons_data) : [];
-            
-            // Get service durations from database
-            const serviceIds = services.map(s => s.id || s);
-            const addonIds = addons.map(a => a.id || a);
-            
-            if (serviceIds.length > 0 || addonIds.length > 0) {
-              const { data: serviceData } = await supabase
-                .from('services')
-                .select('duration')
-                .in('id', serviceIds);
-              
-              const { data: addonData } = await supabase
-                .from('add_ons')
-                .select('duration')
-                .in('id', addonIds);
-              
-              const serviceDuration = serviceData?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
-              const addonDuration = addonData?.reduce((sum, a) => sum + (a.duration || 0), 0) || 0;
-              duration = serviceDuration + addonDuration || 30;
-            }
-          } catch (e) {
-            console.warn('Error calculating duration for appointment:', e);
-            duration = 30; // Fallback to 30 minutes
-          }
-        }
-        
-        console.log(`🕐 Processing ${apt.appointment_type} appointment: ${startTime} for ${duration} minutes`);
-        
-        // Calculate which time slots to block based on duration
-        const startHour = parseInt(startTime.split(':')[0]);
-        const startMinute = parseInt(startTime.split(':')[1]);
-        const startMinutes = startHour * 60 + startMinute;
-        const endMinutes = startMinutes + duration;
-        
-        console.log(`🕐 Time calculation: ${startTime} = ${startMinutes} minutes, duration = ${duration} minutes, end = ${endMinutes} minutes`);
-        
-        // Block all time slots that overlap with this appointment
-        // Check each available time slot to see if it conflicts with this appointment
-        for (const slot of allTimeSlots) {
-          const slotTime = slot.value; // e.g., "08:00", "08:30", "09:00"
-          const slotHour = parseInt(slotTime.split(':')[0]);
-          const slotMinute = parseInt(slotTime.split(':')[1]);
-          const slotMinutes = slotHour * 60 + slotMinute;
-          const slotEndMinutes = slotMinutes + 30; // Each slot is 30 minutes
-          
-          // Check if this slot overlaps with the appointment
-          // Slot overlaps if: slot starts before appointment ends AND slot ends after appointment starts
-          const overlaps = slotMinutes < endMinutes && slotEndMinutes > startMinutes;
-          
-          if (overlaps) {
-            blockedSlots.add(slotTime);
-            console.log(`🔴 Blocking slot: ${slotTime} (overlaps with ${startTime} - ${Math.floor(endMinutes/60).toString().padStart(2, '0')}:${(endMinutes%60).toString().padStart(2, '0')})`);
-          } else {
-            console.log(`✅ Slot ${slotTime} is available (no overlap with ${startTime})`);
-          }
-        }
-      }
-
-      // Process queue appointments and calculate their timeline positions
-      if (queueAppointments.length > 0) {
-        console.log('🔄 Processing queue appointments for timeline...');
-        
-        // Sort scheduled appointments by time
-        const sortedScheduled = [...scheduledAppointments].sort((a, b) => {
-          const timeA = a.appointment_time?.slice(0, 5) || '00:00';
-          const timeB = b.appointment_time?.slice(0, 5) || '00:00';
-          return timeA.localeCompare(timeB);
-        });
-
-        // Sort queue appointments by priority and position
-        const sortedQueue = [...queueAppointments].sort((a, b) => {
-          // Priority first (urgent = 0, normal = 1, low = 2)
-          const priorityA = a.is_urgent ? 0 : 1;
-          const priorityB = b.is_urgent ? 0 : 1;
-          if (priorityA !== priorityB) return priorityA - priorityB;
-          
-          // Then by queue position
-          const posA = a.queue_position || 999;
-          const posB = b.queue_position || 999;
-          return posA - posB;
-        });
-
-        let currentTime = 8 * 60; // Start at 8:00 AM in minutes
-        const workEnd = 17 * 60; // End at 5:00 PM in minutes
-        const lunchStart = 12 * 60; // 12:00 PM
-        const lunchEnd = 13 * 60; // 1:00 PM
-
-        // Process scheduled appointments and insert queue appointments in gaps
-        for (const scheduledApt of sortedScheduled) {
-          const scheduledTime = timeToMinutes(scheduledApt.appointment_time?.slice(0, 5) || '08:00');
-          const scheduledDuration = scheduledApt.total_duration || 30;
-
-          // Try to fit queue appointments before this scheduled appointment
-          while (sortedQueue.length > 0 && currentTime < scheduledTime) {
-            // Check for lunch break
-            if (currentTime >= lunchStart && currentTime < lunchEnd) {
-              currentTime = lunchEnd;
-              continue;
-            }
-
-            const queueApt = sortedQueue[0];
-            const queueDuration = queueApt.total_duration || 30;
-
-            // Check if queue appointment fits before scheduled appointment
-            if (currentTime + queueDuration + 5 <= scheduledTime) { // 5 min buffer
-              // Calculate which time slots this queue appointment would occupy
-              const queueStartTime = minutesToTime(currentTime);
-              const queueEndTime = minutesToTime(currentTime + queueDuration);
-              
-              console.log(`📅 Queue appointment would occupy: ${queueStartTime} - ${queueEndTime}`);
-              
-              // Block time slots that this queue appointment would occupy
-              for (const slot of allTimeSlots) {
-                const slotTime = slot.value;
-                const slotHour = parseInt(slotTime.split(':')[0]);
-                const slotMinute = parseInt(slotTime.split(':')[1]);
-                const slotMinutes = slotHour * 60 + slotMinute;
-                const slotEndMinutes = slotMinutes + 30; // Each slot is 30 minutes
-                
-                const queueStartMinutes = currentTime;
-                const queueEndMinutes = currentTime + queueDuration;
-                
-                // Check if this slot overlaps with the queue appointment
-                if (slotMinutes < queueEndMinutes && slotEndMinutes > queueStartMinutes) {
-                  blockedSlots.add(slotTime);
-                  console.log(`🔴 Blocking slot: ${slotTime} (occupied by queue appointment ${queueStartTime} - ${queueEndTime})`);
-                }
-              }
-              
-              currentTime += queueDuration + 5; // Move to next position
-              sortedQueue.shift(); // Remove processed queue appointment
-            } else {
-              break; // Can't fit, move to after scheduled
-            }
-          }
-
-          // Move current time past the scheduled appointment
-          currentTime = Math.max(currentTime, scheduledTime + scheduledDuration + 5);
-        }
-
-        // Process remaining queue appointments after all scheduled appointments
-        while (sortedQueue.length > 0 && currentTime < workEnd) {
-          // Check for lunch break
-          if (currentTime >= lunchStart && currentTime < lunchEnd) {
-            console.log(`🕐 Queue processing hit lunch break, moving to after lunch`);
-            currentTime = lunchEnd;
-            continue;
-          }
-
-          const queueApt = sortedQueue[0];
-          const queueDuration = queueApt.total_duration || 30;
-
-          // Check if this queue appointment would cross lunch break
-          if (currentTime < lunchEnd && (currentTime + queueDuration) > lunchStart) {
-            console.log(`🕐 Queue appointment would cross lunch break, moving to after lunch`);
-            currentTime = lunchEnd;
-            continue;
-          }
-
-          if (currentTime + queueDuration <= workEnd) {
-            // Calculate which time slots this queue appointment would occupy
-            const queueStartTime = minutesToTime(currentTime);
-            const queueEndTime = minutesToTime(currentTime + queueDuration);
-            
-            console.log(`📅 Queue appointment would occupy: ${queueStartTime} - ${queueEndTime}`);
-            
-            // Block time slots that this queue appointment would occupy
-            for (const slot of allTimeSlots) {
-              const slotTime = slot.value;
-              const slotHour = parseInt(slotTime.split(':')[0]);
-              const slotMinute = parseInt(slotTime.split(':')[1]);
-              const slotMinutes = slotHour * 60 + slotMinute;
-              const slotEndMinutes = slotMinutes + 30; // Each slot is 30 minutes
-              
-              const queueStartMinutes = currentTime;
-              const queueEndMinutes = currentTime + queueDuration;
-              
-              // Check if this slot overlaps with the queue appointment
-              if (slotMinutes < queueEndMinutes && slotEndMinutes > queueStartMinutes) {
-                blockedSlots.add(slotTime);
-                console.log(`🔴 Blocking slot: ${slotTime} (occupied by queue appointment ${queueStartTime} - ${queueEndTime})`);
-              }
-            }
-            
-            currentTime += queueDuration + 5; // Move to next position
-            sortedQueue.shift(); // Remove processed queue appointment
-          } else {
-            break; // Can't fit today
-          }
-        }
-      }
-      
-      const allBookedSlots = Array.from(blockedSlots);
-      
-      // Create detailed slot information
-      const detailedSlots = {};
-      allBookedSlots.forEach(slot => {
-        detailedSlots[slot] = {
-          time: slot,
-          type: 'blocked', // Will be enhanced to show 'scheduled' or 'queue'
-          reason: 'Occupied'
-        };
-      });
-      
-      console.log('⏰ Blocked slots based on duration:', allBookedSlots);
-      console.log('📋 Total blocked slots:', allBookedSlots.length);
-      console.log('📋 Detailed slot info:', detailedSlots);
-      
-      setBookedTimeSlots(allBookedSlots);
-      return allBookedSlots;
-    } catch (error) {
-      console.error('❌ Error fetching booked time slots:', error);
-      setBookedTimeSlots([]);
-      return [];
-    }
-  };
 
   // Helper functions for time conversion
   const timeToMinutes = (time) => {
@@ -1237,90 +447,7 @@ const BookAppointment = () => {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:00`;
   };
 
-  // Get appointment details for a specific time slot
-  const getAppointmentAtTime = (timeSlot) => {
-    if (!bookedTimeSlots.includes(timeSlot)) return null;
-    
-    // Try to find appointment data from the barber queues
-    const barberQueue = barberQueues[bookingData.selectedBarber];
-    if (barberQueue && barberQueue.appointments) {
-      // First, look for scheduled appointments with exact time match
-      const scheduledAppointment = barberQueue.appointments.find(apt => 
-        apt.appointment_time && apt.appointment_time.slice(0, 5) === timeSlot
-      );
-      
-      if (scheduledAppointment) {
-        return {
-          time: timeSlot,
-          type: scheduledAppointment.appointment_type || 'scheduled',
-          appointment: scheduledAppointment
-        };
-      }
-      
-      // If no scheduled appointment found, check if there are any queue appointments
-      const queueAppointments = barberQueue.appointments.filter(apt => 
-        apt.appointment_type === 'queue' && apt.status !== 'cancelled'
-      );
-      
-      if (queueAppointments.length > 0) {
-        // If there are queue appointments and this slot is blocked but not by a scheduled appointment,
-        // it's likely blocked by a queue appointment
-        return {
-          time: timeSlot,
-          type: 'queue',
-          appointment: queueAppointments[0] // Use first queue appointment as representative
-        };
-      }
-    }
-    
-    // Fallback: assume it's a scheduled appointment if we can't determine
-    return {
-      time: timeSlot,
-      type: 'scheduled', // Default to scheduled for booked slots
-      appointment: null
-    };
-  };
 
-  // Find alternative time suggestions when a slot conflicts
-  const findAlternativeTimes = (conflictTime, serviceDuration) => {
-    const conflictMinutes = timeToMinutes(conflictTime);
-    const serviceMinutes = serviceDuration;
-    const suggestions = [];
-    
-    // Look for available slots before the conflict
-    for (let i = 30; i <= 120; i += 30) { // Check 30, 60, 90, 120 minutes before
-      const suggestedTime = conflictMinutes - i;
-      if (suggestedTime >= 8 * 60) { // Not before 8:00 AM
-        const suggestedTimeStr = minutesToTime(suggestedTime);
-        if (!bookedTimeSlots.includes(suggestedTimeStr)) {
-          suggestions.push({
-            time: suggestedTimeStr,
-            display: convertTo12Hour(suggestedTimeStr),
-            reason: `${i} minutes earlier`,
-            type: 'before'
-          });
-        }
-      }
-    }
-    
-    // Look for available slots after the conflict
-    for (let i = 30; i <= 120; i += 30) { // Check 30, 60, 90, 120 minutes after
-      const suggestedTime = conflictMinutes + i;
-      if (suggestedTime <= 17 * 60) { // Not after 5:00 PM
-        const suggestedTimeStr = minutesToTime(suggestedTime);
-        if (!bookedTimeSlots.includes(suggestedTimeStr)) {
-          suggestions.push({
-            time: suggestedTimeStr,
-            display: convertTo12Hour(suggestedTimeStr),
-            reason: `${i} minutes later`,
-            type: 'after'
-          });
-        }
-      }
-    }
-    
-    return suggestions.slice(0, 3); // Return top 3 suggestions
-  };
 
   // Helper function to get step title
   const getStepTitle = (step) => {
@@ -1340,494 +467,13 @@ const BookAppointment = () => {
       default: return '';
     }
   };
-  // Calculate service duration in minutes
-  const calculateServiceDuration = async (selectedServices, selectedAddOns = [], servicesList = [], addOnsList = []) => {
-    if (!selectedServices || selectedServices.length === 0) return 30; // Default 30 minutes
-    
-    // Calculate service duration
-    const serviceDuration = selectedServices.reduce((total, serviceId) => {
-      const service = servicesList.find(s => s.id === serviceId);
-      return total + (service?.duration_minutes || 30);
-    }, 0);
-    
-    // Calculate add-ons duration
-    let addOnsDuration = 0;
-    if (selectedAddOns && selectedAddOns.length > 0) {
-      const addOnsData = JSON.stringify(selectedAddOns);
-      addOnsDuration = await addOnsService.calculateAddOnsDuration(addOnsData);
-    }
-    
-    const totalDuration = serviceDuration + addOnsDuration;
-    return totalDuration || 30; // Default to 30 minutes if no duration found
-  };
+
 
   // Generate time slots for 8AM-11:30AM and 1PM-4:30PM in 12-hour format with 30-minute intervals
-  const generateTimeSlotsWithIntervals = () => {
-    const slots = [];
-    
-    // Morning slots: 8:00 AM - 11:30 AM (30-minute intervals)
-    for (let hour = 8; hour <= 11; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        if (hour === 11 && minute > 30) break; // Stop after 11:30 AM
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const displayTime = convertTo12Hour(timeString);
-        slots.push({ value: timeString, display: displayTime });
-      }
-    }
-    
-    // Afternoon slots: 1:00 PM - 4:30 PM (30-minute intervals)
-    for (let hour = 13; hour <= 16; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        if (hour === 16 && minute > 30) break; // Stop at 4:30 PM
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const displayTime = convertTo12Hour(timeString);
-        slots.push({ value: timeString, display: displayTime });
-      }
-    }
-    
-    console.log('🕐 Generated time slots (30-min intervals):', slots.map(s => s.value));
-    console.log('🕐 Total slots count:', slots.length);
-    console.log('🕐 11:30 AM included:', slots.some(s => s.value === '11:30'));
-    return slots;
-  };
-  // Queue management logic - handle how queue appointments interact with scheduled slots
-  const manageQueueAndScheduledSlots = async (barberId, date) => {
-    try {
-      console.log('🔄 Managing queue and scheduled slots for barber:', barberId, 'date:', date);
-      
-      // Get all appointments for this barber on this date
-      const { data: appointments, error } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('barber_id', barberId)
-        .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing'])
-        .order('queue_position', { ascending: true });
 
-      if (error) throw error;
 
-      console.log('📋 All appointments:', appointments);
 
-      // Separate queue and scheduled appointments
-      const queueAppointments = appointments?.filter(apt => apt.appointment_type === 'queue') || [];
-      const scheduledAppointments = appointments?.filter(apt => apt.appointment_type === 'scheduled') || [];
 
-      console.log('👥 Queue appointments:', queueAppointments);
-      console.log('📅 Scheduled appointments:', scheduledAppointments);
-
-      // Create a time slot occupancy map
-      const timeSlotOccupancy = new Map();
-      
-      // Mark scheduled appointments as occupied
-      scheduledAppointments.forEach(apt => {
-        if (apt.appointment_time) {
-          timeSlotOccupancy.set(apt.appointment_time, {
-            type: 'scheduled',
-            appointment: apt,
-            endTime: null // Will calculate based on service duration
-          });
-        }
-      });
-
-      // Calculate end times for scheduled appointments based on actual service duration
-      for (const [timeSlot, occupancy] of timeSlotOccupancy.entries()) {
-        if (occupancy.type === 'scheduled') {
-          let serviceDuration = occupancy.appointment.total_duration || 30; // Use actual duration
-          
-          // If no total_duration, calculate from services and add-ons
-          if (!occupancy.appointment.total_duration && (occupancy.appointment.services_data || occupancy.appointment.add_ons_data)) {
-            try {
-              const services = occupancy.appointment.services_data ? JSON.parse(occupancy.appointment.services_data) : [];
-              const addons = occupancy.appointment.add_ons_data ? JSON.parse(occupancy.appointment.add_ons_data) : [];
-              
-              // Get service durations from database
-              const serviceIds = services.map(s => s.id || s);
-              const addonIds = addons.map(a => a.id || a);
-              
-              if (serviceIds.length > 0 || addonIds.length > 0) {
-                const { data: serviceData } = await supabase
-                  .from('services')
-                  .select('duration')
-                  .in('id', serviceIds);
-                
-                const { data: addonData } = await supabase
-                  .from('add_ons')
-                  .select('duration')
-                  .in('id', addonIds);
-                
-                const serviceDurationSum = serviceData?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
-                const addonDurationSum = addonData?.reduce((sum, a) => sum + (a.duration || 0), 0) || 0;
-                serviceDuration = serviceDurationSum + addonDurationSum || 30;
-              }
-            } catch (e) {
-              console.warn('Error calculating duration for scheduled appointment:', e);
-              serviceDuration = 30; // Fallback to 30 minutes
-            }
-          }
-          
-          const startTime = new Date(`${date} ${timeSlot}`);
-          const endTime = new Date(startTime.getTime() + serviceDuration * 60000);
-          const endTimeString = endTime.toTimeString().slice(0, 5);
-          occupancy.endTime = endTimeString;
-          
-          console.log(`📅 Scheduled appointment ${occupancy.appointment.id}: ${timeSlot} - ${endTimeString} (${serviceDuration} min)`);
-        }
-      }
-
-      // Find available time slots for queue appointments with enhanced conflict detection
-      const availableSlots = [];
-      const allTimeSlots = generateTimeSlotsWithIntervals();
-      
-      // Create a comprehensive blocked slots map
-      const blockedSlots = new Set();
-      
-      // Block all slots that are occupied by scheduled appointments
-      for (const [timeSlot, occupancy] of timeSlotOccupancy.entries()) {
-        if (occupancy.type === 'scheduled' && occupancy.endTime) {
-          // Block all 30-minute slots that overlap with this scheduled appointment
-          const startHour = parseInt(timeSlot.split(':')[0]);
-          const startMinute = parseInt(timeSlot.split(':')[1]);
-          const startMinutes = startHour * 60 + startMinute;
-          
-          const endHour = parseInt(occupancy.endTime.split(':')[0]);
-          const endMinute = parseInt(occupancy.endTime.split(':')[1]);
-          const endMinutes = endHour * 60 + endMinute;
-          
-          for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
-            const hour = Math.floor(minutes / 60);
-            const minute = minutes % 60;
-            const slotString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            blockedSlots.add(slotString);
-          }
-        }
-      }
-      
-      // Find available slots
-      for (let i = 0; i < allTimeSlots.length; i++) {
-        const slot = allTimeSlots[i].value;
-        
-        if (!blockedSlots.has(slot)) {
-            availableSlots.push(slot);
-        }
-      }
-
-      console.log('⏰ Available time slots for queue:', availableSlots);
-      console.log('🚫 Blocked slots by scheduled appointments:', Array.from(blockedSlots));
-      console.log('📊 Queue management summary:');
-      console.log(`   - Total time slots: ${allTimeSlots.length}`);
-      console.log(`   - Blocked by scheduled: ${blockedSlots.size}`);
-      console.log(`   - Available for queue: ${availableSlots.length}`);
-      console.log(`   - Queue appointments to assign: ${queueAppointments.filter(apt => !apt.appointment_time).length}`);
-      
-      // Debug: Show all time slots and their status
-      console.log('🔍 All time slots status:');
-      allTimeSlots.forEach(slot => {
-        const isBlocked = blockedSlots.has(slot.value);
-        console.log(`   ${slot.display} (${slot.value}): ${isBlocked ? '🚫 BLOCKED' : '✅ AVAILABLE'}`);
-      });
-      
-      // Debug: Show which appointments are blocking which slots
-      console.log('🔍 Blocking analysis:');
-      for (const apt of appointments || []) {
-        if (apt.appointment_time) {
-          const startTime = apt.appointment_time?.slice(0, 5);
-          const duration = apt.total_duration || 30;
-          console.log(`   ${apt.appointment_type} at ${startTime} for ${duration} min blocks: ${Array.from(blockedSlots).filter(slot => {
-            const slotHour = parseInt(slot.split(':')[0]);
-            const slotMinute = parseInt(slot.split(':')[1]);
-            const slotMinutes = slotHour * 60 + slotMinute;
-            
-            const startHour = parseInt(startTime.split(':')[0]);
-            const startMinute = parseInt(startTime.split(':')[1]);
-            const startMinutes = startHour * 60 + startMinute;
-            const endMinutes = startMinutes + duration;
-            
-            return slotMinutes >= startMinutes && slotMinutes < endMinutes;
-          }).join(', ')}`);
-        }
-      }
-
-      // Process queue appointments with smart slot assignment and conflict prevention
-      const updates = [];
-      const assignedSlots = new Set(); // Track assigned slots to prevent conflicts
-      let currentSlotIndex = 0;
-
-      // Sort queue appointments by queue number to maintain order
-      const sortedQueueAppointments = queueAppointments.sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
-      
-      console.log('🔄 Processing queue appointments with conflict management...');
-      console.log(`📋 Queue appointments to process: ${sortedQueueAppointments.length}`);
-      console.log(`⏰ Available slots: ${availableSlots.length}`);
-
-      for (let i = 0; i < sortedQueueAppointments.length; i++) {
-        const queueAppointment = sortedQueueAppointments[i];
-        
-        // If queue appointment doesn't have a time slot yet
-        if (!queueAppointment.appointment_time) {
-          // Find the next available slot that doesn't conflict
-          let assignedSlot = null;
-          
-          // Try to find a slot that doesn't conflict with existing assignments
-          for (let j = currentSlotIndex; j < availableSlots.length; j++) {
-            const candidateSlot = availableSlots[j];
-            
-            if (!assignedSlots.has(candidateSlot)) {
-              // Check if this slot would conflict with any existing scheduled appointments
-              let hasConflict = false;
-              
-              // Calculate duration for this queue appointment
-              let queueDuration = queueAppointment.total_duration || 30;
-              
-              if (!queueAppointment.total_duration && (queueAppointment.services_data || queueAppointment.add_ons_data)) {
-                try {
-                  const services = queueAppointment.services_data ? JSON.parse(queueAppointment.services_data) : [];
-                  const addons = queueAppointment.add_ons_data ? JSON.parse(queueAppointment.add_ons_data) : [];
-                  
-                  const serviceIds = services.map(s => s.id || s);
-                  const addonIds = addons.map(a => a.id || a);
-                  
-                  if (serviceIds.length > 0 || addonIds.length > 0) {
-                    const { data: serviceData } = await supabase
-                      .from('services')
-                      .select('duration')
-                      .in('id', serviceIds);
-                    
-                    const { data: addonData } = await supabase
-                      .from('add_ons')
-                      .select('duration')
-                      .in('id', addonIds);
-                    
-                    const serviceDurationSum = serviceData?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
-                    const addonDurationSum = addonData?.reduce((sum, a) => sum + (a.duration || 0), 0) || 0;
-                    queueDuration = serviceDurationSum + addonDurationSum || 30;
-                  }
-                } catch (e) {
-                  console.warn('Error calculating duration for queue appointment:', e);
-                  queueDuration = 30;
-                }
-              }
-              
-              // Check if this slot would conflict with scheduled appointments
-              const startHour = parseInt(candidateSlot.split(':')[0]);
-              const startMinute = parseInt(candidateSlot.split(':')[1]);
-              const startMinutes = startHour * 60 + startMinute;
-              const endMinutes = startMinutes + queueDuration;
-              
-              for (const [occupiedSlot, occupancy] of timeSlotOccupancy.entries()) {
-                if (occupancy.type === 'scheduled' && occupancy.endTime) {
-                  const occupiedStartHour = parseInt(occupiedSlot.split(':')[0]);
-                  const occupiedStartMinute = parseInt(occupiedSlot.split(':')[1]);
-                  const occupiedStartMinutes = occupiedStartHour * 60 + occupiedStartMinute;
-                  
-                  const occupiedEndHour = parseInt(occupancy.endTime.split(':')[0]);
-                  const occupiedEndMinute = parseInt(occupancy.endTime.split(':')[1]);
-                  const occupiedEndMinutes = occupiedEndHour * 60 + occupiedEndMinute;
-                  
-                  // Check for overlap
-                  if (startMinutes < occupiedEndMinutes && endMinutes > occupiedStartMinutes) {
-                    hasConflict = true;
-                    console.log(`⚠️ Conflict detected: Queue slot ${candidateSlot} (${startMinutes}-${endMinutes}) overlaps with scheduled ${occupiedSlot} (${occupiedStartMinutes}-${occupiedEndMinutes})`);
-                    break;
-                  }
-                  
-                  // Check for gap management - ensure there's enough buffer time
-                  const gapBefore = occupiedStartMinutes - endMinutes;
-                  const gapAfter = startMinutes - occupiedEndMinutes;
-                  
-                  // If there's a small gap (less than 15 minutes), it might cause issues
-                  if (gapBefore >= 0 && gapBefore < 15) {
-                    console.log(`⚠️ Small gap before scheduled appointment: ${gapBefore} minutes between queue end and scheduled start`);
-                  }
-                  if (gapAfter >= 0 && gapAfter < 15) {
-                    console.log(`⚠️ Small gap after scheduled appointment: ${gapAfter} minutes between scheduled end and queue start`);
-                  }
-                }
-              }
-              
-              if (!hasConflict) {
-                assignedSlot = candidateSlot;
-                currentSlotIndex = j + 1; // Move to next slot for next appointment
-                console.log(`✅ Queue appointment assigned to ${candidateSlot} (no conflicts detected)`);
-                break;
-              } else {
-                console.log(`❌ Queue appointment cannot use ${candidateSlot} (conflict with scheduled appointment)`);
-              }
-            }
-          }
-          
-          if (assignedSlot) {
-            console.log(`🎯 Assigning slot ${assignedSlot} to queue appointment ${queueAppointment.id} (position ${queueAppointment.queue_position})`);
-            
-            updates.push({
-              id: queueAppointment.id,
-              appointment_time: assignedSlot,
-              status: 'scheduled' // Change status to scheduled when assigned a slot
-            });
-            
-            // Mark this slot as assigned
-            assignedSlots.add(assignedSlot);
-            
-            // Calculate and log the end time
-            let queueDuration = queueAppointment.total_duration || 30;
-            const startTime = new Date(`${date} ${assignedSlot}`);
-            const endTime = new Date(startTime.getTime() + queueDuration * 60000);
-            const endTimeString = endTime.toTimeString().slice(0, 5);
-            
-            console.log(`⏰ Queue appointment ${queueAppointment.id}: ${assignedSlot} - ${endTimeString} (${queueDuration} min)`);
-          } else {
-            console.log(`⚠️ No available slots for queue appointment ${queueAppointment.id} (position ${queueAppointment.queue_position}) - conflicts with scheduled appointments`);
-            // Keep as queue appointment if no slots available
-            break;
-          }
-        }
-      }
-
-      // Update appointments with assigned time slots
-      if (updates.length > 0) {
-        console.log('📝 Updating appointments with assigned slots:', updates);
-        
-        for (const update of updates) {
-          const { error: updateError } = await supabase
-        .from('appointments')
-            .update({
-              appointment_time: update.appointment_time,
-              status: update.status
-            })
-            .eq('id', update.id);
-
-          if (updateError) {
-            console.error('❌ Error updating appointment:', updateError);
-          }
-        }
-      }
-
-      // Refresh the booked time slots after updates
-      await getBookedTimeSlots(date, barberId);
-      
-      // Refresh queue data to show updated information
-      await fetchBarberQueues([{ id: barberId }], date);
-      
-    } catch (error) {
-      console.error('❌ Error managing queue and scheduled slots:', error);
-    }
-  };
-
-  // Enhanced unified queue management functions
-  const createUnifiedQueue = (appointments) => {
-    const unifiedQueue = [];
-    const currentTime = new Date();
-    const currentTimeString = currentTime.toTimeString().slice(0, 5);
-    
-    // Process scheduled appointments first
-    const scheduledAppointments = appointments
-      .filter(apt => apt.appointment_type === 'scheduled' && apt.appointment_time)
-      .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
-    
-    // Process queue appointments
-    const queueAppointments = appointments
-      .filter(apt => apt.appointment_type === 'queue' && apt.status === 'pending')
-      .sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
-    
-    // Create timeline
-    let timeline = [];
-    
-    // Add scheduled appointments to timeline
-    scheduledAppointments.forEach(apt => {
-      timeline.push({
-        ...apt,
-        type: 'scheduled',
-        startTime: apt.appointment_time,
-        endTime: calculateEndTime(apt.appointment_time, apt.total_duration || 30),
-        position: null // Will be calculated based on timeline
-      });
-    });
-    
-    // Add queue appointments to timeline
-    queueAppointments.forEach(apt => {
-      timeline.push({
-        ...apt,
-        type: 'queue',
-        startTime: null, // Will be calculated based on availability
-        endTime: null,
-        position: apt.queue_position || 0
-      });
-    });
-    
-    // Sort timeline by time and position
-    timeline.sort((a, b) => {
-      if (a.type === 'scheduled' && b.type === 'scheduled') {
-        return a.startTime.localeCompare(b.startTime);
-      }
-      if (a.type === 'queue' && b.type === 'queue') {
-        return (a.position || 0) - (b.position || 0);
-      }
-      if (a.type === 'scheduled' && b.type === 'queue') {
-        return -1; // Scheduled appointments come first
-      }
-      return 1;
-    });
-    
-    // Calculate actual positions and start times
-    let currentPosition = 1;
-    let lastEndTime = '08:00'; // Start of working day
-    
-    timeline.forEach((apt, index) => {
-      if (apt.type === 'scheduled') {
-        apt.position = currentPosition++;
-        lastEndTime = apt.endTime;
-      } else if (apt.type === 'queue') {
-        apt.position = currentPosition++;
-        apt.startTime = lastEndTime;
-        apt.endTime = calculateEndTime(apt.startTime, apt.total_duration || 30);
-        lastEndTime = apt.endTime;
-      }
-    });
-    
-    return timeline;
-  };
-
-  // Helper function to calculate end time
-  const calculateEndTime = (startTime, duration) => {
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const startMinutes = hours * 60 + minutes;
-    const endMinutes = startMinutes + duration;
-    const endHours = Math.floor(endMinutes / 60);
-    const endMins = endMinutes % 60;
-    return `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
-  };
-
-  // Helper function to get current position
-  const getCurrentPosition = (appointments) => {
-    const currentTime = new Date();
-    const currentTimeString = currentTime.toTimeString().slice(0, 5);
-    
-    // Find the appointment that should be currently active
-    const activeAppointment = appointments.find(apt => 
-      apt.status === 'ongoing' || 
-      (apt.appointment_time && apt.appointment_time <= currentTimeString)
-    );
-    
-    return activeAppointment ? activeAppointment.queue_position || 1 : 1;
-  };
-
-  // Helper function to calculate unified wait time
-  const calculateUnifiedWaitTime = (unifiedQueue) => {
-    const currentTime = new Date();
-    const currentTimeString = currentTime.toTimeString().slice(0, 5);
-    
-    // Find current position in queue
-    const currentPosition = getCurrentPosition(unifiedQueue);
-    const remainingAppointments = unifiedQueue.filter(apt => 
-      (apt.position || 0) >= currentPosition
-    );
-    
-    // Calculate total wait time
-    const totalWaitTime = remainingAppointments.reduce((total, apt) => {
-      return total + (apt.total_duration || 30);
-    }, 0);
-    
-    return totalWaitTime;
-  };
 
   // Fetch data on component mount
   useEffect(() => {
@@ -1838,25 +484,25 @@ const BookAppointment = () => {
 
     fetchUser();
     fetchBarbersAndServices();
-    setTimeSlots(generateTimeSlotsWithIntervals());
-    
+
+
     // Check for recommended haircut request from HaircutRecommender
     const recommendedHaircutRequest = sessionStorage.getItem('recommendedHaircutRequest');
     const recommendedHaircutName = sessionStorage.getItem('recommendedHaircutName');
-    
+
     if (recommendedHaircutRequest) {
       setBookingData(prev => ({
         ...prev,
         specialRequests: recommendedHaircutRequest
       }));
-      
+
       // Clear the sessionStorage after using it
       sessionStorage.removeItem('recommendedHaircutRequest');
       sessionStorage.removeItem('recommendedHaircutName');
-      
+
       console.log('✅ Applied recommended haircut request:', recommendedHaircutName);
     }
-    
+
     setTimeout(() => {
       setAnimateForm(true);
     }, 300);
@@ -1910,24 +556,24 @@ const BookAppointment = () => {
   // Check if barber can accommodate a specific service duration
   const canBarberAccommodateService = useCallback((queue, serviceDuration = 30) => {
     if (!queue) return false;
-    
+
     const minServiceDuration = serviceDuration || 30;
     const maxQueueSize = 15; // Standardized queue capacity
-    
+
     // Check if queue is at maximum capacity
     if (queue.queueCount >= maxQueueSize) return false;
-    
+
     // Check if there's enough remaining time for the service
     if (queue.remainingTime < minServiceDuration) return false;
-    
+
     // Check if adding this service would exceed working hours
     const totalQueueTime = queue.appointments
       ?.filter(apt => apt.appointment_type === 'queue')
       ?.reduce((total, apt) => total + (apt.total_duration || 30), 0) || 0;
-    
+
     const estimatedEndTime = totalQueueTime + minServiceDuration;
     const workingHours = 9 * 60; // 9 hours in minutes (8 AM to 5 PM)
-    
+
     return estimatedEndTime <= workingHours;
   }, []);
 
@@ -1935,9 +581,9 @@ const BookAppointment = () => {
   const fetchBarberQueues = useCallback(async (barbersList = [], selectedDate = null) => {
     try {
       const dateToFetch = selectedDate || new Date().toISOString().split('T')[0];
-      
+
       console.log('🔄 fetchBarberQueues called with:', { barbersList, selectedDate, dateToFetch });
-      
+
       const { data: queueData, error } = await supabase
         .from('appointments')
         .select('barber_id, status, queue_position, appointment_type, appointment_time, appointment_date, is_urgent, total_duration, services_data, add_ons_data, service_id')
@@ -1946,54 +592,31 @@ const BookAppointment = () => {
 
       if (error) throw error;
 
-      console.log('📊 Raw queue data from database:', queueData);
-      
-      // Debug: Check what duration data is available
-      if (queueData && queueData.length > 0) {
-        console.log('🔍 Duration data analysis:');
-        queueData.forEach((apt, idx) => {
-          console.log(`  Appointment ${idx + 1}:`, {
-            id: apt.id,
-            total_duration: apt.total_duration,
-            services_data: apt.services_data,
-            add_ons_data: apt.add_ons_data,
-            service_id: apt.service_id,
-            appointment_type: apt.appointment_type
-          });
-        });
-      }
+
 
       const queues = {};
       const barbersToProcess = barbersList.length > 0 ? barbersList : barbers;
-      
+
       console.log('👥 Barbers to process:', barbersToProcess);
-      
+
       // Process barbers sequentially to handle async operations
       for (const barber of barbersToProcess) {
         const barberAppointments = queueData?.filter(apt => apt.barber_id === barber.id) || [];
-        
-        console.log(`📋 Appointments for barber ${barber.id}:`, barberAppointments);
-        
+
         // Separate queue and scheduled appointments
         const queueAppointments = barberAppointments.filter(apt => apt.appointment_type === 'queue');
         const scheduledAppointments = barberAppointments.filter(apt => apt.appointment_type === 'scheduled');
-        
-        // Debug: Log appointment statuses
-        console.log(`🔍 Appointment statuses for barber ${barber.id}:`, {
-          queueAppointments: queueAppointments.map(apt => ({ id: apt.id, status: apt.status, type: apt.appointment_type })),
-          scheduledAppointments: scheduledAppointments.map(apt => ({ id: apt.id, status: apt.status, type: apt.appointment_type }))
-        });
-        
+
         // Filter queue appointments by correct status (confirmed, ongoing, pending, scheduled)
-        const activeQueueAppointments = queueAppointments.filter(apt => 
+        const activeQueueAppointments = queueAppointments.filter(apt =>
           ['confirmed', 'ongoing', 'pending', 'scheduled'].includes(apt.status)
         );
-        
+
         // Count queue appointments (excluding ongoing - that's the current customer being served)
         const queueCount = activeQueueAppointments.filter(apt => apt.status !== 'ongoing').length;
         const pendingCount = barberAppointments.filter(apt => apt.status === 'pending').length;
         const currentAppointment = barberAppointments.find(apt => apt.status === 'ongoing');
-        
+
         console.log(`📊 Queue calculation for barber ${barber.id}:`, {
           totalAppointments: barberAppointments.length,
           queueAppointments: queueAppointments.length,
@@ -2002,46 +625,46 @@ const BookAppointment = () => {
           scheduledCount: scheduledAppointments.length,
           currentAppointment: currentAppointment?.id || 'none'
         });
-        
+
         // Calculate estimated wait time based on actual service durations
         const estimatedWait = await calculateEstimatedWaitTime(activeQueueAppointments, currentAppointment);
-        
+
         // Calculate total time used based on service durations (in 30-minute slots)
         // Calculate capacity based on working hours (8am-5pm = 9 hours = 540 minutes)
         const workingHours = {
           start: '08:00:00',
           end: '17:00:00'
         };
-        
+
         const timeToMinutes = (timeStr) => {
           if (!timeStr) return 0;
           const [hours, minutes] = timeStr.split(':').map(Number);
           return hours * 60 + minutes;
         };
-        
+
         const workingStartMinutes = timeToMinutes(workingHours.start);
         const workingEndMinutes = timeToMinutes(workingHours.end);
         const totalWorkingMinutes = workingEndMinutes - workingStartMinutes; // 540 minutes
-        
+
         // Calculate time used by scheduled appointments only
         const scheduledAppts = barberAppointments.filter(apt => apt.appointment_type === 'scheduled');
         const totalTimeUsed = scheduledAppts.reduce((total, apt) => {
           const duration = apt.total_duration || 30;
           return total + duration;
         }, 0);
-        
+
         // Calculate remaining time for queue appointments
         const remainingTime = totalWorkingMinutes - totalTimeUsed;
-        
+
         // Use a more realistic average service duration for capacity calculation
         // This should ideally be based on the most common service duration
         const averageServiceDuration = 40; // 40 minutes average service duration
         const maxQueueCapacity = Math.floor(remainingTime / averageServiceDuration);
-        
+
         // Don't enforce minimum capacity - respect actual time constraints
         const finalQueueCapacity = Math.max(0, maxQueueCapacity);
         const timeBasedAvailableSlots = Math.max(0, finalQueueCapacity - queueAppointments.length);
-        
+
         // Check if barber is fully scheduled (no available time slots)
         // A barber is fully scheduled if:
         // 1. No remaining time in working hours, OR
@@ -2050,10 +673,10 @@ const BookAppointment = () => {
         const minServiceDuration = 30; // Minimum service duration
         const maxQueueSize = 15; // Standardized queue capacity // Maximum queue size
         const isFullyScheduled = remainingTime < minServiceDuration || queueAppointments.length >= maxQueueSize;
-        
+
         // Check if barber is at full capacity (queue full OR fully scheduled)
         const isFullCapacity = isFullyScheduled || (remainingTime < minServiceDuration && queueAppointments.length > 0);
-        
+
         const queueInfo = {
           queueCount,
           scheduledCount: scheduledAppointments.length,
@@ -2068,7 +691,7 @@ const BookAppointment = () => {
           timeBasedAvailableSlots, // Available slots based on actual service time
           remainingTime // Remaining time in minutes
         };
-        
+
         queues[barber.id] = queueInfo;
         console.log(`✅ Queue info for barber ${barber.id}:`, {
           ...queueInfo,
@@ -2097,65 +720,65 @@ const BookAppointment = () => {
   const calculateEstimatedWaitTime = async (queueAppointments, currentAppointment) => {
     try {
       let totalWaitTime = 0;
-      
+
       // If there's a current appointment, add its remaining time
       if (currentAppointment) {
         const currentServiceDuration = currentAppointment.service?.duration || 30;
-        const currentAddOnsDuration = await calculateAddOnsDuration(currentAppointment.add_ons_data);
+        const currentAddOnsDuration = calculateAddOnsDuration(currentAppointment.add_ons_data);
         totalWaitTime += (currentServiceDuration + currentAddOnsDuration);
       }
-      
+
       // Add wait time for each person in queue
       for (const appointment of queueAppointments) {
         if (appointment.status === 'ongoing') continue; // Skip current appointment (already counted)
-        
+
         const serviceDuration = appointment.service?.duration || 30;
-        const addOnsDuration = await calculateAddOnsDuration(appointment.add_ons_data);
+        const addOnsDuration = calculateAddOnsDuration(appointment.add_ons_data);
         totalWaitTime += (serviceDuration + addOnsDuration);
       }
-      
+
       return Math.max(0, totalWaitTime); // Return 0 if negative
     } catch (error) {
       console.error('Error calculating estimated wait time:', error);
       return queueAppointments.length * 30; // Fallback to 30 minutes per person
     }
   };
-  // Calculate add-ons duration
-  const calculateAddOnsDuration = async (addOnsData) => {
+  // Calculate add-ons duration (synchronous)
+  const calculateAddOnsDuration = (addOnsData) => {
     try {
       if (!addOnsData) return 0;
-      
+
       // Handle both array format (new) and JSON string format (old)
       let addOnItems;
-      if (Array.isArray(addOnsData)) {
+      if (typeof addOnsData === 'string') {
+        try {
+          addOnItems = JSON.parse(addOnsData);
+        } catch (e) {
+          return 0;
+        }
+      } else if (Array.isArray(addOnsData)) {
         addOnItems = addOnsData;
       } else {
-        addOnItems = JSON.parse(addOnsData);
+        return 0;
       }
-      
+
       if (!Array.isArray(addOnItems) || addOnItems.length === 0) return 0;
-      
-      // Legacy mapping for addon durations
-      const legacyDurationMapping = {
-        'addon1': 15, // Beard Trim
-        'addon2': 10, // Hot Towel Treatment
-        'addon3': 20, // Scalp Massage
-        'addon4': 15, // Hair Wash
-        'addon5': 10, // Styling
-        'addon6': 15, // Hair Wax Application
-        'addon7': 10, // Eyebrow Trim
-        'addon8': 10, // Mustache Trim
-        'addon9': 15, // Face Mask
-        'addon10': 20  // Hair Treatment
-      };
-      
+
       let totalDuration = 0;
       addOnItems.forEach(item => {
-        if (legacyDurationMapping[item]) {
-          totalDuration += legacyDurationMapping[item];
+        // Try to find in state first
+        const id = typeof item === 'object' ? (item.id || item) : item;
+        const addon = addOns.find(a => a.id === id);
+
+        if (addon) {
+          totalDuration += addon.duration || 15;
+        } else if (LEGACY_DURATION_MAPPING[id]) {
+          totalDuration += LEGACY_DURATION_MAPPING[id];
+        } else {
+          totalDuration += 15; // Default fallback
         }
       });
-      
+
       return totalDuration;
     } catch (error) {
       console.error('Error calculating add-ons duration:', error);
@@ -2201,7 +824,7 @@ const BookAppointment = () => {
         } else {
           // Fallback calculation
           const serviceDuration = appointment.service?.duration || 30;
-          const addOnsDuration = await calculateAddOnsDuration(appointment.add_ons_data);
+          const addOnsDuration = calculateAddOnsDuration(appointment.add_ons_data);
           totalWaitTime += serviceDuration + addOnsDuration;
         }
       }
@@ -2264,13 +887,13 @@ const BookAppointment = () => {
 
       // Create a list of occupied time slots
       const occupiedSlots = [];
-      
+
       for (const appointment of existingAppointments || []) {
         if (appointment.appointment_time) {
           const appointmentStart = timeToMinutes(appointment.appointment_time);
           const appointmentDuration = appointment.total_duration || 30; // Default 30 minutes
           const appointmentEnd = appointmentStart + appointmentDuration;
-          
+
           occupiedSlots.push({
             start: appointmentStart,
             end: appointmentEnd,
@@ -2286,11 +909,11 @@ const BookAppointment = () => {
 
       // Find the next available slot
       let currentTime = startMinutes;
-      
+
       for (const slot of occupiedSlots) {
         // Check if there's enough time between current time and next appointment
         const availableTime = slot.start - currentTime;
-        
+
         if (availableTime >= serviceDuration) {
           // Check if this slot crosses lunch break
           const slotEnd = currentTime + serviceDuration;
@@ -2299,11 +922,11 @@ const BookAppointment = () => {
             currentTime = lunchEndMinutes;
             continue;
           }
-          
+
           console.log('✅ Found available slot:', minutesToTime(currentTime));
           return minutesToTime(currentTime);
         }
-        
+
         // Move to after this appointment
         currentTime = slot.end;
       }
@@ -2338,390 +961,28 @@ const BookAppointment = () => {
     }
   };
 
-  // Helper functions for enhanced queue summary
-  const getQueuePosition = (barberId, selectedDate = null) => {
-    const queue = barberQueues[barberId];
-    if (!queue) return 'N/A';
-    
-    // Get all appointments for this barber on the selected date
-    const appointments = queue.appointments || [];
-    const dateToCheck = selectedDate || new Date().toISOString().split('T')[0];
-    
-    // Filter appointments for the selected date
-    const dateAppointments = appointments.filter(apt => 
-      apt.appointment_date === dateToCheck
-    );
-    
-    // Count all active appointments (both queue and scheduled)
-    const activeAppointments = dateAppointments.filter(apt => 
-      ['pending', 'scheduled', 'confirmed', 'ongoing'].includes(apt.status)
-    );
-    
-    // Get the highest queue position from existing appointments
-    const maxQueuePosition = Math.max(0, ...activeAppointments.map(apt => apt.queue_position || 0));
-    
-    // Next position is the highest existing position + 1
-    const totalPosition = maxQueuePosition + 1;
-    
-    console.log('🔢 Queue position calculation:', {
-      barberId,
-      selectedDate: dateToCheck,
-      activeAppointments: activeAppointments.length,
-      maxQueuePosition,
-      totalPosition
-    });
-    
-    return totalPosition;
-  };
 
-  const getNextSlotRange = async (barberId, selectedDate = null) => {
-    console.log('🔍 getNextSlotRange called with:', { barberId, selectedDate });
-    const queue = barberQueues[barberId];
-    if (!queue || !timeSlots) {
-      console.log('🔍 getNextSlotRange - No queue or timeSlots, returning N/A');
-      return 'N/A';
-    }
-    
-    try {
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      // Use selectedDate if provided, otherwise default to today
-      const targetDate = selectedDate || today;
-      const isTargetTomorrow = targetDate === tomorrow;
-      const isTargetFuture = targetDate > tomorrow;
-      
-      // Use the unified function to get next available slot
-      const nextAvailable = await getNextAvailableSlot(barberId, targetDate);
-      
-      // Add appropriate date indicator
-      let result;
-      if (isTargetTomorrow) {
-        result = `${nextAvailable} (Tomorrow)`;
-      } else if (isTargetFuture) {
-        const targetDateObj = new Date(targetDate);
-        const dayName = targetDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-        const monthDay = targetDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        result = `${nextAvailable} (${dayName}, ${monthDay})`;
-      } else {
-        result = nextAvailable;
-      }
-      
-      console.log('🔍 getNextSlotRange - Final result:', result);
-      return result;
-      
-    } catch (error) {
-      console.error('Error calculating next slot:', error);
-      return 'N/A';
-    }
-  };
 
   const calculateTotalDuration = (selectedServices, selectedAddOns, servicesList, addOnsList) => {
     const servicesDuration = selectedServices.reduce((total, serviceId) => {
       const service = servicesList.find(s => s.id === serviceId);
       return total + (service?.duration || 30); // Fixed: use 'duration' not 'duration_minutes'
     }, 0);
-    
-    // Use the same add-ons duration calculation as queue calculation
-    const addOnsDuration = selectedAddOns.reduce((total, addonId) => {
-      const addon = addOnsList.find(a => a.id === addonId);
-      if (addon) {
-        return total + (addon.duration || 15);
-      }
-      
-      // Legacy mapping for addon durations (same as queue calculation)
-      const legacyDurationMapping = {
-        'addon1': 15, // Beard Trim
-        'addon2': 10, // Hot Towel Treatment
-        'addon3': 20, // Scalp Massage
-        'addon4': 15, // Hair Wash
-        'addon5': 10, // Styling
-        'addon6': 15, // Hair Wax Application
-        'addon7': 10, // Eyebrow Trim
-        'addon8': 10, // Mustache Trim
-        'addon9': 15, // Face Mask
-        'addon10': 20  // Hair Treatment
-      };
-      
-      return total + (legacyDurationMapping[addonId] || 15);
-    }, 0);
+
+    // Use unified helper for add-ons duration
+    const addOnsDuration = calculateAddOnsDuration(selectedAddOns);
 
     return servicesDuration + addOnsDuration;
   };
 
-  // Check if a service would cross the lunch break (12:00 PM - 1:00 PM)
-  const wouldCrossLunchBreak = (startTime, duration) => {
-    const [startHour, startMinute] = startTime.split(':').map(Number);
-    const startMinutes = startHour * 60 + startMinute;
-    const endMinutes = startMinutes + duration;
-    
-    // Lunch break is 12:00 PM (720 minutes) to 1:00 PM (780 minutes)
-    const lunchStart = 12 * 60; // 720 minutes
-    const lunchEnd = 13 * 60;   // 780 minutes
-    
-    // Check if service crosses lunch break
-    return startMinutes < lunchEnd && endMinutes > lunchStart;
-  };
 
-  // Enhanced gap management for 40-minute services
-  const checkServiceGapConflicts = (slotTime, duration) => {
-    if (!duration || duration <= 0) return false;
-    
-    const [startHour, startMinute] = slotTime.split(':').map(Number);
-    const startMinutes = startHour * 60 + startMinute;
-    const endMinutes = startMinutes + duration;
-    
-    // Check if this service would create inefficient gaps
-    // For 40-minute services, we want to avoid creating 20-minute gaps
-    const nextSlot = startMinutes + 30; // Next 30-minute slot
-    const hasGapAfter = !bookedTimeSlots.includes(minutesToTime(nextSlot)) && 
-                       nextSlot < endMinutes;
-    
-    // Check if there's a gap before this slot that would be inefficient
-    const prevSlot = startMinutes - 30;
-    const hasGapBefore = prevSlot >= 0 && 
-                        !bookedTimeSlots.includes(minutesToTime(prevSlot)) &&
-                        prevSlot + duration <= 16 * 60; // Within business hours
-    
-    return hasGapAfter || hasGapBefore;
-  };
 
-  // Find gap-optimized time slots for better scheduling
-  const findGapOptimizedTimes = (preferredTime, duration) => {
-    const optimizedTimes = [];
-    const [prefHour, prefMinute] = preferredTime.split(':').map(Number);
-    const prefMinutes = prefHour * 60 + prefMinute;
-    
-    // Look for slots that would fill gaps efficiently
-    const timeSlots = [
-      '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-      '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
-    ];
-    
-    timeSlots.forEach(slot => {
-      const [hour, minute] = slot.split(':').map(Number);
-      const slotMinutes = hour * 60 + minute;
-      
-      // Skip if this slot is already booked
-      if (bookedTimeSlots.includes(slot)) return;
-      
-      // Skip if this would cross lunch break
-      if (wouldCrossLunchBreak(slot, duration)) return;
-      
-      // Check if this slot would fill a gap efficiently
-      const wouldFillGap = checkIfFillsGap(slot, duration);
-      
-      if (wouldFillGap) {
-        optimizedTimes.push({
-          time: slot,
-          display: convertTo12Hour(slot),
-          reason: 'Fills scheduling gap efficiently',
-          priority: Math.abs(slotMinutes - prefMinutes) < 60 ? 'high' : 'medium'
-        });
-      }
-    });
-    
-    // Sort by priority and proximity to preferred time
-    return optimizedTimes.sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return a.priority === 'high' ? -1 : 1;
-      }
-      const aMinutes = timeToMinutes(a.time);
-      const bMinutes = timeToMinutes(b.time);
-      return Math.abs(aMinutes - prefMinutes) - Math.abs(bMinutes - prefMinutes);
-    });
-  };
 
-  // Check if a slot would fill a scheduling gap efficiently
-  const checkIfFillsGap = (slotTime, duration) => {
-    const [hour, minute] = slotTime.split(':').map(Number);
-    const startMinutes = hour * 60 + minute;
-    const endMinutes = startMinutes + duration;
-    
-    // Check if this slot would fill a gap between existing appointments
-    const prevSlot = minutesToTime(startMinutes - 30);
-    const nextSlot = minutesToTime(endMinutes);
-    
-    const hasAppointmentBefore = bookedTimeSlots.includes(prevSlot);
-    const hasAppointmentAfter = bookedTimeSlots.includes(nextSlot);
-    
-    // This slot fills a gap if there are appointments before and after
-    return hasAppointmentBefore && hasAppointmentAfter;
-  };
 
   // Check if a time slot + duration would conflict with existing appointments
-  const wouldSlotConflictWithExistingAppointments = (slotTime, duration, bookedSlots) => {
-    if (!duration || duration <= 0) return false;
-    
-    const [startHour, startMinute] = slotTime.split(':').map(Number);
-    const startMinutes = startHour * 60 + startMinute;
-    const endMinutes = startMinutes + duration;
-    
-    console.log(`🔍 Checking conflict for slot ${slotTime} with ${duration} minutes (${startMinutes} - ${endMinutes})`);
-    
-    // Check if this slot + duration would overlap with any existing appointment
-    // We need to check against the actual appointment data, not just the booked slots list
-    // This is a simplified check - in a real implementation, you'd want to check against
-    // the actual appointment durations from the database
-    
-    // For now, we'll check if any of the slots that would be occupied by this appointment
-    // are already in the booked slots list
-    const slotsToCheck = [];
-    for (let time = startMinutes; time < endMinutes; time += 30) {
-      const hour = Math.floor(time / 60);
-      const minute = time % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      slotsToCheck.push(timeString);
-    }
-    
-    const hasConflict = slotsToCheck.some(slot => bookedSlots.includes(slot));
-    
-    if (hasConflict) {
-      console.log(`🔴 Conflict detected: Slot ${slotTime} with ${duration} minutes would overlap with existing appointments`);
-    } else {
-      console.log(`✅ No conflict: Slot ${slotTime} with ${duration} minutes is available`);
-    }
-    
-    return hasConflict;
-  };
 
-  const getEstimatedStartTime = async (barberId, selectedDate = null) => {
-    const queue = barberQueues[barberId];
-    if (!queue || !timeSlots) return 'N/A';
-    
-    try {
-      const now = new Date();
-      const currentTime = now.toTimeString().slice(0, 5);
-      const today = now.toISOString().split('T')[0];
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      // Use selectedDate if provided, otherwise default to today
-      const targetDate = selectedDate || today;
-      const isTargetToday = targetDate === today;
-      const isTargetTomorrow = targetDate === tomorrow;
-      const isTargetFuture = targetDate > tomorrow;
-      
-      // For queue appointments, calculate based on queue position (no time slot selection)
-      const queueCount = queue.queueCount || 0;
-      
-      // Get scheduled appointments for the target date
-      const { data: targetAppointments, error: targetError } = await supabase
-        .from('appointments')
-        .select('appointment_time, appointment_type, status')
-        .eq('barber_id', barberId)
-        .eq('appointment_date', targetDate)
-        .eq('appointment_type', 'scheduled')
-        .in('status', ['scheduled', 'confirmed', 'ongoing']);
-      
-      if (targetError) {
-        console.error('Error fetching appointments:', targetError);
-        return 'N/A';
-      }
-      
-      // Get booked time slots for the target date
-      const targetBookedSlots = targetAppointments?.map(apt => apt.appointment_time).filter(Boolean) || [];
-      
-      // Find available slots for the target date
-      let availableSlots;
-      if (isTargetToday) {
-        // For today, only future slots are available
-        availableSlots = timeSlots.filter(slot => 
-          slot.value > currentTime && !targetBookedSlots.includes(slot.value)
-        );
-      } else {
-        // For tomorrow or future dates, all slots are available (no time restriction)
-        availableSlots = timeSlots.filter(slot => 
-          !targetBookedSlots.includes(slot.value)
-        );
-      }
-      
-      if (availableSlots.length === 0) {
-        return 'No slots available';
-      }
-      
-      // Calculate customer's estimated slot based on queue position
-      const customerSlotIndex = Math.min(queueCount, availableSlots.length - 1);
-      const customerSlot = availableSlots[customerSlotIndex];
-      
-      // Add appropriate date indicator
-      if (isTargetTomorrow) {
-        return `${customerSlot.display} (Tomorrow)`;
-      } else if (isTargetFuture) {
-        const targetDateObj = new Date(targetDate);
-        const dayName = targetDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-        const monthDay = targetDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `${customerSlot.display} (${dayName}, ${monthDay})`;
-      }
-      
-      return customerSlot.display;
-      
-    } catch (error) {
-      console.error('Error calculating estimated start time:', error);
-      return 'N/A';
-    }
-  };
 
-  const getEstimatedEndTime = async (barberId, selectedServices, selectedAddOns, servicesList, addOnsList, selectedDate = null) => {
-    const startTime = await getEstimatedStartTime(barberId, selectedDate);
-    if (startTime === 'N/A' || startTime === 'No slots available') return 'N/A';
-    
-    const totalDuration = calculateTotalDuration(selectedServices, selectedAddOns, servicesList, addOnsList);
-    
-    // Extract date indicator and clean start time
-    let dateIndicator = '';
-    let cleanStartTime = startTime;
-    
-    if (startTime.includes('(Tomorrow)')) {
-      dateIndicator = ' (Tomorrow)';
-      cleanStartTime = startTime.replace(' (Tomorrow)', '');
-    } else if (startTime.includes('(') && startTime.includes(')')) {
-      // Extract future date indicator like "(Wednesday, Dec 25)"
-      const match = startTime.match(/\(([^)]+)\)$/);
-      if (match) {
-        dateIndicator = ` (${match[1]})`;
-        cleanStartTime = startTime.replace(dateIndicator, '');
-      }
-    }
-    
-    // For queue appointments, find the time slot object (no scheduled appointments)
-    const startTimeObj = timeSlots.find(slot => slot.display === cleanStartTime);
-    if (!startTimeObj) {
-      console.warn('Start time slot not found:', cleanStartTime);
-      return 'N/A';
-    }
-    const startTime24 = startTimeObj.value;
-    
-    const [hours, minutes] = startTime24.split(':').map(Number);
-    const startDate = new Date();
-    startDate.setHours(hours, minutes, 0, 0);
-    
-    const endDate = new Date(startDate.getTime() + totalDuration * 60000);
-    const endTime24 = endDate.toTimeString().slice(0, 5);
-    
-    // Find the closest time slot for the end time
-    const endTimeSlot = timeSlots.find(slot => slot.value === endTime24);
-    let endTimeDisplay;
-    
-    if (endTimeSlot) {
-      endTimeDisplay = endTimeSlot.display;
-    } else {
-      // If exact time slot not found, create a custom time display
-      // This handles cases like 12:00 PM which falls in the lunch break gap
-      const [hours, minutes] = endTime24.split(':').map(Number);
-      const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const minutesStr = minutes.toString().padStart(2, '0');
-      endTimeDisplay = `${hour12}:${minutesStr} ${ampm}`;
-    }
-    
-    // Add date indicator if present
-    if (dateIndicator) {
-      return `${endTimeDisplay}${dateIndicator}`;
-    }
-    
-    return endTimeDisplay;
-  };
+
 
   // Load barber recommendations when step 1 is reached
   useEffect(() => {
@@ -2741,17 +1002,17 @@ const BookAppointment = () => {
   useEffect(() => {
     if (barbers.length > 0 && currentStep === 1 && (!barberRecommendations || barberRecommendations.length === 0)) {
       console.log('🔄 Loading fallback recommendations...');
-      
+
       // Filter out barbers with full slots based on service duration
-      const serviceDuration = bookingData.selectedServices.length > 0 
+      const serviceDuration = bookingData.selectedServices.length > 0
         ? calculateTotalDuration(
-            bookingData.selectedServices, 
-            bookingData.selectedAddOns, 
-            services, 
-            addOns
-          )
+          bookingData.selectedServices,
+          bookingData.selectedAddOns,
+          services,
+          addOns
+        )
         : 30; // Default 30 minutes if no services selected yet
-      
+
       // Filter to only include available barbers for recommendations
       const availableBarbers = barbers.filter(barber => {
         const queue = barberQueues[barber.id];
@@ -2759,38 +1020,38 @@ const BookAppointment = () => {
         const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
         return !isFullSlot; // Only include barbers who can accommodate the service
       });
-      
+
       console.log(`📊 Filtered barbers: ${availableBarbers.length} available out of ${barbers.length} total`);
-      
+
       // Sort barbers by rating (highest first)
       const sortedBarbers = [...availableBarbers].sort((a, b) => {
         const ratingA = a.average_rating || 0;
         const ratingB = b.average_rating || 0;
         const reviewCountA = a.total_ratings || 0;
         const reviewCountB = b.total_ratings || 0;
-        
+
         // Primary sort by rating, secondary by review count
         if (ratingA !== ratingB) {
           return ratingB - ratingA;
         }
         return reviewCountB - reviewCountA;
       });
-      
+
       // Generate more recommendations to ensure we have enough available ones
       const fallbackRecommendations = sortedBarbers.slice(0, 6).map((barber, index) => {
         const rating = barber.average_rating || 0;
         const reviewCount = barber.total_ratings || 0;
-        
+
         // All barbers in this list are available (already filtered)
-        
+
         // Calculate score based on rating and review count
         let score = Math.round(rating * 20); // Convert 5-star rating to percentage (0-100)
         if (reviewCount > 10) score += 10; // Bonus for experienced barbers
         if (reviewCount > 50) score += 5; // Extra bonus for highly reviewed barbers
-        
+
         // Cap at 100%
         score = Math.min(score, 100);
-        
+
         return {
           barber: barber,
           score: score,
@@ -2804,7 +1065,7 @@ const BookAppointment = () => {
           priority: index === 0 ? 'high' : index === 1 ? 'medium' : 'low'
         };
       });
-      
+
       setBarberRecommendations(fallbackRecommendations);
       setShowRecommendations(true);
     }
@@ -2817,175 +1078,23 @@ const BookAppointment = () => {
     }
   }, [bookingData.selectedDate, barbers]);
 
-  // No time slot loading needed - queue appointments don't use time slots
-  // Removed scheduled appointment time slot loading logic
 
-  // Test function to verify queue blocking (can be called from browser console)
-  window.testQueueBlocking = async () => {
-    console.log('🧪 Testing queue blocking...');
-    if (bookingData.selectedDate && bookingData.selectedBarber) {
-      try {
-        const bookedSlots = await getBookedTimeSlots(bookingData.selectedDate, bookingData.selectedBarber);
-        console.log('📋 Current booked slots:', bookedSlots);
-        console.log('🕐 Current time slots:', timeSlots);
-        console.log('✅ Test completed successfully!');
-        return { bookedSlots, timeSlots };
-      } catch (error) {
-        console.error('❌ Error in test:', error);
-        return null;
-      }
-    } else {
-      console.log('❌ Please select a date and barber first');
-      console.log('Current booking data:', { selectedDate: bookingData.selectedDate, selectedBarber: bookingData.selectedBarber });
-      return null;
-    }
+  // Check if a service would cross the lunch break (12:00 PM - 1:00 PM)
+  const wouldCrossLunchBreak = (startTime, duration) => {
+    if (!startTime) return false;
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = startMinutes + duration;
+
+    // Lunch break is 12:00 PM (720 minutes) to 1:00 PM (780 minutes)
+    const lunchStart = 12 * 60; // 720 minutes
+    const lunchEnd = 13 * 60;   // 780 minutes
+
+    // Check if service crosses lunch break
+    return startMinutes < lunchEnd && endMinutes > lunchStart;
   };
 
-  // Test function with parameters
-  window.testQueueBlockingWithParams = async (date, barberId) => {
-    console.log('🧪 Testing queue blocking with parameters...', { date, barberId });
-    try {
-      const bookedSlots = await getBookedTimeSlots(date, barberId);
-      console.log('📋 Booked slots result:', bookedSlots);
-      return bookedSlots;
-    } catch (error) {
-      console.error('❌ Error in test:', error);
-      return null;
-    }
-  };
 
-  // Direct database test function
-  window.testDatabaseQuery = async (date, barberId) => {
-    console.log('🔍 Testing direct database query...', { date, barberId });
-    try {
-      const { data: allAppointments, error } = await supabase
-        .from('appointments')
-        .select('appointment_time, appointment_type, status, queue_position, total_duration, services_data, add_ons_data')
-        .eq('appointment_date', date)
-        .eq('barber_id', barberId)
-        .in('status', ['scheduled', 'confirmed', 'ongoing']);
-
-      if (error) {
-        console.error('❌ Database error:', error);
-        return null;
-      }
-
-      console.log('📅 Raw appointments from database:', allAppointments);
-      
-      const scheduledSlots = allAppointments
-        ?.filter(apt => apt.appointment_type === 'scheduled' && apt.appointment_time)
-        ?.map(apt => apt.appointment_time?.slice(0, 5))
-        ?.filter(Boolean) || [];
-      
-      const queueSlots = allAppointments
-        ?.filter(apt => apt.appointment_type === 'queue' && apt.appointment_time)
-        ?.map(apt => apt.appointment_time?.slice(0, 5))
-        ?.filter(Boolean) || [];
-
-      console.log('⏰ Scheduled slots found:', scheduledSlots);
-      console.log('👥 Queue slots found:', queueSlots);
-      console.log('📋 Total blocked slots:', [...scheduledSlots, ...queueSlots]);
-
-      return { scheduledSlots, queueSlots, allAppointments };
-        } catch (error) {
-      console.error('❌ Error in database test:', error);
-      return null;
-    }
-  };
-  // Test function for 90-minute duration blocking
-  window.test90MinuteBlocking = async (date, barberId) => {
-    console.log('🧪 Testing 90-minute duration blocking...', { date, barberId });
-    
-    // Create a test appointment with 90 minutes duration
-    const testAppointment = {
-      appointment_time: '08:00:00',
-      appointment_type: 'scheduled',
-      status: 'pending',
-      total_duration: 90
-    };
-    
-    console.log('📝 Test appointment:', testAppointment);
-    
-    // Simulate the blocking logic
-    const startTime = testAppointment.appointment_time?.slice(0, 5); // '08:00'
-    const duration = testAppointment.total_duration; // 90
-    
-    const startHour = parseInt(startTime.split(':')[0]); // 8
-    const startMinute = parseInt(startTime.split(':')[1]); // 0
-    const startMinutes = startHour * 60 + startMinute; // 480
-    const endMinutes = startMinutes + duration; // 570
-    
-    console.log(`🕐 Time calculation: ${startTime} = ${startMinutes} minutes, duration = ${duration} minutes, end = ${endMinutes} minutes`);
-    
-    const blockedSlots = [];
-    for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      blockedSlots.push(timeString);
-      console.log(`🔴 Should block slot: ${timeString} (${minutes} minutes)`);
-    }
-    
-    console.log('📋 Expected blocked slots for 90-minute service:', blockedSlots);
-    return blockedSlots;
-  };
-  // Debug function to check all appointments for a specific date/barber
-  window.debugAllAppointments = async (date, barberId) => {
-    console.log('🔍 Debugging all appointments...', { date, barberId });
-    
-    try {
-      const { data: allAppointments, error } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('appointment_date', date)
-        .eq('barber_id', barberId);
-
-      if (error) {
-        console.error('❌ Database error:', error);
-        return null;
-      }
-
-      console.log('📅 ALL appointments for this barber on this date:', allAppointments);
-      
-      // Check each appointment's blocking effect
-      for (const apt of allAppointments || []) {
-        if (apt.appointment_time) {
-          const startTime = apt.appointment_time?.slice(0, 5);
-          const duration = apt.total_duration || 30;
-          
-          console.log(`\n📝 Appointment ${apt.id}:`);
-          console.log(`   Time: ${startTime}`);
-          console.log(`   Duration: ${duration} minutes`);
-          console.log(`   Type: ${apt.appointment_type}`);
-          console.log(`   Status: ${apt.status}`);
-          
-          // Calculate blocked slots
-          const startHour = parseInt(startTime.split(':')[0]);
-          const startMinute = parseInt(startTime.split(':')[1]);
-          const startMinutes = startHour * 60 + startMinute;
-          const endMinutes = startMinutes + duration;
-          
-          const blockedSlots = [];
-          for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
-            const hour = Math.floor(minutes / 60);
-            const minute = minutes % 60;
-            const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            blockedSlots.push(timeString);
-          }
-          
-          console.log(`   Blocks slots: ${blockedSlots.join(', ')}`);
-        }
-      }
-      
-      return allAppointments;
-    } catch (error) {
-      console.error('❌ Error in debug:', error);
-      return null;
-    }
-  };
-
-  // Make manageQueueAndScheduledSlots available globally for testing
-  window.manageQueueAndScheduledSlots = manageQueueAndScheduledSlots;
 
   // Real-time queue status updates
   const [queueStatus, setQueueStatus] = useState({});
@@ -3015,9 +1124,9 @@ const BookAppointment = () => {
     try {
       console.log('🔄 Loading alternative barbers...');
       const alternatives = await UnifiedSlotBookingService.getAlternativeBarbers(
-        date, 
-        serviceDuration, 
-        excludeBarberId, 
+        date,
+        serviceDuration,
+        excludeBarberId,
         barbers
       );
       setAlternativeBarbers(alternatives);
@@ -3034,18 +1143,18 @@ const BookAppointment = () => {
 
   const handleUnifiedSlotSelect = (slot) => {
     console.log('🎯 Selected unified slot:', slot);
-    
+
     // Determine appointment type based on slot availability and time
     let appointmentType = 'queue'; // Default to queue
-    
+
     if (slot.type === 'available' && slot.canBook && slot.time) {
       appointmentType = 'scheduled'; // Has specific time = scheduled
     } else if (slot.type === 'queue_position') {
       appointmentType = 'queue'; // No specific time = queue
     }
-    
+
     console.log('🎯 Determined appointment type:', appointmentType, 'for slot:', slot);
-    
+
     updateBookingData({
       selectedTimeSlot: slot.time || null,
       selectedSlot: slot,
@@ -3060,9 +1169,9 @@ const BookAppointment = () => {
     // Reload slots for the new barber
     if (bookingData.selectedDate && bookingData.selectedServices.length > 0) {
       const serviceDuration = calculateTotalDuration(
-        bookingData.selectedServices, 
-        bookingData.selectedAddOns, 
-        services, 
+        bookingData.selectedServices,
+        bookingData.selectedAddOns,
+        services,
         addOns
       );
       loadUnifiedSlots(barberId, bookingData.selectedDate, serviceDuration);
@@ -3073,14 +1182,14 @@ const BookAppointment = () => {
   const validateBarberScheduledAvailability = async (barberId, date, selectedTimeSlot) => {
     try {
       console.log('🔍 Validating barber scheduled availability for booking...');
-      
+
       // First check comprehensive barber availability
       const availabilityCheck = await BarberAvailabilityService.checkBarberAvailability(barberId, date, selectedTimeSlot);
-      
+
       if (!availabilityCheck.isAvailable) {
         // Provide specific error messages based on unavailability type
         let errorMessage = availabilityCheck.reason;
-        
+
         if (availabilityCheck.type === 'day_off') {
           errorMessage = `${availabilityCheck.barberName} is on ${availabilityCheck.dayOffType?.replace('_', ' ')} from ${availabilityCheck.startDate} to ${availabilityCheck.endDate}. Please select a different barber or date.`;
         } else if (availabilityCheck.type === 'offline') {
@@ -3092,27 +1201,27 @@ const BookAppointment = () => {
         } else if (availabilityCheck.type === 'outside_hours') {
           errorMessage = `Appointments are only available between 8:00 AM and 5:00 PM. Please select a different time.`;
         }
-        
+
         throw new Error(errorMessage);
       }
-      
+
       // Additional validation for scheduled appointments
       const serviceDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
       const slots = await UnifiedSlotBookingService.getUnifiedSlots(barberId, date, serviceDuration);
       const availableSlots = slots.filter(slot => slot.canBook && slot.type === 'available');
-      
+
       console.log('📊 Booking validation - Barber slot analysis:', {
         totalSlots: slots.length,
         availableSlots: availableSlots.length,
         selectedTimeSlot,
         serviceDuration
       });
-      
+
       // If no available slots, barber is fully scheduled
       if (availableSlots.length === 0) {
         throw new Error('This barber is fully scheduled and has no available time slots. Please select a different barber or date.');
       }
-      
+
       // Check if the selected time slot is actually available
       if (selectedTimeSlot) {
         const selectedSlot = slots.find(slot => slot.time === selectedTimeSlot);
@@ -3120,10 +1229,10 @@ const BookAppointment = () => {
           throw new Error(`The selected time slot ${selectedTimeSlot} is no longer available. Please select a different time slot.`);
         }
       }
-      
+
       console.log('✅ Barber scheduled availability validation passed');
       return true;
-      
+
     } catch (error) {
       console.error('❌ Barber scheduled availability validation failed:', error);
       throw error;
@@ -3134,14 +1243,14 @@ const BookAppointment = () => {
   const validateBarberQueueAvailability = async (barberId, date) => {
     try {
       console.log('🔍 Validating barber queue availability for booking...');
-      
+
       // First check comprehensive barber availability
       const availabilityCheck = await BarberAvailabilityService.checkBarberAvailability(barberId, date);
-      
+
       if (!availabilityCheck.isAvailable) {
         // Provide specific error messages based on unavailability type
         let errorMessage = availabilityCheck.reason;
-        
+
         if (availabilityCheck.type === 'day_off') {
           errorMessage = `${availabilityCheck.barberName} is on ${availabilityCheck.dayOffType?.replace('_', ' ')} from ${availabilityCheck.startDate} to ${availabilityCheck.endDate}. Please select a different barber or date.`;
         } else if (availabilityCheck.type === 'offline') {
@@ -3151,36 +1260,36 @@ const BookAppointment = () => {
         } else if (availabilityCheck.type === 'outside_hours') {
           errorMessage = `Queue appointments are only available during business hours (8:00 AM - 5:00 PM). Please try again during business hours.`;
         }
-        
+
         throw new Error(errorMessage);
       }
-      
+
       // Additional capacity check for queue appointments
       const serviceDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
       const slots = await UnifiedSlotBookingService.getUnifiedSlots(barberId, date, serviceDuration);
       const availableSlots = slots.filter(slot => slot.canBook && slot.type === 'available');
       const queueSlots = slots.filter(slot => slot.type === 'queue');
-      
+
       console.log('📊 Queue booking validation - Barber slot analysis:', {
         totalSlots: slots.length,
         availableSlots: availableSlots.length,
         queueSlots: queueSlots.length,
         serviceDuration
       });
-      
+
       // If no available slots AND no queue capacity, barber is completely full
       if (availableSlots.length === 0 && queueSlots.length >= 15) { // Assuming max queue size of 15
         throw new Error('This barber is completely full - no available time slots and queue is at maximum capacity. Please select a different barber or date.');
       }
-      
+
       // If no available slots but queue has capacity, allow queue booking
       if (availableSlots.length === 0) {
         console.log('⚠️ Barber has no available time slots, but queue booking is allowed');
       }
-      
+
       console.log('✅ Barber queue availability validation passed');
       return true;
-      
+
     } catch (error) {
       console.error('❌ Barber queue availability validation failed:', error);
       throw error;
@@ -3191,7 +1300,7 @@ const BookAppointment = () => {
   const calculateCurrentQueueStatus = async (barberId, date) => {
     try {
       console.log('🔄 Calculating current queue status for:', { barberId, date });
-      
+
       // Get current appointments for this barber on this date
       const { data: appointments, error } = await supabase
         .from('appointments')
@@ -3213,28 +1322,28 @@ const BookAppointment = () => {
 
       const queueAppointments = appointments?.filter(apt => apt.appointment_type === 'queue') || [];
       const scheduledAppointments = appointments?.filter(apt => apt.appointment_type === 'scheduled') || [];
-      
+
       // Calculate current queue position for new appointment
       const nextQueuePosition = queueAppointments.length + 1;
-      
+
       // Calculate estimated wait time based on current queue
       const totalQueueDuration = queueAppointments.reduce((total, apt) => {
         return total + (apt.total_duration || 30);
       }, 0);
-      
+
       // Add buffer time for service transitions (5 minutes per appointment)
       const bufferTime = queueAppointments.length * 5;
       const totalWaitTime = totalQueueDuration + bufferTime;
-      
+
       // Calculate current time and business hours
       const now = new Date();
       const currentTime = now.toTimeString().slice(0, 5);
       const businessStart = '08:00';
       const businessEnd = '17:00';
-      
+
       // Determine if barber is currently working
       const isBusinessHours = currentTime >= businessStart && currentTime <= businessEnd;
-      
+
       // Calculate barber's current status
       let barberStatus = 'available';
       if (!isBusinessHours) {
@@ -3249,7 +1358,7 @@ const BookAppointment = () => {
           const aptEndTime = aptEnd.toTimeString().slice(0, 5);
           return currentTime >= aptStart && currentTime <= aptEndTime;
         });
-        
+
         if (currentScheduled) {
           barberStatus = 'busy';
         } else if (queueAppointments.length > 0) {
@@ -3257,7 +1366,7 @@ const BookAppointment = () => {
           barberStatus = 'available';
         }
       }
-      
+
       const result = {
         queueLength: queueAppointments.length,
         nextQueuePosition,
@@ -3269,10 +1378,10 @@ const BookAppointment = () => {
         queueAppointments: queueAppointments.length,
         totalAppointments: appointments?.length || 0
       };
-      
+
       console.log('📊 Queue Status Result:', result);
       return result;
-      
+
     } catch (error) {
       console.error('❌ Error calculating queue status:', error);
       return {
@@ -3293,7 +1402,7 @@ const BookAppointment = () => {
   const calculateRealTimeAvailability = async (barberId, date, serviceDuration) => {
     try {
       console.log('🔄 Calculating real-time availability for:', { barberId, date, serviceDuration });
-      
+
       // Get current appointments to calculate actual capacity
       const { data: appointments, error } = await supabase
         .from('appointments')
@@ -3314,48 +1423,48 @@ const BookAppointment = () => {
 
       const queueAppointments = appointments?.filter(apt => apt.appointment_type === 'queue') || [];
       const scheduledAppointments = appointments?.filter(apt => apt.appointment_type === 'scheduled') || [];
-      
+
       // Calculate capacity based on working hours (8am-5pm = 9 hours = 540 minutes)
       const workingHours = {
         start: '08:00:00',
         end: '17:00:00'
       };
-      
+
       const timeToMinutes = (timeStr) => {
         if (!timeStr) return 0;
         const [hours, minutes] = timeStr.split(':').map(Number);
         return hours * 60 + minutes;
       };
-      
+
       const workingStartMinutes = timeToMinutes(workingHours.start);
       const workingEndMinutes = timeToMinutes(workingHours.end);
       const totalWorkingMinutes = workingEndMinutes - workingStartMinutes; // 540 minutes
-      
+
       // Calculate time used by scheduled appointments only
       const totalTimeUsed = scheduledAppointments.reduce((total, apt) => {
         const duration = apt.total_duration || 30;
         return total + duration;
       }, 0);
-      
+
       // Calculate remaining time for queue appointments
       const remainingTime = totalWorkingMinutes - totalTimeUsed;
       const averageServiceDuration = 40; // 40 minutes average service duration
       const maxQueueCapacity = Math.floor(remainingTime / averageServiceDuration);
-      
+
       // Don't enforce minimum capacity - respect actual time constraints
       const finalQueueCapacity = Math.max(0, maxQueueCapacity);
       const timeBasedAvailableSlots = Math.max(0, finalQueueCapacity - queueAppointments.length);
-      
+
       // Check if adding another appointment would exceed working hours
       const totalQueueTime = queueAppointments.reduce((total, apt) => {
         return total + (apt.total_duration || 30);
       }, 0);
-      
+
       // Add the customer's service duration to check if it would exceed working hours
       const customerServiceDuration = serviceDuration || 40; // Use provided service duration or default
       const estimatedEndTime = workingStartMinutes + totalQueueTime + customerServiceDuration;
       const wouldExceedWorkingHours = estimatedEndTime > workingEndMinutes;
-      
+
       // Calculate next available time
       let nextAvailableTime = null;
       if (timeBasedAvailableSlots > 0) {
@@ -3363,7 +1472,7 @@ const BookAppointment = () => {
         const totalQueueTime = queueAppointments.reduce((total, apt) => {
           return total + (apt.total_duration || 30);
         }, 0);
-        
+
         const nextAvailableMinutes = workingStartMinutes + totalQueueTime;
         if (nextAvailableMinutes < workingEndMinutes) {
           const hours = Math.floor(nextAvailableMinutes / 60);
@@ -3371,15 +1480,15 @@ const BookAppointment = () => {
           nextAvailableTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         }
       }
-      
+
       // Calculate queue position and wait time
       const queuePosition = queueAppointments.length + 1;
       const estimatedWaitTime = queueAppointments.reduce((total, apt) => {
         return total + (apt.total_duration || 30);
       }, 0);
-      
+
       const isAtCapacity = queueAppointments.length >= finalQueueCapacity || wouldExceedWorkingHours;
-      
+
       return {
         availableSlots: isAtCapacity ? 0 : timeBasedAvailableSlots,
         queueSlots: queueAppointments.length,
@@ -3393,7 +1502,7 @@ const BookAppointment = () => {
         isAtCapacity,
         wouldExceedWorkingHours
       };
-      
+
     } catch (error) {
       console.error('❌ Error calculating real-time availability:', error);
       return {
@@ -3419,7 +1528,7 @@ const BookAppointment = () => {
       console.log('🔄 Updating real-time queue status...', { barberId, date });
       console.log('🔍 Using barber ID for real-time status:', barberId);
       console.log('🔍 Real-time queue status - Date:', date, 'Type:', typeof date);
-      
+
       // Get current appointments for this barber
       const { data: appointments, error } = await supabase
         .from('appointments')
@@ -3433,38 +1542,38 @@ const BookAppointment = () => {
 
       // Find currently serving appointment
       const currentServing = appointments?.find(apt => apt.status === 'ongoing') || null;
-      
+
       // Calculate queue position for pending appointments
       const pendingAppointments = appointments?.filter(apt => apt.status === 'pending' && apt.appointment_type === 'queue') || [];
       const queuePosition = pendingAppointments.length > 0 ? pendingAppointments[0].queue_position : null;
-      
+
       // Calculate estimated wait time based on actual appointment durations
       let estimatedWait = 0;
-      
+
       // Add remaining time for currently serving appointment (including add-ons)
       if (currentServing) {
         let currentDuration = currentServing.total_duration || 30;
-        
+
         // Calculate actual duration including add-ons
         if (!currentServing.total_duration && (currentServing.services_data || currentServing.add_ons_data)) {
           try {
             const services = currentServing.services_data ? JSON.parse(currentServing.services_data) : [];
             const addons = currentServing.add_ons_data ? JSON.parse(currentServing.add_ons_data) : [];
-            
+
             const serviceIds = services.map(s => s.id || s);
             const addonIds = addons.map(a => a.id || a);
-            
+
             if (serviceIds.length > 0 || addonIds.length > 0) {
               const { data: serviceData } = await supabase
                 .from('services')
                 .select('duration')
                 .in('id', serviceIds);
-              
+
               const { data: addonData } = await supabase
                 .from('add_ons')
                 .select('duration')
                 .in('id', addonIds);
-              
+
               const serviceDuration = serviceData?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
               const addonDuration = addonData?.reduce((sum, a) => sum + (a.duration || 0), 0) || 0;
               currentDuration = serviceDuration + addonDuration || 30;
@@ -3474,61 +1583,61 @@ const BookAppointment = () => {
             currentDuration = 30;
           }
         }
-        
+
         const startTime = currentServing.appointment_time?.slice(0, 5);
-        
+
         if (startTime) {
           const startHour = parseInt(startTime.split(':')[0]);
           const startMinute = parseInt(startTime.split(':')[1]);
           const startMinutes = startHour * 60 + startMinute;
           const endMinutes = startMinutes + currentDuration;
-          
+
           const now = new Date();
           const currentHour = now.getHours();
           const currentMinute = now.getMinutes();
           const currentMinutes = currentHour * 60 + currentMinute;
-          
+
           // Calculate remaining time for current appointment
           const remainingTime = Math.max(0, endMinutes - currentMinutes);
           estimatedWait += remainingTime;
-          
+
           console.log(`⏰ Current serving: ${startTime} for ${currentDuration} min, remaining: ${remainingTime} min`);
         } else {
           estimatedWait += currentDuration;
         }
       }
-      
+
       // Add wait time for queue appointments (pending appointments without time slots)
-      const queueAppointments = appointments?.filter(apt => 
-        apt.appointment_type === 'queue' && 
-        apt.status === 'pending' && 
+      const queueAppointments = appointments?.filter(apt =>
+        apt.appointment_type === 'queue' &&
+        apt.status === 'pending' &&
         !apt.appointment_time &&
         (!queuePosition || apt.queue_position < queuePosition)
       ) || [];
-      
+
       for (const apt of queueAppointments) {
         let duration = apt.total_duration || 30;
-        
+
         // Calculate duration including add-ons for queue appointments
         if (!apt.total_duration && (apt.services_data || apt.add_ons_data)) {
           try {
             const services = apt.services_data ? JSON.parse(apt.services_data) : [];
             const addons = apt.add_ons_data ? JSON.parse(apt.add_ons_data) : [];
-            
+
             const serviceIds = services.map(s => s.id || s);
             const addonIds = addons.map(a => a.id || a);
-            
+
             if (serviceIds.length > 0 || addonIds.length > 0) {
               const { data: serviceData } = await supabase
                 .from('services')
                 .select('duration')
                 .in('id', serviceIds);
-              
+
               const { data: addonData } = await supabase
                 .from('add_ons')
                 .select('duration')
                 .in('id', addonIds);
-              
+
               const serviceDuration = serviceData?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
               const addonDuration = addonData?.reduce((sum, a) => sum + (a.duration || 0), 0) || 0;
               duration = serviceDuration + addonDuration || 30;
@@ -3538,42 +1647,42 @@ const BookAppointment = () => {
             duration = 30;
           }
         }
-        
+
         estimatedWait += duration;
       }
-      
+
       // Add wait time for scheduled appointments that haven't started yet (including add-ons)
-      const futureScheduledAppointments = appointments?.filter(apt => 
-        apt.appointment_type === 'scheduled' && 
-        apt.status === 'pending' && 
+      const futureScheduledAppointments = appointments?.filter(apt =>
+        apt.appointment_type === 'scheduled' &&
+        apt.status === 'pending' &&
         apt.appointment_time
       ) || [];
-      
+
       for (const apt of futureScheduledAppointments) {
         const startTime = apt.appointment_time?.slice(0, 5);
         if (startTime) {
           let duration = apt.total_duration || 30;
-          
+
           // Calculate duration including add-ons for future scheduled appointments
           if (!apt.total_duration && (apt.services_data || apt.add_ons_data)) {
             try {
               const services = apt.services_data ? JSON.parse(apt.services_data) : [];
               const addons = apt.add_ons_data ? JSON.parse(apt.add_ons_data) : [];
-              
+
               const serviceIds = services.map(s => s.id || s);
               const addonIds = addons.map(a => a.id || a);
-              
+
               if (serviceIds.length > 0 || addonIds.length > 0) {
                 const { data: serviceData } = await supabase
                   .from('services')
                   .select('duration')
                   .in('id', serviceIds);
-                
+
                 const { data: addonData } = await supabase
                   .from('add_ons')
                   .select('duration')
                   .in('id', addonIds);
-                
+
                 const serviceDuration = serviceData?.reduce((sum, s) => sum + (s.duration || 0), 0) || 0;
                 const addonDuration = addonData?.reduce((sum, a) => sum + (a.duration || 0), 0) || 0;
                 duration = serviceDuration + addonDuration || 30;
@@ -3583,26 +1692,26 @@ const BookAppointment = () => {
               duration = 30;
             }
           }
-          
+
           const startHour = parseInt(startTime.split(':')[0]);
           const startMinute = parseInt(startTime.split(':')[1]);
           const startMinutes = startHour * 60 + startMinute;
-          
+
           const now = new Date();
           const currentHour = now.getHours();
           const currentMinute = now.getMinutes();
           const currentMinutes = currentHour * 60 + currentMinute;
-          
+
           // If this scheduled appointment is in the future, add its duration to wait time
           if (startMinutes > currentMinutes) {
             estimatedWait += duration;
           }
         }
       }
-      
+
       // Use the unified function to get next available slot
       const nextAvailable = await getNextAvailableSlot(barberId, date);
-      
+
       const newStatus = {
         currentServing: currentServing ? {
           queueNumber: currentServing.queue_position,
@@ -3615,148 +1724,31 @@ const BookAppointment = () => {
         nextAvailable,
         lastUpdated: new Date().toLocaleTimeString()
       };
-      
+
       setQueueStatus(prev => ({
         ...prev,
         [barberId]: newStatus
       }));
       console.log('📊 Real-time queue status updated:', newStatus);
       console.log('🔍 Real-time queue status - Next Available:', nextAvailable);
-      
+
       return newStatus;
     } catch (error) {
       console.error('❌ Error updating queue status:', error);
       return null;
+    } finally {
+      setIsRefreshing(false);
     }
   };
   // Make updateQueueStatus available globally
   window.updateQueueStatus = updateQueueStatus;
-  // Hybrid Appointment System - Convert between queue and scheduled
-  const convertToHybrid = async (appointmentId, targetType) => {
-    try {
-      console.log(`🔄 Converting appointment ${appointmentId} to ${targetType}...`);
-      
-      const updates = {};
-      
-      if (targetType === 'scheduled') {
-        // Convert queue to scheduled - assign time slot
-        const { data: appointment, error: fetchError } = await supabase
-          .from('appointments')
-          .select('*')
-          .eq('id', appointmentId)
-          .single();
-          
-        if (fetchError) throw fetchError;
-        
-        // Find next available slot
-        const { data: allAppointments } = await supabase
-          .from('appointments')
-          .select('appointment_time, total_duration')
-          .eq('barber_id', appointment.barber_id)
-          .eq('appointment_date', appointment.appointment_date)
-          .in('status', ['scheduled', 'confirmed', 'ongoing']);
-          
-        const allTimeSlots = generateTimeSlotsWithIntervals();
-        const blockedSlots = new Set();
-        
-        // Block existing appointments
-        for (const apt of allAppointments || []) {
-          if (apt.appointment_time) {
-            const startTime = apt.appointment_time?.slice(0, 5);
-            const duration = apt.total_duration || 30;
-            
-            const startHour = parseInt(startTime.split(':')[0]);
-            const startMinute = parseInt(startTime.split(':')[1]);
-            const startMinutes = startHour * 60 + startMinute;
-            const endMinutes = startMinutes + duration;
-            
-            // Block all time slots that overlap with this appointment
-            for (const slot of allTimeSlots) {
-              const slotTime = slot.value;
-              const slotHour = parseInt(slotTime.split(':')[0]);
-              const slotMinute = parseInt(slotTime.split(':')[1]);
-              const slotMinutes = slotHour * 60 + slotMinute;
-              const slotEndMinutes = slotMinutes + 30; // Each slot is 30 minutes
-              
-              // Check if this slot overlaps with the appointment
-              const overlaps = slotMinutes < endMinutes && slotEndMinutes > startMinutes;
-              
-              if (overlaps) {
-                blockedSlots.add(slotTime);
-              }
-            }
-          }
-        }
-        
-        const nextAvailable = allTimeSlots.find(slot => !blockedSlots.has(slot.value));
-        
-        if (nextAvailable) {
-          updates.appointment_time = nextAvailable.value + ':00';
-          updates.appointment_type = 'scheduled';
-          updates.status = 'scheduled';
-        } else {
-          throw new Error('No available time slots');
-        }
-        
-      } else if (targetType === 'queue') {
-        // Convert scheduled to queue - remove time slot, assign queue number
-        const { data: appointment, error: fetchError } = await supabase
-          .from('appointments')
-          .select('barber_id, appointment_date')
-          .eq('id', appointmentId)
-          .single();
-          
-        if (fetchError) throw fetchError;
-        
-        const queueCount = barberQueues[appointment.barber_id]?.queueCount || 0;
-        
-        updates.appointment_time = null;
-        updates.appointment_type = 'queue';
-        updates.status = 'pending';
-        updates.queue_position = queueCount + 1;
-      }
-      
-      const { error: updateError } = await supabase
-        .from('appointments')
-        .update(updates)
-        .eq('id', appointmentId);
-        
-      if (updateError) throw updateError;
-      
-      console.log(`✅ Successfully converted appointment to ${targetType}`);
-      
-      // Refresh data
-      await fetchBarberQueues();
-      
-      // Get appointment details for status update
-      const { data: updatedAppointment } = await supabase
-        .from('appointments')
-        .select('barber_id, appointment_date')
-        .eq('id', appointmentId)
-        .single();
-        
-      if (updatedAppointment) {
-        await updateQueueStatus(updatedAppointment.barber_id, updatedAppointment.appointment_date);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Error converting appointment:', error);
-      return false;
-    }
-  };
 
-  // Make convertToHybrid available globally
-  window.convertToHybrid = convertToHybrid;
 
-  // Make getNextSlotRange available globally for testing
-  window.getNextSlotRange = getNextSlotRange;
-  
   // Unified function to get next available slot (used by both functions)
   const getNextAvailableSlot = async (barberId, date, serviceDuration = 30) => {
     try {
       console.log('🔍 getNextAvailableSlot called with:', { barberId, date, serviceDuration });
-      
+
       // Get current appointments to calculate proper next available time
       const { data: appointments, error } = await supabase
         .from('appointments')
@@ -3771,203 +1763,59 @@ const BookAppointment = () => {
       // Calculate next available time based on actual service durations
       const now = new Date();
       const currentTime = now.getHours() * 60 + now.getMinutes();
-      
+
       // Find the latest appointment end time
       let latestEndTime = currentTime;
-      
+
       for (const apt of appointments || []) {
         if (apt.appointment_time) {
           const [hour, minute] = apt.appointment_time.split(':').map(Number);
           const startMinutes = hour * 60 + minute;
           const duration = apt.total_duration || 30;
           const endMinutes = startMinutes + duration;
-          
+
           if (endMinutes > latestEndTime) {
             latestEndTime = endMinutes;
           }
         }
       }
-      
+
       // Calculate next available slot considering service duration
       const nextAvailableMinutes = latestEndTime;
       const nextAvailableTime = minutesToTime(nextAvailableMinutes);
-        
-        // Convert to display format
-        const timeSlots = generateTimeSlotsWithIntervals();
-      const matchingSlot = timeSlots.find(ts => ts.value === nextAvailableTime);
-        
-      const result = matchingSlot ? matchingSlot.display : nextAvailableTime;
+
+      // Convert to display format
+      const result = convertTo12Hour(nextAvailableTime);
       console.log(`🔍 getNextAvailableSlot - Next available: ${result} (${serviceDuration} min service)`);
-      
+
       return result;
-      
+
     } catch (error) {
       console.error('Error in getNextAvailableSlot:', error);
       return 'N/A';
     }
   };
-  
+
   // Make it available globally
   window.getNextAvailableSlot = getNextAvailableSlot;
 
-  
-  
-  // Test function for getNextSlotRange debugging
-  window.testGetNextSlotRange = async (barberId, date) => {
-    console.log('🧪 Testing getNextSlotRange...', { barberId, date });
-    const result = await getNextSlotRange(barberId, date);
-    console.log('📋 getNextSlotRange result:', result);
-    return result;
-  };
-  
-  
+
+
 
   // Test function for queue vs scheduled conflict scenario
-  window.testQueueScheduledConflict = async (date, barberId) => {
-    console.log('🧪 Testing Queue vs Scheduled Conflict Scenario...', { date, barberId });
-    
-    // Create test scenario: Queue at 8:00 AM, Scheduled at 9:30 AM
-    const testScenario = {
-      queueAppointment: {
-        appointment_time: '08:00:00',
-        appointment_type: 'queue',
-        status: 'pending',
-        total_duration: 45, // 45 minutes
-        queue_position: 1
-      },
-      scheduledAppointment: {
-        appointment_time: '09:30:00',
-        appointment_type: 'scheduled',
-        status: 'pending',
-        total_duration: 45, // 45 minutes
-        queue_position: null
-      }
-    };
-    
-    console.log('📝 Test Scenario:');
-    console.log(`   Queue: 8:00 AM - 8:45 AM (45 min)`);
-    console.log(`   Scheduled: 9:30 AM - 10:15 AM (45 min)`);
-    console.log(`   Gap: 8:45 AM - 9:30 AM (45 minutes free)`);
-    
-    // Calculate time slots
-    const allTimeSlots = generateTimeSlotsWithIntervals();
-    const blockedSlots = new Set();
-    
-    // Block slots for queue appointment
-    const queueStart = 8 * 60; // 8:00 AM = 480 minutes
-    const queueEnd = queueStart + 45; // 8:45 AM = 525 minutes
-    
-    for (let minutes = queueStart; minutes < queueEnd; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      blockedSlots.add(timeString);
-    }
-    
-    // Block slots for scheduled appointment
-    const scheduledStart = 9 * 60 + 30; // 9:30 AM = 570 minutes
-    const scheduledEnd = scheduledStart + 45; // 10:15 AM = 615 minutes
-    
-    for (let minutes = scheduledStart; minutes < scheduledEnd; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      blockedSlots.add(timeString);
-    }
-    
-    console.log('🚫 Blocked slots:', Array.from(blockedSlots));
-    
-    // Find available slots
-    const availableSlots = allTimeSlots
-      .map(slot => slot.value)
-      .filter(slot => !blockedSlots.has(slot));
-    
-    console.log('✅ Available slots:', availableSlots);
-    
-    // Show the gap analysis
-    const gapStart = 8 * 60 + 45; // 8:45 AM
-    const gapEnd = 9 * 60 + 30;   // 9:30 AM
-    const gapMinutes = gapEnd - gapStart;
-    
-    console.log(`📊 Gap Analysis:`);
-    console.log(`   Gap duration: ${gapMinutes} minutes`);
-    console.log(`   Gap time: 8:45 AM - 9:30 AM`);
-    console.log(`   Can fit another appointment: ${gapMinutes >= 30 ? 'Yes' : 'No'}`);
-    
-    return {
-      blockedSlots: Array.from(blockedSlots),
-      availableSlots,
-      gapMinutes,
-      canFitAnother: gapMinutes >= 30
-    };
-  };
 
-  // Test function for queue assignment with scheduled appointment scenario
-  window.testQueueAssignmentWithScheduled = async (date, barberId) => {
-    console.log('🧪 Testing Queue Assignment with Scheduled Appointment...', { date, barberId });
-    
-    console.log('📝 Scenario:');
-    console.log(`   Scheduled: 9:30 AM - 10:15 AM (45 min)`);
-    console.log(`   Queue customer wants appointment`);
-    console.log(`   Question: Should queue get 8:00 AM slot?`);
-    
-    // Simulate the queue management logic
-    const allTimeSlots = generateTimeSlotsWithIntervals();
-    const blockedSlots = new Set();
-    
-    // Block only the scheduled appointment (9:30 AM - 10:15 AM)
-    const scheduledStart = 9 * 60 + 30; // 9:30 AM = 570 minutes
-    const scheduledEnd = scheduledStart + 45; // 10:15 AM = 615 minutes
-    
-    for (let minutes = scheduledStart; minutes < scheduledEnd; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      blockedSlots.add(timeString);
-    }
-    
-    console.log('🚫 Blocked by scheduled appointment:', Array.from(blockedSlots));
-    
-    // Find available slots for queue
-    const availableSlots = allTimeSlots
-      .map(slot => slot.value)
-      .filter(slot => !blockedSlots.has(slot));
-    
-    console.log('✅ Available slots for queue:', availableSlots);
-    
-    // Check if 8:00 AM is available
-    const slot800 = '08:00';
-    const is800Available = availableSlots.includes(slot800);
-    
-    console.log(`🎯 8:00 AM slot available: ${is800Available ? 'YES' : 'NO'}`);
-    
-    if (is800Available) {
-      console.log('✅ Queue customer should be assigned to 8:00 AM');
-      console.log('📅 Timeline:');
-      console.log('   8:00 AM - 8:45 AM: Queue customer (45 min)');
-      console.log('   8:45 AM - 9:30 AM: 45-minute gap');
-      console.log('   9:30 AM - 10:15 AM: Scheduled customer (45 min)');
-    } else {
-      console.log('❌ 8:00 AM slot is not available');
-    }
-    
-    return {
-      blockedSlots: Array.from(blockedSlots),
-      availableSlots,
-      is800Available,
-      nextAvailableSlot: availableSlots[0] || 'None'
-    };
-  };
+
+
 
   // Send hybrid system queue update notification to customer
   const sendHybridQueueUpdateNotification = async (queueStatus, payload) => {
     try {
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
-      
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
+
       let notificationTitle = '';
       let notificationMessage = '';
       let notificationType = 'queue_update';
-      
+
       // Determine notification content based on the change
       if (payload.eventType === 'INSERT') {
         notificationTitle = 'New Customer in Queue';
@@ -3975,7 +1823,7 @@ const BookAppointment = () => {
       } else if (payload.eventType === 'UPDATE') {
         const oldStatus = payload.old?.status;
         const newStatus = payload.new?.status;
-        
+
         if (oldStatus === 'pending' && newStatus === 'ongoing') {
           notificationTitle = 'Queue Moving';
           notificationMessage = `A customer is now being served. Your estimated wait time has been updated.`;
@@ -3990,7 +1838,7 @@ const BookAppointment = () => {
         notificationTitle = 'Queue Update';
         notificationMessage = `A customer left the queue. Your position may have improved.`;
       }
-      
+
       // Only send notification if there's meaningful content
       if (notificationTitle && notificationMessage) {
         await centralizedNotificationService.createNotification({
@@ -4009,7 +1857,7 @@ const BookAppointment = () => {
             next_available: queueStatus.nextAvailable
           }
         });
-        
+
         console.log('✅ Hybrid queue update notification sent to customer');
       }
     } catch (error) {
@@ -4030,38 +1878,38 @@ const BookAppointment = () => {
     if (bookingData.selectedBarber && bookingData.selectedDate) {
       // Initial update
       updateQueueStatus(bookingData.selectedBarber, bookingData.selectedDate);
-      
+
       // Debounce timer for rapid updates
       let debounceTimer = null;
-      
+
       // Set up real-time subscription for appointments table
       const subscription = supabase
         .channel('appointments-changes')
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
+        .on('postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
             table: 'appointments',
             filter: `barber_id=eq.${bookingData.selectedBarber}`
-          }, 
+          },
           async (payload) => {
             console.log('🔄 Real-time appointment change detected:', payload);
-            
+
             // Skip notifications for the current user's own appointment changes to prevent duplicates
             if (payload.new?.user_id === user?.id) {
               console.log('🔄 Skipping notification for current user\'s own appointment change');
               return;
             }
-            
+
             // Debounce rapid updates - only refresh after 500ms of no changes
             if (debounceTimer) {
               clearTimeout(debounceTimer);
             }
-            
+
             debounceTimer = setTimeout(async () => {
               console.log('⚡ Debounced refresh triggered');
               const newStatus = await updateQueueStatus(bookingData.selectedBarber, bookingData.selectedDate);
-              
+
               // Send hybrid system queue update notification to customer
               // Only for other users' appointment changes
               if (newStatus && user) {
@@ -4071,12 +1919,12 @@ const BookAppointment = () => {
           }
         )
         .subscribe();
-      
+
       // Fallback: Set up auto-refresh every 2 seconds as backup
       const interval = setInterval(() => {
         updateQueueStatus(bookingData.selectedBarber, bookingData.selectedDate);
       }, 2000); // Backup refresh every 2 seconds
-      
+
       return () => {
         clearInterval(interval);
         if (debounceTimer) clearTimeout(debounceTimer);
@@ -4087,55 +1935,55 @@ const BookAppointment = () => {
 
   const loadBarberRecommendations = async () => {
     try {
-      console.log('🔄 Loading hybrid barber recommendations with real slots...', { 
-        userId: user?.id, 
+      console.log('🔄 Loading hybrid barber recommendations with real slots...', {
+        userId: user?.id,
         date: bookingData.selectedDate,
-        services: bookingData.selectedServices 
+        services: bookingData.selectedServices
       });
-      
+
       if (!bookingData.selectedDate || bookingData.selectedServices.length === 0) {
         console.log('⚠️ Missing date or services for recommendations');
         return;
       }
-      
+
       const serviceDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
       const recommendations = [];
-      
+
       // Import UnifiedSlotBookingService for hybrid scheduling
-      const { default: UnifiedSlotBookingService } = await import('../../services/UnifiedSlotBookingService');
-      
+      const { default: UnifiedSlotBookingService } = await import('../../services/booking/UnifiedSlotBookingService');
+
       for (const barber of barbers) {
         try {
           // Get unified slots (scheduled + queue) for this barber
           const unifiedSlots = await UnifiedSlotBookingService.getUnifiedSlots(
-            barber.id, 
-            bookingData.selectedDate, 
-          serviceDuration
-        );
-        
+            barber.id,
+            bookingData.selectedDate,
+            serviceDuration
+          );
+
           // Filter for available slots and queue slots
-          const availableSlots = unifiedSlots.filter(slot => 
+          const availableSlots = unifiedSlots.filter(slot =>
             slot.type === 'available' && slot.canBook
           );
-          const queueSlots = unifiedSlots.filter(slot => 
+          const queueSlots = unifiedSlots.filter(slot =>
             slot.type === 'queue'
           );
-          
+
           // Calculate hybrid availability score
           const hybridScore = calculateHybridBarberScore(barber, availableSlots, queueSlots, serviceDuration);
-          
+
           // Get next available time (scheduled or queue)
-          const nextAvailableTime = availableSlots.length > 0 
-            ? availableSlots[0].time 
-            : queueSlots.length > 0 
-              ? `Queue position ${queueSlots.length + 1}` 
+          const nextAvailableTime = availableSlots.length > 0
+            ? availableSlots[0].time
+            : queueSlots.length > 0
+              ? `Queue position ${queueSlots.length + 1}`
               : null;
-          
+
           // Calculate estimated wait time for queue
-          const estimatedWaitTime = queueSlots.length > 0 
-            ? queueSlots.length * serviceDuration 
+          const estimatedWaitTime = queueSlots.length > 0
+            ? queueSlots.length * serviceDuration
             : 0;
-          
+
           recommendations.push({
             barber: barber,
             score: hybridScore,
@@ -4155,7 +2003,7 @@ const BookAppointment = () => {
               totalCapacity: availableSlots.length + (10 - queueSlots.length) // Max 10 queue
             }
           });
-          
+
         } catch (error) {
           console.error(`Error getting slots for barber ${barber.full_name}:`, error);
           // Still include barber but with limited info
@@ -4180,7 +2028,7 @@ const BookAppointment = () => {
           });
         }
       }
-      
+
       // Sort by hybrid score (scheduled slots + queue availability)
       recommendations.sort((a, b) => {
         // Primary sort by hybrid score
@@ -4190,11 +2038,11 @@ const BookAppointment = () => {
         // Secondary sort by total capacity
         return b.hybridInfo.totalCapacity - a.hybridInfo.totalCapacity;
       });
-      
+
       console.log('✅ Hybrid barber recommendations loaded:', recommendations);
       setBarberRecommendations(recommendations);
       setShowRecommendations(true);
-      
+
     } catch (error) {
       console.error('❌ Error loading hybrid barber recommendations:', error);
       setBarberRecommendations([]);
@@ -4206,30 +2054,30 @@ const BookAppointment = () => {
   const calculateAvailableSlotsWithDuration = (appointments, serviceDuration) => {
     const workingHours = { start: 8, end: 16, breakStart: 12, breakEnd: 13 };
     const availableSlots = [];
-    
+
     // Helper functions for time conversion
     const timeToMinutes = (timeStr) => {
       if (!timeStr) return 0;
       const [hours, minutes] = timeStr.split(':').map(Number);
       return hours * 60 + minutes;
     };
-    
+
     const minutesToTime = (minutes) => {
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
       return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
     };
-    
+
     // Create a timeline of occupied slots
     const occupiedSlots = new Map();
-    
+
     appointments.forEach(apt => {
       if (apt.appointment_time) {
         const startTime = apt.appointment_time;
         const duration = apt.total_duration || 30;
         const startMinutes = timeToMinutes(startTime);
         const endMinutes = startMinutes + duration;
-        
+
         // Mark all minutes as occupied
         for (let minutes = startMinutes; minutes < endMinutes; minutes += 15) {
           const timeSlot = minutesToTime(minutes);
@@ -4237,17 +2085,17 @@ const BookAppointment = () => {
         }
       }
     });
-    
+
     // Find available slots that can accommodate the service duration
     for (let hour = workingHours.start; hour < workingHours.end; hour++) {
       for (let minute = 0; minute < 60; minute += 15) {
         // Skip lunch break
         if (hour >= workingHours.breakStart && hour < workingHours.breakEnd) continue;
-        
+
         const timeSlot = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         const startMinutes = timeToMinutes(timeSlot);
         const endMinutes = startMinutes + serviceDuration;
-        
+
         // Check if this slot can accommodate the service
         let canAccommodate = true;
         for (let minutes = startMinutes; minutes < endMinutes; minutes += 15) {
@@ -4257,7 +2105,7 @@ const BookAppointment = () => {
             break;
           }
         }
-        
+
         if (canAccommodate) {
           availableSlots.push({
             time: timeSlot,
@@ -4268,7 +2116,7 @@ const BookAppointment = () => {
         }
       }
     }
-    
+
     return availableSlots;
   };
 
@@ -4277,77 +2125,77 @@ const BookAppointment = () => {
 
   const calculateHybridBarberScore = (barber, availableSlots, queueSlots, serviceDuration) => {
     let score = 0;
-    
+
     // Base score from barber rating (0-5 scale, weighted 25%)
     score += (barber.average_rating || 0) * 5; // 0-25 points
-    
+
     // Scheduled slots availability (up to 35 points)
     if (availableSlots.length > 0) {
       score += Math.min(availableSlots.length * 3, 35);
     }
-    
+
     // Queue availability (up to 25 points)
     if (queueSlots.length < 10) { // Max queue size
       score += Math.max(0, 25 - (queueSlots.length * 2.5));
     }
-    
+
     // Service compatibility score (15 points)
     if (barber.specialties && Array.isArray(barber.specialties) && bookingData.selectedServices.length > 0) {
-      const serviceMatch = bookingData.selectedServices.some(serviceId => 
+      const serviceMatch = bookingData.selectedServices.some(serviceId =>
         barber.specialties.includes(serviceId)
       );
       if (serviceMatch) score += 15;
     }
-    
+
     return Math.min(100, Math.round(score));
   };
 
   const calculateBarberScore = (barber, availableSlots, serviceDuration) => {
     let score = 0;
-    
+
     // Base score from barber rating (0-5 scale, weighted 30%)
     score += (barber.average_rating || 0) * 0.3;
-    
+
     // Availability score (up to 50% bonus)
     if (availableSlots.length > 0) {
       score += Math.min(availableSlots.length * 0.1, 0.5);
     }
-    
+
     // Service compatibility score (20% bonus)
     if (barber.specialties && Array.isArray(barber.specialties) && bookingData.selectedServices.length > 0) {
-      const serviceMatch = bookingData.selectedServices.some(serviceId => 
+      const serviceMatch = bookingData.selectedServices.some(serviceId =>
         barber.specialties.includes(serviceId)
       );
       if (serviceMatch) score += 0.2;
     }
-    
+
     // Convert normalized score (0-2 range) to percentage (0-100)
     return Math.min(100, Math.round(score * 50));
   };
 
   const generateHybridRecommendationReasons = (barber, availableSlots, queueSlots, score) => {
     const reasons = [];
-    
+
     if (barber.average_rating > 4.5) {
       reasons.push('Highly rated barber');
     }
-    
+
     if (availableSlots.length > 0) {
       reasons.push(`${availableSlots.length} scheduled slots available`);
     }
-    
+
     if (queueSlots.length < 5) {
       reasons.push(`Queue position ${queueSlots.length + 1} available`);
     } else if (queueSlots.length < 10) {
       reasons.push('Queue available (moderate wait)');
     }
-    
+
     if (score > 80) {
       reasons.push('Perfect match for your needs');
     } else if (score > 60) {
       reasons.push('Good availability');
     }
-    
+
     return reasons;
   };
 
@@ -4417,12 +2265,12 @@ const BookAppointment = () => {
         if (apt.appointment_time) {
           const aptStartMinutes = timeToMinutes(apt.appointment_time);
           const aptDuration = apt.total_duration || 30;
-          
+
           // Check if appointment is within working hours
           if (aptStartMinutes < workingStartMinutes || (aptStartMinutes + aptDuration) > workingEndMinutes) {
             throw new Error(`Existing scheduled appointment at ${apt.appointment_time} is outside working hours (8:00 AM - 5:00 PM). Please contact support.`);
           }
-          
+
           totalTimeUsed += aptDuration;
         }
       }
@@ -4430,10 +2278,10 @@ const BookAppointment = () => {
       // Calculate queue capacity based on remaining time and customer's service duration
       const remainingTime = totalWorkingMinutes - totalTimeUsed;
       const customerServiceDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
-      
+
       // Calculate how many appointments can fit in remaining time based on customer's service duration
       const maxQueueCapacity = Math.floor(remainingTime / customerServiceDuration);
-      
+
       // Don't enforce minimum capacity - respect actual time constraints
       const finalQueueCapacity = Math.max(0, maxQueueCapacity);
 
@@ -4493,9 +2341,9 @@ const BookAppointment = () => {
               (slotStartMinutes >= aptStartMinutes && slotStartMinutes < aptEndMinutes) ||
               (slotEndMinutes > aptStartMinutes && slotEndMinutes <= aptEndMinutes) ||
               (slotStartMinutes <= aptStartMinutes && slotEndMinutes >= aptEndMinutes)
-                 ) {
-                   throw new Error(`Selected time slot ${convertTo12Hour(selectedTimeSlot)} overlaps with existing appointment at ${convertTo12Hour(apt.appointment_time)}. Please select a different time.`);
-                 }
+            ) {
+              throw new Error(`Selected time slot ${convertTo12Hour(selectedTimeSlot)} overlaps with existing appointment at ${convertTo12Hour(apt.appointment_time)}. Please select a different time.`);
+            }
           }
         }
       }
@@ -4574,7 +2422,7 @@ const BookAppointment = () => {
       const today = new Date();
       selectedDateObj.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
-      
+
       if (selectedDateObj < today) {
         throw new Error('Cannot book appointments for past dates. Please select today or a future date.');
       }
@@ -4586,7 +2434,7 @@ const BookAppointment = () => {
         const currentMinute = currentTime.getMinutes();
         const currentTimeInMinutes = currentHour * 60 + currentMinute;
         const cutoffTime = 16 * 60 + 30; // 4:30 PM in minutes
-        
+
         if (currentTimeInMinutes >= cutoffTime) {
           throw new Error('Cannot book appointments for today after 4:30 PM. Please select tomorrow or a future date.');
         }
@@ -4603,7 +2451,8 @@ const BookAppointment = () => {
       console.log('✅ Validation passed, proceeding with Advanced Hybrid Queue booking...');
 
       // Always use queue appointments - no scheduled appointments
-      const appointmentType = 'queue';
+      // Use the appointment type from booking data (defaults to queue)
+      const appointmentType = bookingData.appointmentType || 'queue';
 
       // No time slot conflict check needed - queue appointments are automatically scheduled
       if (false) {
@@ -4614,7 +2463,7 @@ const BookAppointment = () => {
           .eq('appointment_date', bookingData.selectedDate)
           .eq('appointment_time', bookingData.selectedTimeSlot)
           .in('status', ['scheduled', 'confirmed', 'ongoing']);
-          
+
         if (existingAppointments && existingAppointments.length > 0) {
           throw new Error('Time slot is already booked. Please select a different time.');
         }
@@ -4639,7 +2488,7 @@ const BookAppointment = () => {
           // Map UUID to legacy format (addon1, addon2, etc.)
           const legacyMapping = {
             'addon1': 'addon1',
-            'addon2': 'addon2', 
+            'addon2': 'addon2',
             'addon3': 'addon3',
             'addon4': 'addon4',
             'addon5': 'addon5',
@@ -4649,12 +2498,12 @@ const BookAppointment = () => {
             'addon9': 'addon9',
             'addon10': 'addon10'
           };
-          
+
           // If it's already a legacy ID, return as is
           if (legacyMapping[addonId]) {
             return addonId;
           }
-          
+
           // If it's a UUID, map to legacy format based on addon name
           if (addon) {
             const nameToLegacy = {
@@ -4671,7 +2520,7 @@ const BookAppointment = () => {
             };
             return nameToLegacy[addon.name] || addonId;
           }
-          
+
           return addonId;
         }).filter(Boolean),
         [APPOINTMENT_FIELDS.APPOINTMENT_DATE]: bookingData.selectedDate,
@@ -4707,28 +2556,50 @@ const BookAppointment = () => {
         // Show success message with position and estimated time (skip for friend bookings)
         if (!bookingData.bookForFriend) {
           let successMessage;
-          
+
           if (bookingData.appointmentType === 'queue') {
             successMessage = `✅ Appointment queued successfully!\n` +
               `Queue Position: ${result.queue_position || 'TBD'}\n` +
-          `⏳ Status: Pending confirmation by barber/manager`;
+              `⏳ Status: Pending confirmation by barber/manager`;
           } else {
             successMessage = `✅ Queue appointment request submitted successfully!\n` +
               `⏳ Status: Pending barber approval\n` +
               `📋 You will receive a notification once approved`;
           }
-        
-        setSuccess(successMessage);
+
+          setSuccess(successMessage);
         }
 
         resetFriendVerification();
 
         // Email confirmation removed - using push notifications only
 
-        // Do NOT create booking confirmation notification here to avoid duplicates.
-        // Confirmation notifications are sent only upon approval by barber/manager.
+        // Do NOT create booking confirmation notification here for customers to avoid duplicates.
+        // Confirmation notifications are sent to customers ONLY upon approval by barber/manager.
 
-        // Push notification is now handled by CentralizedNotificationService
+        // Notify barber and managers of new booking
+        try {
+          const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
+
+          const serviceId = bookingData.selectedServices[0];
+          const service = services.find(s => s.id === serviceId);
+          const serviceName = service ? service.name : 'Service';
+          const customerName = bookingData.bookForFriend
+            ? bookingData.friendName
+            : (user?.user_metadata?.full_name || user?.email || 'A customer');
+
+          await centralizedNotificationService.createNewBookingNotification({
+            barberId: bookingData.selectedBarber,
+            customerName,
+            serviceName,
+            appointmentId: result.appointment_id,
+            appointmentType: bookingData.appointmentType,
+            appointmentTime: bookingData.selectedTimeSlot
+          });
+          console.log('✅ Barber and Managers notified of new booking');
+        } catch (notifError) {
+          console.warn('⚠️ Failed to notify barber/manager of new booking:', notifError);
+        }
 
         // Navigate after 2 seconds
         setTimeout(() => {
@@ -4736,26 +2607,21 @@ const BookAppointment = () => {
         }, 2000);
 
         console.log('✅ Advanced Hybrid Queue booking completed successfully');
-        
+
         // Clear haircut recommendation data from localStorage after successful booking
         localStorage.removeItem('specialRequest');
         localStorage.removeItem('selectedHaircutStyle');
       } else {
-        // Show error and suggest alternatives if available
-        setError(result.error);
-        
-        if (result.suggested_times && result.suggested_times.length > 0) {
-          setAlternativeTimes(result.suggested_times);
-          openAlternativeTimesModal();
-        }
+        // If the service returned failure, throw the error to be caught by the catch block below
+        throw new Error(result.error || 'The booking system encountered an error. Please try again.');
       }
 
     } catch (error) {
       console.error('❌ Advanced Hybrid Queue booking error:', error);
-      
+
       // Provide more user-friendly error messages
       let errorMessage = `Failed to book appointment: ${error.message}`;
-      
+
       if (error.message.includes('exceed working hours')) {
         errorMessage = `⏰ ${error.message}`;
       } else if (error.message.includes('overlaps with existing')) {
@@ -4777,7 +2643,7 @@ const BookAppointment = () => {
       } else if (error.message.includes('4:30 PM cutoff')) {
         errorMessage = `⏰ ${error.message}`;
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -4801,75 +2667,76 @@ const BookAppointment = () => {
   return (
     <div className="container-fluid px-2 px-md-4 py-3 py-md-5">
       <div className="container-fluid">
-      {/* Book for a Child */}
-      <div className="row mb-4 mb-lg-5">
-        <div className="col">
-          <div className="card border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-            <div className="card-body py-4 py-lg-5">
-              {/* Mobile Layout */}
-              <div className="d-block d-md-none">
-                <div className="text-center mb-3">
-                  <div className="bg-white rounded-circle p-2 d-inline-block shadow-sm mb-2">
-                    <img 
-                      src={logoImage} 
-                      alt="Raf & Rok" 
-                      height="35"
-                      className="rounded-circle"
-                    />
-                  </div>
-                  <h5 className="mb-1 text-dark fw-bold">
-                    {isRebooking ? 'Reschedule Appointment' : 'Book Appointment'}
-                  </h5>
-                  <small className="text-secondary fw-medium">
-                    Step {currentStep} of 3: {getStepTitle(currentStep)}
-                  </small>
-                </div>
-                <div className="d-flex justify-content-center">
-                  <div className="bg-white rounded-pill px-3 py-2 shadow-sm" style={{ width: '100%', maxWidth: '250px' }}>
-                    <div className="progress" style={{ height: '8px' }}>
-                      <div 
-                        className="progress-bar bg-gradient-primary" 
-                        style={{ 
-                          width: `${(currentStep / 3) * 100}%`,
-                          background: 'linear-gradient(90deg, #6c757d 0%, #495057 100%)'
-                        }}
-                      ></div>
+        {/* Book for a Child */}
+        <div className="row mb-4 mb-lg-5">
+          <div className="col">
+            <div className="card border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+              <div className="card-body py-4 py-lg-5">
+                {/* Mobile Layout */}
+                <div className="d-block d-md-none">
+                  <div className="text-center mb-3">
+                    <div className="bg-white rounded-circle p-2 d-inline-block shadow-sm mb-2">
+                      <img
+                        src={logoImage}
+                        alt="Raf & Rok"
+                        height="35"
+                        className="rounded-circle"
+                      />
                     </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Desktop Layout */}
-              <div className="d-none d-md-flex align-items-center justify-content-between">
-                <div className="d-flex align-items-center">
-                  <div className="bg-white rounded-circle p-3 me-4 shadow-sm">
-                    <img 
-                      src={logoImage} 
-                      alt="Raf & Rok" 
-                      height="50"
-                      className="rounded-circle"
-                    />
-                  </div>
-                  <div>
-                    <h3 className="mb-2 text-dark fw-bold">
+                    <h5 className="mb-1 text-dark fw-bold">
                       {isRebooking ? 'Reschedule Appointment' : 'Book Appointment'}
-                    </h3>
-                    <p className="text-secondary fw-medium mb-0 fs-5">
+                    </h5>
+                    <small className="text-secondary fw-medium">
                       Step {currentStep} of 3: {getStepTitle(currentStep)}
-                    </p>
+                    </small>
+                  </div>
+                  <div className="d-flex justify-content-center">
+                    <div className="bg-white rounded-pill px-3 py-2 shadow-sm" style={{ width: '100%', maxWidth: '250px' }}>
+                      <div className="progress" style={{ height: '8px' }}>
+                        <div
+                          className="progress-bar bg-gradient-primary"
+                          style={{
+                            width: `${(currentStep / 3) * 100}%`,
+                            background: 'linear-gradient(90deg, #6c757d 0%, #495057 100%)'
+                          }}
+                        ></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                
-                <div className="d-flex align-items-center gap-4">
-                  <div className="bg-white rounded-pill px-4 py-3 shadow-sm">
-                    <div className="progress" style={{ width: '250px', height: '12px' }}>
-                      <div 
-                        className="progress-bar bg-gradient-primary" 
-                        style={{ 
-                          width: `${(currentStep / 3) * 100}%`,
-                          background: 'linear-gradient(90deg, #6c757d 0%, #495057 100%)'
-                        }}
-                      ></div>
+
+                {/* Desktop Layout */}
+                <div className="d-none d-md-flex align-items-center justify-content-between">
+                  <div className="d-flex align-items-center">
+                    <div className="bg-white rounded-circle p-3 me-4 shadow-sm">
+                      <img
+                        src={logoImage}
+                        alt="Raf & Rok"
+                        height="50"
+                        className="rounded-circle"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="mb-2 text-dark fw-bold">
+                        {isRebooking ? 'Reschedule Appointment' : 'Book Appointment'}
+                      </h3>
+                      <p className="text-secondary fw-medium mb-0 fs-5">
+                        Step {currentStep} of 3: {getStepTitle(currentStep)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-4">
+                    <div className="bg-white rounded-pill px-4 py-3 shadow-sm">
+                      <div className="progress" style={{ width: '250px', height: '12px' }}>
+                        <div
+                          className="progress-bar bg-gradient-primary"
+                          style={{
+                            width: `${(currentStep / 3) * 100}%`,
+                            background: 'linear-gradient(90deg, #6c757d 0%, #495057 100%)'
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4877,112 +2744,103 @@ const BookAppointment = () => {
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="row justify-content-center">
-        <div className="col-12 col-xl-12">
-          <div className={`card border-0 shadow-lg ${animateForm ? 'form-animated' : ''}`}>
-            {/* Alerts */}
-            {error && (
-              <div className="alert alert-danger alert-dismissible m-3 mb-0 fade show" role="alert">
-                <div className="d-flex align-items-center">
-                  <i className="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
-                  <div>{error}</div>
+        <div className="row justify-content-center">
+          <div className="col-12 col-xl-12">
+            <div className={`card border-0 shadow-lg ${animateForm ? 'form-animated' : ''}`}>
+              {/* Alerts */}
+              {error && (
+                <div className="alert alert-danger alert-dismissible m-3 mb-0 fade show" role="alert">
+                  <div className="d-flex align-items-center">
+                    <i className="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
+                    <div>{error}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setError('')}
+                  ></button>
                 </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setError('')}
-                ></button>
-              </div>
-            )}
+              )}
 
-            {success && (
-              <div className="alert alert-success alert-dismissible m-3 mb-0 fade show" role="alert">
-                <div className="d-flex align-items-center">
-                  <i className="bi bi-check-circle-fill me-2 fs-4"></i>
-                  <div>{success}</div>
+              {success && (
+                <div className="alert alert-success alert-dismissible m-3 mb-0 fade show" role="alert">
+                  <div className="d-flex align-items-center">
+                    <i className="bi bi-check-circle-fill me-2 fs-4"></i>
+                    <div>{success}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setSuccess('')}
+                  ></button>
                 </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setSuccess('')}
-                ></button>
-              </div>
-            )}
+              )}
 
 
-            {/* Step Content */}
-            <>
-              {currentStep === 1 && <Step1DateTypeAndBarber 
-                bookingData={bookingData} 
-                updateBookingData={updateBookingData}
-                onNext={nextStep}
-                existingAppointment={existingAppointment}
-                checkExistingAppointment={checkExistingAppointment}
-                user={user}
-                setError={setError}
-                barbers={barbers}
-                services={services}
-                addOns={addOns}
-                barberQueues={barberQueues}
-                barberRecommendations={barberRecommendations}
-                setBarberRecommendations={setBarberRecommendations}
-                showRecommendations={showRecommendations}
-                setShowRecommendations={setShowRecommendations}
-                getBookedTimeSlots={getBookedTimeSlots}
-                bookedTimeSlots={bookedTimeSlots}
-                timeSlots={timeSlots}
-                manageQueueAndScheduledSlots={manageQueueAndScheduledSlots}
-                fetchBarberQueues={fetchBarberQueues}
-                queueStatus={queueStatus}
-                updateQueueStatus={updateQueueStatus}
-                calculateTotalDuration={calculateTotalDuration}
-                wouldCrossLunchBreak={wouldCrossLunchBreak}
-                wouldSlotConflictWithExistingAppointments={wouldSlotConflictWithExistingAppointments}
-                // Enhanced time slot system props
-                getAppointmentAtTime={getAppointmentAtTime}
-                findAlternativeTimes={findAlternativeTimes}
-                setAlternativeTimes={setAlternativeTimes}
-                setShowAlternativeTimesModal={setShowAlternativeTimesModal}
-                // Unified slot system props
-                unifiedSlots={unifiedSlots}
-                alternativeBarbers={alternativeBarbers}
-                showAlternatives={showAlternatives}
-                isBarberFullyScheduled={isBarberFullyScheduled}
-                setIsBarberFullyScheduled={setIsBarberFullyScheduled}
-                loadUnifiedSlots={loadUnifiedSlots}
-                loadAlternativeBarbers={loadAlternativeBarbers}
-                handleUnifiedSlotSelect={handleUnifiedSlotSelect}
-                handleAlternativeBarberSelect={handleAlternativeBarberSelect}
-                // Real-time status calculation functions
-                calculateCurrentQueueStatus={calculateCurrentQueueStatus}
-                calculateRealTimeAvailability={calculateRealTimeAvailability}
-                canBarberAccommodateService={canBarberAccommodateService}
-                // Child email OTP helpers
-                friendVerification={friendVerification}
-                onSendFriendVerification={sendFriendVerificationCode}
-                onVerifyFriendVerification={verifyFriendVerificationCode}
-                onResetFriendVerification={resetFriendVerification}
-              />}
-              
-              {currentStep === 2 && <Step2ServicesAndAddons 
-                bookingData={bookingData} 
-                updateBookingData={updateBookingData}
-                onNext={nextStep}
-                onPrev={prevStep}
-                services={services}
-                addOns={addOns}
-              />}
-              
-            </>
+              {/* Step Content */}
+              <>
+                {currentStep === 1 && <Step1DateTypeAndBarber
+                  bookingData={bookingData}
+                  updateBookingData={updateBookingData}
+                  onNext={nextStep}
+                  existingAppointment={existingAppointment}
+                  checkExistingAppointment={checkExistingAppointment}
+                  user={user}
+                  setError={setError}
+                  barbers={barbers}
+                  services={services}
+                  addOns={addOns}
+                  barberQueues={barberQueues}
+                  barberRecommendations={barberRecommendations}
+                  setBarberRecommendations={setBarberRecommendations}
+                  showRecommendations={showRecommendations}
+                  setShowRecommendations={setShowRecommendations}
+                  fetchBarberQueues={fetchBarberQueues}
+                  queueStatus={queueStatus}
+                  updateQueueStatus={updateQueueStatus}
+                  calculateTotalDuration={calculateTotalDuration}
+                  wouldCrossLunchBreak={wouldCrossLunchBreak}
+
+
+                  // Unified slot system props
+                  unifiedSlots={unifiedSlots}
+                  alternativeBarbers={alternativeBarbers}
+                  showAlternatives={showAlternatives}
+                  isBarberFullyScheduled={isBarberFullyScheduled}
+                  setIsBarberFullyScheduled={setIsBarberFullyScheduled}
+                  loadUnifiedSlots={loadUnifiedSlots}
+                  loadAlternativeBarbers={loadAlternativeBarbers}
+                  handleUnifiedSlotSelect={handleUnifiedSlotSelect}
+                  handleAlternativeBarberSelect={handleAlternativeBarberSelect}
+                  // Real-time status calculation functions
+                  calculateCurrentQueueStatus={calculateCurrentQueueStatus}
+                  calculateRealTimeAvailability={calculateRealTimeAvailability}
+                  canBarberAccommodateService={canBarberAccommodateService}
+                  // Child email OTP helpers
+                  friendVerification={friendVerification}
+                  onSendFriendVerification={sendFriendVerificationCode}
+                  onVerifyFriendVerification={verifyFriendVerificationCode}
+                  onResetFriendVerification={resetFriendVerification}
+                />}
+
+                {currentStep === 2 && <Step2ServicesAndAddons
+                  bookingData={bookingData}
+                  updateBookingData={updateBookingData}
+                  onNext={nextStep}
+                  onPrev={prevStep}
+                  services={services}
+                  addOns={addOns}
+                />}
+
+              </>
             </div>
           </div>
         </div>
       </div>
-      
-      {currentStep === 3 && <Step3QueueSummary 
-        bookingData={bookingData} 
+
+      {currentStep === 3 && <Step3QueueSummary
+        bookingData={bookingData}
         updateBookingData={updateBookingData}
         onPrev={prevStep}
         onEdit={goToStep}
@@ -4995,12 +2853,7 @@ const BookAppointment = () => {
         rebookingAppointment={rebookingAppointment}
         onSubmit={handleBookingSubmit}
         loading={loading}
-        timeSlots={timeSlots}
-        getQueuePosition={getQueuePosition}
-        getNextSlotRange={getNextSlotRange}
         calculateTotalDuration={calculateTotalDuration}
-        getEstimatedStartTime={getEstimatedStartTime}
-        getEstimatedEndTime={getEstimatedEndTime}
         wouldCrossLunchBreak={wouldCrossLunchBreak}
         isRefreshing={isRefreshing}
         setIsRefreshing={setIsRefreshing}
@@ -5015,123 +2868,17 @@ const BookAppointment = () => {
         friendVerification={friendVerification}
       />}
 
-      {/* Alternative Times Modal */}
-      {showAlternativeTimesModal && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  <i className="bi bi-clock me-2"></i>
-                  Alternative Time Options
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowAlternativeTimesModal(false)}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <div className="alert alert-info">
-                  <i className="bi bi-info-circle me-2"></i>
-                  The selected time slot is not available. Here are some alternative options:
-                </div>
-                
-                <div className="row g-3">
-                  {alternativeTimes.map((option, index) => (
-                    <div key={index} className="col-12">
-                      <div className="card">
-                        <div className="card-body">
-                          {option.type === 'queue_position' ? (
-                            <div>
-                              <h6 className="card-title">
-                                <i className="bi bi-people me-2"></i>
-                                Join Queue (Position #{option.position})
-                              </h6>
-                              <p className="card-text">
-                                <strong>Estimated Wait:</strong> {Math.floor(option.estimated_wait / 60)} hours {option.estimated_wait % 60} minutes
-                              </p>
-                              <p className="text-muted small">
-                                You'll be served after all scheduled appointments and current queue customers.
-                              </p>
-                            </div>
-                          ) : (
-                            <div>
-                              <h6 className="card-title">
-                                <i className="bi bi-calendar-check me-2"></i>
-                                {option.time} - {option.end_time}
-                              </h6>
-                              <p className="card-text">
-                                {option.type === 'gap_before_scheduled' && (
-                                  <span className="text-info">
-                                    <i className="bi bi-info-circle me-1"></i>
-                                    Available slot before {option.before_appointment}
-                                  </span>
-                                )}
-                                {option.type === 'after_scheduled' && (
-                                  <span className="text-success">
-                                    <i className="bi bi-check-circle me-1"></i>
-                                    Available after all scheduled appointments
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          )}
-                          
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => {
-                              if (option.type === 'queue_position') {
-                                // Join queue
-                                setBookingData(prev => ({
-                                  ...prev,
-                                  appointmentType: 'queue'
-                                }));
-                                setShowAlternativeTimesModal(false);
-                                handleBookingSubmit();
-                              } else {
-                                // Use specific time
-                                setBookingData(prev => ({
-                                  ...prev,
-                                  appointmentType: 'scheduled',
-                                  selectedTimeSlot: option.time
-                                }));
-                                setShowAlternativeTimesModal(false);
-                                handleBookingSubmit();
-                              }
-                            }}
-                          >
-                            {option.type === 'queue_position' ? 'Join Queue' : 'Select This Time'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowAlternativeTimesModal(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };
 // Step 1: Date, Type and Barber Selection (Merged)
-const Step1DateTypeAndBarber = ({ 
-  bookingData, 
-  updateBookingData, 
-  onNext, 
+const Step1DateTypeAndBarber = ({
+  bookingData,
+  updateBookingData,
+  onNext,
   existingAppointment,
-  checkExistingAppointment, 
+  checkExistingAppointment,
   user,
   setError,
   barbers,
@@ -5142,21 +2889,13 @@ const Step1DateTypeAndBarber = ({
   setBarberRecommendations,
   showRecommendations,
   setShowRecommendations,
-  getBookedTimeSlots,
-  bookedTimeSlots,
-  timeSlots,
-  manageQueueAndScheduledSlots,
   fetchBarberQueues,
   queueStatus,
   updateQueueStatus,
   calculateTotalDuration,
   wouldCrossLunchBreak,
-  wouldSlotConflictWithExistingAppointments,
-  // Enhanced time slot system props
-  getAppointmentAtTime,
-  findAlternativeTimes,
-  setAlternativeTimes,
-  setShowAlternativeTimesModal,
+
+
   // Unified slot system props
   unifiedSlots,
   alternativeBarbers,
@@ -5188,12 +2927,12 @@ const Step1DateTypeAndBarber = ({
   const [friendEmailError, setFriendEmailError] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
-  
+
   const normalizedFriendEmail = friendEmail.trim().toLowerCase();
   const isFriendEmailValid = FRIEND_EMAIL_REGEX.test(normalizedFriendEmail);
   const isOtpSectionVisible = bookForFriend && friendVerification?.sent && friendVerification.email === normalizedFriendEmail && !friendVerification?.verified;
   const isFriendEmailVerified = bookForFriend && friendVerification?.verified && friendVerification.email === normalizedFriendEmail;
-  
+
   useEffect(() => {
     if (!bookForFriend) {
       setOtpCode('');
@@ -5315,11 +3054,11 @@ const Step1DateTypeAndBarber = ({
       setOtpError('');
     }
   };
-  
+
   // Barber availability warning state
   const [barberAvailability, setBarberAvailability] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
-  
+
   // Track availability for each barber
   const [barberAvailabilityStatus, setBarberAvailabilityStatus] = useState({});
   const [showQueueDetails, setShowQueueDetails] = useState({});
@@ -5330,27 +3069,21 @@ const Step1DateTypeAndBarber = ({
   // Load estimated arrival time when barber is selected
   useEffect(() => {
     const loadEstimatedArrivalTime = async () => {
-      if (selectedBarber && barberQueues && timeSlots && selectedDate) {
+      if (selectedBarber && barberQueues && selectedDate) {
         try {
           // For queue appointments, show queue position and wait time
-          if (appointmentType === 'queue') {
-            const queueInfo = barberQueues[selectedBarber];
-            if (queueInfo) {
-              const queuePosition = queueInfo.queueCount + 1; // Next position
-              const waitTime = queueInfo.estimatedWait || 0;
-              
-              if (queuePosition === 1) {
-                setEstimatedArrivalTime('Next in line');
-              } else {
-                setEstimatedArrivalTime(`Position #${queuePosition} (${waitTime} min wait)`);
-              }
+          const queueInfo = barberQueues[selectedBarber];
+          if (queueInfo) {
+            const queuePosition = (queueInfo.queueCount || 0) + 1; // Next position
+            const waitTime = queueInfo.estimatedWait || 0;
+
+            if (queuePosition === 1) {
+              setEstimatedArrivalTime('Next in line');
             } else {
-              setEstimatedArrivalTime('Position #1');
+              setEstimatedArrivalTime(`Position #${queuePosition} (${waitTime} min wait)`);
             }
           } else {
-            // For scheduled appointments, use the original logic
-          const result = await getEstimatedArrivalTime(selectedBarber, barberQueues, timeSlots, selectedDate);
-          setEstimatedArrivalTime(result);
+            setEstimatedArrivalTime('Position #1');
           }
         } catch (error) {
           console.error('Error loading estimated arrival time:', error);
@@ -5360,30 +3093,9 @@ const Step1DateTypeAndBarber = ({
     };
 
     loadEstimatedArrivalTime();
-  }, [selectedBarber, barberQueues, timeSlots, selectedDate, appointmentType]);
+  }, [selectedBarber, barberQueues, selectedDate]);
 
-  // Real-time queue status updates
-  useEffect(() => {
-    if (bookingData.selectedBarber && bookingData.selectedDate && bookingData.appointmentType === 'queue') {
-      const updateQueueStatus = async () => {
-        try {
-          await manageQueueAndScheduledSlots(bookingData.selectedBarber, bookingData.selectedDate);
-        } catch (error) {
-          console.error('Error updating queue status:', error);
-        }
-      };
 
-      // Initial update
-      updateQueueStatus();
-
-      // Set up interval for live updates
-      const interval = setInterval(updateQueueStatus, 30000); // Update every 30 seconds
-
-      return () => {
-        if (interval) clearInterval(interval);
-      };
-    }
-  }, [bookingData.selectedBarber, bookingData.selectedDate, bookingData.appointmentType]);
 
   // Load queue data for all recommended barbers to show slot availability
   useEffect(() => {
@@ -5404,22 +3116,22 @@ const Step1DateTypeAndBarber = ({
   // Auto-load queue data when barber is selected
   useEffect(() => {
     console.log('🔄 useEffect triggered:', { selectedBarber, selectedDate, barbersLength: barbers?.length });
-    
+
     if (selectedBarber && selectedDate && barbers && barbers.length > 0) {
       console.log('🔄 Auto-loading queue data for selected barber:', selectedBarber);
       const selectedBarberObj = barbers.find(b => b.id === selectedBarber);
       console.log('🔍 Found barber object:', selectedBarberObj);
-      
+
       if (selectedBarberObj) {
         fetchBarberQueues([selectedBarberObj], selectedDate);
-                              } else {
+      } else {
         console.warn('⚠️ Barber not found in barbers array:', selectedBarber);
       }
     } else {
-      console.log('❌ Missing requirements:', { 
-        hasSelectedBarber: !!selectedBarber, 
-        hasSelectedDate: !!selectedDate, 
-        hasBarbers: !!(barbers && barbers.length > 0) 
+      console.log('❌ Missing requirements:', {
+        hasSelectedBarber: !!selectedBarber,
+        hasSelectedDate: !!selectedDate,
+        hasBarbers: !!(barbers && barbers.length > 0)
       });
     }
   }, [selectedBarber, selectedDate, barbers, fetchBarberQueues]);
@@ -5428,17 +3140,17 @@ const Step1DateTypeAndBarber = ({
   useEffect(() => {
     if (selectedBarber && selectedDate && bookingData.selectedServices.length > 0) {
       const serviceDuration = calculateTotalDuration(
-        bookingData.selectedServices, 
-        bookingData.selectedAddOns, 
-        services, 
+        bookingData.selectedServices,
+        bookingData.selectedAddOns,
+        services,
         addOns
       );
-      
+
       console.log('🔄 Loading unified slots for:', { selectedBarber, selectedDate, serviceDuration });
-      
+
       // Load unified slots
       loadUnifiedSlots(selectedBarber, selectedDate, serviceDuration);
-      
+
       // Load alternative barbers
       loadAlternativeBarbers(selectedDate, serviceDuration, selectedBarber);
     }
@@ -5449,21 +3161,21 @@ const Step1DateTypeAndBarber = ({
     if (selectedBarber && selectedDate && barberQueues[selectedBarber] && bookingData.selectedServices.length > 0) {
       const queue = barberQueues[selectedBarber];
       const isFull = queue.isFullCapacity;
-      
-      console.log('🔍 Checking barber capacity:', { 
-        barberId: selectedBarber, 
-        isFull, 
+
+      console.log('🔍 Checking barber capacity:', {
+        barberId: selectedBarber,
+        isFull,
         queueCount: queue.queueCount,
-        scheduledCount: queue.scheduledCount 
+        scheduledCount: queue.scheduledCount
       });
-      
+
       const serviceDuration = calculateTotalDuration(
-        bookingData.selectedServices, 
-        bookingData.selectedAddOns, 
-        services, 
+        bookingData.selectedServices,
+        bookingData.selectedAddOns,
+        services,
         addOns
       );
-      
+
       // Check if barber is at full capacity OR fully scheduled
       if (isFull) {
         console.log('🚨 Barber is at full capacity, loading alternatives...');
@@ -5480,14 +3192,14 @@ const Step1DateTypeAndBarber = ({
   const checkBarberScheduledAvailability = async (barberId, date, serviceDuration) => {
     try {
       console.log('🔍 Checking if barber is fully scheduled...');
-      
+
       // First check real-time availability to get accurate capacity information
       const realTimeAvailability = await calculateRealTimeAvailability(barberId, date, serviceDuration);
-      
+
       // Also get unified slots for scheduled appointments
       const slots = await UnifiedSlotBookingService.getUnifiedSlots(barberId, date, serviceDuration);
       const availableSlots = slots.filter(slot => slot.canBook && slot.type === 'available');
-      
+
       console.log('📊 Barber slot analysis:', {
         totalSlots: slots.length,
         availableSlots: availableSlots.length,
@@ -5496,13 +3208,13 @@ const Step1DateTypeAndBarber = ({
         realTimeAvailableSlots: realTimeAvailability.availableSlots,
         isAtCapacity: realTimeAvailability.isAtCapacity
       });
-      
+
       // Update warning message
       const warningElement = document.getElementById('barber-schedule-warning');
       if (warningElement) {
         // Check if barber is at capacity (no available slots AND no queue capacity)
         const isFullyBooked = realTimeAvailability.isAtCapacity || (availableSlots.length === 0 && realTimeAvailability.availableSlots === 0);
-        
+
         if (isFullyBooked) {
           warningElement.className = 'alert alert-warning border';
           warningElement.innerHTML = `
@@ -5525,7 +3237,7 @@ const Step1DateTypeAndBarber = ({
           `;
         }
       }
-      
+
       // If no available slots AND at capacity, barber is fully booked
       const isFullyBooked = realTimeAvailability.isAtCapacity || (availableSlots.length === 0 && realTimeAvailability.availableSlots === 0);
       if (isFullyBooked) {
@@ -5560,63 +3272,66 @@ const Step1DateTypeAndBarber = ({
   const handleDateChange = async (date) => {
     // Clear any previous validation messages
     setDateValidationMessage('');
-    
+
     // Check if the selected date is in the past
     const today = new Date();
     const selectedDateObj = new Date(date);
     const currentTime = new Date();
-    
+
     // Check if date is disabled (past dates or today after 4:30 PM)
     if (isDateDisabled(date)) {
-      const todayStr = today.toISOString().split('T')[0];
-      setSelectedDate(todayStr);
-      setDateValidationMessage('⚠️ Cannot book on past dates or today after 4:30 PM. Date has been reset to today.');
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+      setSelectedDate(tomorrowStr);
+      setDateValidationMessage('⚠️ Cannot book for today after 4:30 PM. Date has been set to tomorrow.');
       return;
     }
-    
+
     setSelectedDate(date);
     setCheckingAppointment(true);
-    
+
     // Check for existing appointment
     const hasExisting = await checkExistingAppointment(date);
     setCheckingAppointment(false);
-    
+
     // No time slot reset needed - queue appointments don't use time slots
   };
 
   // Helper function to check if date is disabled
   const isDateDisabled = (date) => {
     if (!date) return false;
-    
+
     const selectedDateObj = new Date(date);
     const today = new Date();
     const currentTime = new Date();
-    
+
     // Block past dates
     selectedDateObj.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
     if (selectedDateObj < today) return true;
-    
+
     // Block today if current time is after 4:30 PM
     if (selectedDateObj.toDateString() === today.toDateString()) {
       const currentHour = currentTime.getHours();
       const currentMinute = currentTime.getMinutes();
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       const cutoffTime = 16 * 60 + 30; // 4:30 PM in minutes
-      
+
       return currentTimeInMinutes >= cutoffTime;
     }
-    
+
     return false;
   };
 
   // Helper function to check if a specific time is in the past
   const isTimeInPast = (date, time) => {
     if (!date || !time) return false;
-    
+
     const selectedDateTime = new Date(`${date} ${time}`);
     const now = new Date();
-    
+
     return selectedDateTime < now;
   };
 
@@ -5627,7 +3342,7 @@ const Step1DateTypeAndBarber = ({
       const today = new Date();
       selectedDateObj.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
-      
+
       if (selectedDateObj < today) {
         setError('Cannot book appointments for past dates. Please select today or a future date.');
         return;
@@ -5640,7 +3355,7 @@ const Step1DateTypeAndBarber = ({
         const currentMinute = currentTime.getMinutes();
         const currentTimeInMinutes = currentHour * 60 + currentMinute;
         const cutoffTime = 16 * 60 + 30; // 4:30 PM in minutes
-        
+
         if (currentTimeInMinutes >= cutoffTime) {
           setError('Cannot book appointments for today after 4:30 PM. Please select tomorrow or a future date.');
           return;
@@ -5690,10 +3405,10 @@ const Step1DateTypeAndBarber = ({
     try {
       setCheckingAvailability(true);
       console.log('🔍 Checking barber availability for warning:', { barberId, date });
-      
+
       const availability = await BarberAvailabilityService.checkBarberAvailability(barberId, date);
       console.log('📊 Barber availability result:', availability);
-      
+
       setBarberAvailability(availability);
     } catch (error) {
       console.error('❌ Error checking barber availability:', error);
@@ -5706,9 +3421,9 @@ const Step1DateTypeAndBarber = ({
   // Check availability for all barbers when date changes
   const checkAllBarbersAvailability = async (date) => {
     if (!date || !barbers || barbers.length === 0) return;
-    
+
     console.log('🔍 Checking availability for all barbers on date:', date);
-    
+
     const availabilityPromises = barbers.map(async (barber) => {
       try {
         const availability = await BarberAvailabilityService.checkBarberAvailability(barber.id, date);
@@ -5718,14 +3433,14 @@ const Step1DateTypeAndBarber = ({
         return { barberId: barber.id, availability: { isAvailable: true } };
       }
     });
-    
+
     const results = await Promise.all(availabilityPromises);
     const availabilityMap = {};
-    
+
     results.forEach(({ barberId, availability }) => {
       availabilityMap[barberId] = availability;
     });
-    
+
     setBarberAvailabilityStatus(availabilityMap);
     console.log('📊 All barbers availability status:', availabilityMap);
   };
@@ -5746,16 +3461,20 @@ const Step1DateTypeAndBarber = ({
 
   // Barber selection functions
   const handleBarberSelect = async (barberId) => {
+    if (selectedBarber === barberId) {
+      setSelectedBarber('');
+      return;
+    }
     setSelectedBarber(barberId);
     setShowRecommendations(false);
-    
+
     console.log('🎯 Barber selected:', barberId, 'Date:', selectedDate);
-    
+
     // Check availability for the selected barber and date
     if (selectedDate) {
       checkBarberAvailability(barberId, selectedDate);
     }
-    
+
     // Load queue data for this barber and date
     if (selectedDate) {
       console.log('📊 Loading queue data for barber:', barberId, 'date:', selectedDate);
@@ -5764,7 +3483,7 @@ const Step1DateTypeAndBarber = ({
         const selectedBarberObj = barbers.find(b => b.id === barberId);
         if (selectedBarberObj) {
           await fetchBarberQueues([selectedBarberObj], selectedDate);
-                              } else {
+        } else {
           console.warn('⚠️ Barber not found in barbers list:', barberId);
           // Fallback: try with just the ID
           await fetchBarberQueues([{ id: barberId }], selectedDate);
@@ -5773,16 +3492,9 @@ const Step1DateTypeAndBarber = ({
         console.error('❌ Error loading queue data:', error);
       }
     }
-    
-    // Manage queue and scheduled slots first
-    if (selectedDate) {
-      try {
-        await manageQueueAndScheduledSlots(barberId, selectedDate);
-      } catch (error) {
-        console.error('❌ Error managing queue slots:', error);
-      }
-    }
-    
+
+
+
     // No time slot loading needed - queue appointments don't use time slots
   };
 
@@ -5796,7 +3508,7 @@ const Step1DateTypeAndBarber = ({
 
   const getBarberStatusInfo = (barber) => {
     if (!barber) return { text: 'Unknown', class: 'text-muted', icon: 'bi-question-circle' };
-    
+
     switch (barber.barber_status) {
       case 'available':
         return { text: 'Available', class: 'text-success', icon: 'bi-check-circle' };
@@ -5809,935 +3521,380 @@ const Step1DateTypeAndBarber = ({
     }
   };
   return (
-    <div className="card-body p-4">
-      <h4 className="mb-4">
-        <i className="bi bi-calendar3 me-2 text-primary"></i>
-        Select Date, Type & Barber
-      </h4>
+    <div className="card-body p-3 p-md-4">
+      <div className="d-flex align-items-center mb-4">
+        <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
+          <i className="bi bi-calendar3 fs-4 text-primary"></i>
+        </div>
+        <div>
+          <h4 className="mb-0 fw-bold text-dark">Select Date & Barber</h4>
+          <p className="text-muted small mb-0">Choose when and with whom you'd like your service</p>
+        </div>
+      </div>
 
       {/* Existing Appointment Alert */}
       {existingAppointment && (
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="alert alert-warning">
-              <i className="bi bi-exclamation-triangle me-2"></i>
-              <strong>Existing Appointment Found:</strong> You already have an appointment on {selectedDate} at {existingAppointment.appointment_time || 'Queue #' + (existingAppointment.queue_position || 1)} with {existingAppointment.barber?.full_name || 'your barber'}.
-                  </div>
-                </div>
-              </div>
-            )}
-
-                <div className="row">
-        <div className="col-md-6 mb-4">
-          <label htmlFor="appointmentDate" className="form-label fw-bold">
-            <i className="bi bi-calendar-date me-2 text-primary"></i>
-                        Select Date
-                      </label>
-                      <input
-                        type="date"
-            className="form-control"
-            id="appointmentDate"
-                        value={selectedDate}
-            onChange={(e) => handleDateChange(e.target.value)}
-            onBlur={(e) => handleDateChange(e.target.value)}
-            min={today}
-            max={maxDateStr}
-            step="1"
-            style={{ cursor: 'pointer' }}
-                        required
-                      />
-                      <div className="form-text">
-                        <i className="bi bi-info-circle me-1"></i>
-            Select your preferred appointment date (today or future dates only)
-            <br />
-            <small className="text-muted">
-              <i className="bi bi-calendar3 me-1"></i>
-              Click on the month (MM) or year (YYYY) to change them quickly
-            </small>
-            {checkingAppointment && <span className="text-warning ms-2">Checking for existing appointments...</span>}
-                          </div>
-                      {dateValidationMessage && (
-                        <div className="alert alert-warning mt-2 mb-0">
-                          <i className="bi bi-exclamation-triangle me-2"></i>
-                          {dateValidationMessage}
-                        </div>
-                      )}
-                    </div>
-
-        {/* Appointment Type removed - Only Queue appointments are supported */}
-
-
-
-      {/* Book for a Child */}
-      <div className="row mb-4">
-        <div className="col-12">
-                              <div className="form-check">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-              id="bookForFriend"
-              checked={bookForFriend}
-              onChange={(e) => handleBookForFriendChange(e.target.checked)}
-            />
-            <label className="form-check-label fw-bold" htmlFor="bookForFriend">
-              <i className="bi bi-person-plus me-2 text-primary"></i>
-              Book for a Child
-                        </label>
-                              </div>
-                      </div>
-                    </div>
-
-      {/* Child Details */}
-      {bookForFriend && (
-        <div className="row mb-4">
-          <div className="col-md-6">
-            <label htmlFor="friendName" className="form-label fw-bold">
-              <i className="bi bi-person me-2 text-primary"></i>
-              Child's Name
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id="friendName"
-              value={friendName}
-              onChange={(e) => handleFriendNameChange(e.target.value)}
-              placeholder="Enter name"
-              required={bookForFriend}
-            />
-          </div>
-          <div className="col-md-6">
-            <label htmlFor="friendPhone" className="form-label fw-bold">
-              <i className="bi bi-telephone me-2 text-primary"></i>
-              Guardian Contact Number
-            </label>
-            <input
-              type="tel"
-              className="form-control"
-              id="friendPhone"
-              value={friendPhone}
-              onChange={(e) => handleFriendPhoneChange(e.target.value)}
-              placeholder="Enter phone number"
-              required={bookForFriend}
-            />
-          </div>
-        </div>
-      )}
-      
-      {/* Child Email */}
-      {bookForFriend && (
-        <div className="row mb-4">
-          <div className="col-md-12">
-            <label htmlFor="friendEmail" className="form-label fw-bold">
-              <i className="bi bi-envelope me-2 text-primary"></i>
-              Child's Email Address <span className="text-danger">*</span>
-            </label>
-            <div className="row g-2 align-items-start">
-              <div className="col-lg-6">
-                <input
-                  type="email"
-                  className={`form-control ${friendEmailError ? 'is-invalid' : ''}`}
-                  id="friendEmail"
-                  value={friendEmail}
-                  onChange={(e) => handleFriendEmailChange(e.target.value)}
-                  placeholder="Enter email address"
-                  required={bookForFriend}
-                />
-                {friendEmailError && (
-                  <div className="invalid-feedback d-block">{friendEmailError}</div>
-                )}
-              </div>
-              <div className="col-lg-6">
-                <div className="d-flex flex-column flex-md-row gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary w-100 w-md-auto"
-                    onClick={handleSendVerificationClick}
-                    disabled={!isFriendEmailValid || friendVerification?.sending || isFriendEmailVerified}
-                  >
-                    {friendVerification?.sending ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <i className="bi bi-envelope-check me-1"></i>
-                        {friendVerification?.sent ? 'Resend Code' : 'Send Verification Code'}
-                      </>
-                    )}
-                  </button>
-                  {isOtpSectionVisible && (
-                    <div className="input-group input-group-sm">
-                      <input
-                        type="text"
-                        className={`form-control ${otpError ? 'is-invalid' : ''}`}
-                        placeholder="Enter code"
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value)}
-                        maxLength={6}
-                        aria-label="Verification code"
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={handleVerifyOTPClick}
-                        disabled={friendVerification?.verifying || !otpCode.trim()}
-                      >
-                        {friendVerification?.verifying ? (
-                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        ) : (
-                          <>
-                            <i className="bi bi-shield-check me-1"></i>
-                            Verify Code
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            {otpError && (
-              <div className="text-danger small mt-2">{otpError}</div>
-            )}
-            {!otpError && friendVerification?.error && (
-              <div className="text-danger small mt-2">{friendVerification.error}</div>
-            )}
-            {friendVerification?.success && (
-              <div className={`small mt-2 ${isFriendEmailVerified ? 'text-success' : 'text-info'}`}>
-                {friendVerification.success}
-                {friendVerification.expiresAt && !isFriendEmailVerified && (
-                  <> Code expires at {new Date(friendVerification.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.</>
-                )}
-              </div>
-            )}
-            {isFriendEmailVerified && (
-              <div className="small text-success mt-2 d-flex align-items-center">
-                <i className="bi bi-shield-check me-2"></i>
-                Email verified
-              </div>
-            )}
+        <div className="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-center">
+          <i className="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+          <div>
+            <strong>Existing Appointment Found:</strong>
+            <p className="mb-0 small">You already have an appointment on {selectedDate} at {existingAppointment.appointment_time || 'Queue #' + (existingAppointment.queue_position || 1)} with {existingAppointment.barber?.full_name || 'your barber'}.</p>
           </div>
         </div>
       )}
 
-      {/* Double Booking Check */}
-      {selectedDate && !existingAppointment && !bookForFriend && (
-        <div className="row mb-4">
-          <div className="col-12">
-                        <div className="alert alert-info">
-              <i className="bi bi-shield-check me-2"></i>
-              <strong>Double Booking Protection:</strong> You can only book one appointment per day to ensure fair access for all customers.
-                        </div>
-                        </div>
-                      </div>
-                    )}
+      <div className="row g-4">
+        {/* Left Column: Date and Options */}
+        <div className="col-lg-4">
+          <div className="card border-0 bg-light rounded-4 h-100 p-3 p-lg-4">
+            <h5 className="mb-3 fw-bold">
+              <i className="bi bi-clock-history me-2 text-primary"></i>
+              Booking Details
+            </h5>
 
-      {/* Barber Selection */}
-      {selectedDate && (
-        <>
-          {/* Top 3 Barber Recommendations - Always Show */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <div className="alert alert-warning">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="mb-0">
-                    <i className="bi bi-star-fill me-2"></i>
-                    Top 3 Recommended Barbers
-                  </h6>
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => setShowRecommendations(!showRecommendations)}
-                  >
-                    {showRecommendations ? <i className="bi bi-eye-slash"></i> : <i className="bi bi-eye"></i>}
-                  </button>
-                </div>
-                {showRecommendations && (
-                  <div className="row g-2">
-                    {barberRecommendations && barberRecommendations.length > 0 ? (
-                      (() => {
-                        // Calculate service duration for accurate capacity checking
-                        const serviceDuration = bookingData.selectedServices.length > 0 
-                          ? calculateTotalDuration(
-                              bookingData.selectedServices, 
-                              bookingData.selectedAddOns, 
-                              services, 
-                              addOns
-                            )
-                          : 30; // Default 30 minutes if no services selected yet
-                        
-                        // Filter to show only available barbers in recommendations
-                        const availableRecommendations = barberRecommendations.filter(rec => {
-                          if (!rec || !rec.barber) return false;
-                          
-                          // Check if barber can accommodate the specific service duration
-                          const queue = barberQueues[rec.barber.id];
-                          const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
-                          const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
-                          
-                          console.log(`🔍 Recommendation filter for ${rec.barber.full_name}:`, {
-                            serviceDuration,
-                            canAccommodate,
-                            isFullSlot,
-                            queueCapacity: queue?.isFullCapacity
-                          });
-                          
-                          // Only include barbers who are NOT full
-                          return !isFullSlot;
-                        });
-                        
-                        const recommendationsToShow = availableRecommendations.slice(0, 3);
-                        
-                        console.log(`📊 Total recommendations: ${recommendationsToShow.length}`);
-                        
-                        // Add a message if we have fewer than 3 recommendations
-                        if (recommendationsToShow.length < 3 && recommendationsToShow.length > 0) {
-                          console.log(`⚠️ Only ${recommendationsToShow.length} barbers available for recommendations`);
-                        }
-                        
-                        
-                        return recommendationsToShow
-                        .map((rec, index) => {
-                            
-                            return (
-                          <div key={rec.barber.id} className="col-md-4">
-                            <div className={`card border-${index === 0 ? 'success' : index === 1 ? 'warning' : 'secondary'}`}>
-                              <div className="card-body p-3">
-                                <div className="d-flex justify-content-between align-items-start mb-2">
-                                  <h6 className="card-title mb-0">{rec.barber.full_name}</h6>
-                                  <span className={`badge bg-${index === 0 ? 'success' : index === 1 ? 'warning' : 'secondary'}`}>
-                                    #{index + 1}
-                                  </span>
-                                </div>
-                                
-                                <div className="mb-2">
-                                  <div className="d-flex align-items-center">
-                                    <i className="bi bi-star-fill text-warning me-1"></i>
-                                    <span className="fw-bold">{rec.barber.total_ratings > 0 ? (rec.barber.average_rating || '0') : '0'}/5</span>
-                                    <span className="text-muted ms-1">({rec.barber.total_ratings || 0} reviews)</span>
-                                  </div>
-                                </div>
-                                
-                                {/* Skills Display */}
-                                {rec.barber.skills && (
-                                  <div className="mb-2">
-                                    <div className="d-flex flex-wrap gap-1">
-                                      {rec.barber.skills.split(',').slice(0, 3).map((skill, skillIndex) => (
-                                        <span key={skillIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
-                                          {skill.trim()}
-                                        </span>
-                                      ))}
-                                      {rec.barber.skills.split(',').length > 3 && (
-                                        <span className="badge bg-secondary bg-opacity-10 text-secondary">
-                                          +{rec.barber.skills.split(',').length - 3} more
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <small className="text-success fw-bold">
-                                    {rec.score ? rec.score : '0'}%
-                                        </small>
-                                  <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={() => handleBarberSelect(rec.barber.id)}
-                                  >
-                                    Choose
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()
-                    ) : (
-                      <div className="col-12 text-center">
-                        <p className="text-muted mb-0">Loading recommendations...</p>
-                      </div>
-                    )}
-                    
-                    {/* Show message if fewer than 3 recommendations */}
-                    {barberRecommendations && barberRecommendations.length > 0 && (() => {
-                      const serviceDuration = bookingData.selectedServices.length > 0 
-                        ? calculateTotalDuration(
-                            bookingData.selectedServices, 
-                            bookingData.selectedAddOns, 
-                            services, 
-                            addOns
-                          )
-                        : 30;
-                      
-                      const availableCount = barberRecommendations.filter(rec => {
-                        if (!rec || !rec.barber) return false;
-                        const queue = barberQueues[rec.barber.id];
-                        const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
-                        const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
-                        return !isFullSlot;
-                      }).length;
-                      
-                      if (availableCount < 3 && availableCount > 0) {
-                        return (
-                          <div className="col-12 mt-2">
-                            <div className="alert alert-info py-2">
-                              <small>
-                                <i className="bi bi-info-circle me-1"></i>
-                                Only {availableCount} barber{availableCount !== 1 ? 's' : ''} available for your selected service duration. 
-                                Other barbers may have full schedules.
-                              </small>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                )}
-
-                {/* Warning for fully scheduled barbers */}
-                {selectedBarber && selectedDate && bookingData.selectedServices.length > 0 && (
-                  <div className="row mt-3">
-                    <div className="col-12">
-                      <div id="barber-schedule-warning" className="alert alert-info border">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-info-circle me-2"></i>
-                          <div>
-                            <strong>Schedule Check:</strong> Checking availability for your selected services...
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                                  </div>
-                                </div>
-                              </div>
-
-                    {/* Queue Information - Time slots are not needed for queue appointments */}
-                {appointmentType === 'queue' && (
-                  <div className="row mb-4">
-                    <div className="col-12">
-                      <div className="alert alert-info">
-                        <i className="bi bi-info-circle me-2"></i>
-                        <strong>Queue Information:</strong> Queue appointments are automatically scheduled around the lunch break (12:00 PM - 1:00 PM).
-                        <br />
-                        <small>Your appointment will be scheduled after any existing appointments and will skip the lunch break period.</small>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Enhanced Unified Slot System - Removed for queue-only appointments */}
-                {/* Time slot selection removed - queue appointments don't use time slots */}
-
-                    {/* Barber Selection */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <label className="form-label fw-bold">
-                <i className="bi bi-person me-2 text-primary"></i>
-                Choose Your Barber
+            <div className="mb-4">
+              <label htmlFor="appointmentDate" className="form-label fw-bold small text-uppercase text-secondary">
+                Select Date
               </label>
-              
-              {barbers && barbers.length > 0 ? (
-                <div className="row g-3">
-                        {barbers.map((barber) => {
-                          const queue = barberQueues[barber.id];
-                    const isSelected = selectedBarber === barber.id;
-                    const showDetails = showQueueDetails[barber.id];
-                    
-                    // Calculate service duration for accurate capacity checking
-                    const serviceDuration = bookingData.selectedServices.length > 0 
-                      ? calculateTotalDuration(
-                          bookingData.selectedServices, 
-                          bookingData.selectedAddOns, 
-                          services, 
-                          addOns
-                        )
-                      : 30; // Default 30 minutes if no services selected yet
-                    
-                    // Check if barber can accommodate the specific service duration
-                    const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
-                    
-                    // Check if barber has full slots
-                    const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
-                    const hasAvailableSlots = queue && canAccommodate && !queue.isFullCapacity;
-                    const isFullyScheduled = queue && queue.isFullyScheduled;
-                    const isQueueFull = queue && queue.queueCount >= 15; // Assuming max queue size
-                    
-                    // Debug logging for capacity issues
-                    if (queue && queue.timeBasedAvailableSlots > 0 && queue.isFullCapacity) {
-                      console.log('🚨 Capacity Logic Issue for barber:', barber.full_name, {
-                        timeBasedAvailableSlots: queue.timeBasedAvailableSlots,
-                        isFullCapacity: queue.isFullCapacity,
-                        isFullyScheduled: queue.isFullyScheduled,
-                        remainingTime: queue.remainingTime,
-                        queueCount: queue.queueCount,
-                        scheduledCount: queue.scheduledCount,
-                        serviceDuration,
-                        canAccommodate
-                      });
-                    }
-                    
-                          return (
-                      <div key={barber.id} className="col-md-6 col-lg-4">
-                        {(() => {
-                          const availability = barberAvailabilityStatus[barber.id];
-                          const isUnavailable = availability && !availability.isAvailable;
-                          const isDisabled = isFullSlot || isUnavailable;
-                          
-                          return (
-                            <div className={`card barber-card h-100 ${isSelected ? 'border-primary bg-primary bg-opacity-10' : ''} ${isDisabled ? 'border-secondary bg-light opacity-75' : ''}`}>
-                              <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                              <h6 className="card-title mb-0">{barber.full_name}</h6>
-                              <div className="d-flex flex-column align-items-end gap-1">
-                                {(() => {
-                                  const availability = barberAvailabilityStatus[barber.id];
-                                  if (availability && !availability.isAvailable) {
-                                    // Show availability status instead of barber_status
-                                    return (
-                                      <span className={`badge ${
-                                        availability.type === 'day_off' ? 'bg-warning' :
-                                        availability.type === 'offline' ? 'bg-danger' :
-                                        availability.type === 'busy' ? 'bg-warning' :
-                                        'bg-secondary'
-                                      }`} title={availability.reason}>
-                                        <i className={`bi ${
-                                          availability.type === 'day_off' ? 'bi-calendar-x' :
-                                          availability.type === 'offline' ? 'bi-person-x' :
-                                          availability.type === 'busy' ? 'bi-clock' :
-                                          'bi-exclamation-triangle'
-                                        } me-1`}></i>
-                                        {availability.type === 'day_off' ? 'Day Off' :
-                                         availability.type === 'offline' ? 'Offline' :
-                                         availability.type === 'busy' ? 'Busy' :
-                                         'Unavailable'}
-                                      </span>
-                                    );
-                                  } else {
-                                    // Show regular barber status
-                                    return (
-                                      <span className={`badge ${barber.barber_status === 'available' ? 'bg-success' : barber.barber_status === 'busy' ? 'bg-warning' : 'bg-secondary'}`}>
-                                        {barber.barber_status}
-                                      </span>
-                                    );
-                                  }
-                                })()}
-                                {isFullSlot && (
-                                  <span className="badge bg-secondary" title={
-                                    isFullyScheduled ? 'No available time slots' : 
-                                    isQueueFull ? 'Queue is full' : 
-                                    'No available slots'
-                                  }>
-                                    <i className="bi bi-clock me-1"></i>
-                                    {isFullyScheduled ? 'Fully Scheduled' : 
-                                     isQueueFull ? 'Queue Full' : 
-                                     'Full Slot'}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="mb-2">
-                              <div className="d-flex align-items-center">
-                                <i className="bi bi-star-fill text-warning me-1"></i>
-                                <span className="fw-bold">{barber.total_ratings > 0 ? (barber.average_rating || '0') : '0'}/5</span>
-                                <span className="text-muted ms-1">({barber.total_ratings || 0} reviews)</span>
-                              </div>
-                            </div>
-                            
-                            {/* Skills Display */}
-                            {barber.skills && (
-                              <div className="mb-2">
-                                <div className="d-flex flex-wrap gap-1">
-                                  {barber.skills.split(',').slice(0, 3).map((skill, skillIndex) => (
-                                    <span key={skillIndex} className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
-                                      {skill.trim()}
-                                    </span>
-                                  ))}
-                                  {barber.skills.split(',').length > 3 && (
-                                    <span className="badge bg-secondary bg-opacity-10 text-secondary">
-                                      +{barber.skills.split(',').length - 3} more
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            
-                            <div className="d-flex gap-2">
-                              {(() => {
-                                const availability = barberAvailabilityStatus[barber.id];
-                                const isUnavailable = availability && !availability.isAvailable;
-                                const isDisabled = isFullSlot || isUnavailable;
-                                
-                                return (
-                                  <button
-                                    className={`btn btn-sm ${isSelected ? 'btn-primary' : isDisabled ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                                    onClick={() => handleBarberSelect(barber.id)}
-                                    disabled={isDisabled}
-                                    title={isFullSlot ? 'This barber has no available slots' : 
-                                           isUnavailable ? availability.reason : ''}
-                                  >
-                                    {isSelected ? 'Selected' : 
-                                     isUnavailable ? (availability.type === 'day_off' ? 'Day Off' :
-                                                     availability.type === 'offline' ? 'Offline' :
-                                                     availability.type === 'busy' ? 'Busy' : 'Unavailable') :
-                                     isFullyScheduled ? 'Fully Scheduled' : 
-                                     isQueueFull ? 'Queue Full' : 
-                                     isFullSlot ? 'Full Slot' : 'Select'}
-                                  </button>
-                                );
-                              })()}
-                              <button
-                                className="btn btn-sm btn-outline-info"
-                                onClick={() => toggleQueueDetails(barber.id)}
-                              >
-                                <i className="bi bi-eye"></i>
-                              </button>
-                            </div>
-                            
-                            {/* Queue Details */}
-                            {showDetails && queue && (
-                              <div className="mt-3 pt-3 border-top">
-                                <h6 className="small mb-2">
-                                  <i className="bi bi-list-ol me-1"></i>
-                                  Queue Details:
-                                </h6>
-                                {queue.appointments && queue.appointments.length > 0 ? (
-                                  <div className="small">
-                                    {/* Sort appointments by queue number and status */}
-                                    {queue.appointments
-                                      .sort((a, b) => {
-                                        // First sort by appointment_type (queue first, then scheduled)
-                                        if (a.appointment_type !== b.appointment_type) {
-                                          return a.appointment_type === 'queue' ? -1 : 1;
-                                        }
-                                        // Then sort by queue_position for queue appointments
-                                        if (a.appointment_type === 'queue' && b.appointment_type === 'queue') {
-                                          return (a.queue_position || 0) - (b.queue_position || 0);
-                                        }
-                                        // For scheduled appointments, sort by appointment_time
-                                        if (a.appointment_type === 'scheduled' && b.appointment_type === 'scheduled') {
-                                          return (a.appointment_time || '').localeCompare(b.appointment_time || '');
-                                        }
-                                        return 0;
-                                      })
-                                      .map((apt, idx) => {
-                                        const isQueue = apt.appointment_type === 'queue';
-                                        const isScheduled = apt.appointment_type === 'scheduled';
-                                        const isOngoing = apt.status === 'ongoing';
-                                        const isPending = apt.status === 'pending';
-                                        
-                                        // Calculate service duration for display
-                                        let serviceDuration = apt.total_duration;
-                                        
-                                        // Debug logging
-                                        console.log(`🔍 Duration calculation for appointment ${apt.id}:`, {
-                                          total_duration: apt.total_duration,
-                                          services_data: apt.services_data,
-                                          add_ons_data: apt.add_ons_data,
-                                          service_id: apt.service_id,
-                                          appointment_type: apt.appointment_type
-                                        });
-                                        
-                                        // If total_duration is not available, try to calculate from services_data
-                                        if (!serviceDuration && apt.services_data) {
-                                          try {
-                                            const servicesData = typeof apt.services_data === 'string' 
-                                              ? JSON.parse(apt.services_data) 
-                                              : apt.services_data;
-                                            
-                                            console.log('📋 Parsed services_data:', servicesData);
-                                            
-                                            if (Array.isArray(servicesData)) {
-                                              serviceDuration = servicesData.reduce((total, serviceId) => {
-                                                const service = services.find(s => s.id === serviceId);
-                                                console.log(`  Service ${serviceId}:`, service?.duration || 30);
-                                                return total + (service?.duration || 30);
-                                              }, 0);
-                                            }
-                                          } catch (e) {
-                                            console.warn('Error parsing services_data:', e);
-                                          }
-                                        }
-                                        
-                                        // If still no duration, try to get from service_id
-                                        if (!serviceDuration && apt.service_id) {
-                                          const service = services.find(s => s.id === apt.service_id);
-                                          serviceDuration = service?.duration || 30;
-                                          console.log(`📋 Service from service_id:`, service?.duration || 30);
-                                        }
-                                        
-                                        // Final fallback
-                                        serviceDuration = serviceDuration || 30;
-                                        
-                                        console.log(`✅ Final calculated duration: ${serviceDuration} minutes`);
-                                        
-                                        const serviceDurationText = serviceDuration >= 60 
-                                          ? `${Math.floor(serviceDuration / 60)}h ${serviceDuration % 60}m`
-                                          : `${serviceDuration}m`;
-                                        
-                                        return (
-                                          <div key={idx} className={`d-flex justify-content-between align-items-center py-1 px-2 rounded mb-1 ${
-                                            isOngoing ? 'bg-success bg-opacity-10' : 
-                                            isPending ? 'bg-warning bg-opacity-10' : 
-                                            'bg-light'
-                                          }`}>
-                                            <div className="d-flex align-items-center">
-                                              <span className={`badge me-2 ${
-                                                isOngoing ? 'bg-success' : 
-                                                isPending ? 'bg-warning' : 
-                                                isQueue ? 'bg-primary' : 'bg-info'
-                                              }`}>
-                                                {isQueue ? `#${apt.queue_position || 'N/A'}` : 
-                                                 isScheduled ? 'Scheduled' : 'N/A'}
-                                              </span>
-                                              <div className="d-flex flex-column">
-                                                <span className="fw-medium">
-                                                  {isQueue ? 'Queue Position' : 
-                                                   isScheduled ? 'Scheduled' : 'Unknown'}
-                                                </span>
-                                                <small className="text-muted">
-                                                  <i className="bi bi-clock me-1"></i>
-                                                  {serviceDurationText}
-                                                </small>
-                                              </div>
-                                            </div>
-                                            <div className="text-end">
-                                              <span className={`badge ${
-                                                isOngoing ? 'bg-success' : 
-                                                isPending ? 'bg-warning' : 
-                                                apt.status === 'scheduled' ? 'bg-primary' : 'bg-secondary'
-                                              }`}>
-                                                {isOngoing ? 'Serving Now' : 
-                                                 isPending ? 'Pending' : 
-                                                 apt.status === 'scheduled' ? 'Scheduled' : 
-                                                 apt.status || 'Unknown'}
-                                              </span>
-                                              {isScheduled && apt.appointment_time && (
-                                                <div className="text-muted small mt-1">
-                                                  {convertTo12Hour(apt.appointment_time)}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                          );
-                        })}
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-3">
-                                    <i className="bi bi-inbox text-muted fs-4"></i>
-                                    <p className="small text-muted mb-0 mt-2">No customers in queue</p>
-                                    <small className="text-muted">Be the first to join!</small>
-                                  </div>
-                                )}
-                                
-                                {/* Queue Summary */}
-                                {queue.appointments && queue.appointments.length > 0 && (
-                                  <div className="mt-3 pt-2 border-top">
-                                    <div className="row text-center small">
-                                      <div className="col-4">
-                                        <div className="text-primary fw-bold">{queue.queueCount || 0}</div>
-                                        <div className="text-muted">In Queue</div>
-                                      </div>
-                                      <div className="col-4">
-                                        <div className="text-info fw-bold">{queue.scheduledCount || 0}</div>
-                                        <div className="text-muted">Scheduled</div>
-                                      </div>
-                                      <div className="col-4">
-                                        <div className="text-warning fw-bold">{queue.pendingCount || 0}</div>
-                                        <div className="text-muted">Pending</div>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Service Time Information */}
-                                    {queue.appointments && queue.appointments.length > 0 && (
-                                      <div className="mt-2 pt-2 border-top">
-                                        <div className="row text-center small">
-                                          <div className="col-6">
-                                            <div className="text-success fw-bold">
-                                              {(() => {
-                                                const queueAppts = queue.appointments.filter(apt => apt.appointment_type === 'queue');
-                                                let totalQueueTime = 0;
-                                                
-                                                queueAppts.forEach(apt => {
-                                                  let duration = apt.total_duration;
-                                                  
-                                                  // Calculate duration from services_data if total_duration is not available
-                                                  if (!duration && apt.services_data) {
-                                                    try {
-                                                      const servicesData = typeof apt.services_data === 'string' 
-                                                        ? JSON.parse(apt.services_data) 
-                                                        : apt.services_data;
-                                                      
-                                                      if (Array.isArray(servicesData)) {
-                                                        duration = servicesData.reduce((total, serviceId) => {
-                                                          const service = services.find(s => s.id === serviceId);
-                                                          return total + (service?.duration || 30);
-                                                        }, 0);
-                                                      }
-                                                    } catch (e) {
-                                                      console.warn('Error parsing services_data for avg calculation:', e);
-                                                    }
-                                                  }
-                                                  
-                                                  // Fallback to service_id
-                                                  if (!duration && apt.service_id) {
-                                                    const service = services.find(s => s.id === apt.service_id);
-                                                    duration = service?.duration || 30;
-                                                  }
-                                                  
-                                                  totalQueueTime += duration || 30;
-                                                });
-                                                
-                                                const avgServiceTime = queueAppts.length > 0 ? Math.round(totalQueueTime / queueAppts.length) : 0;
-                                                return avgServiceTime >= 60 
-                                                  ? `${Math.floor(avgServiceTime / 60)}h ${avgServiceTime % 60}m`
-                                                  : `${avgServiceTime}m`;
-                                              })()}
-                                            </div>
-                                            <div className="text-muted">Avg Service Time</div>
-                                          </div>
-                                          <div className="col-6">
-                                            <div className="text-warning fw-bold">
-                                              {(() => {
-                                                const queueAppts = queue.appointments.filter(apt => apt.appointment_type === 'queue');
-                                                let totalWaitTime = 0;
-                                                
-                                                queueAppts.forEach(apt => {
-                                                  let duration = apt.total_duration;
-                                                  
-                                                  // Calculate duration from services_data if total_duration is not available
-                                                  if (!duration && apt.services_data) {
-                                                    try {
-                                                      const servicesData = typeof apt.services_data === 'string' 
-                                                        ? JSON.parse(apt.services_data) 
-                                                        : apt.services_data;
-                                                      
-                                                      if (Array.isArray(servicesData)) {
-                                                        duration = servicesData.reduce((total, serviceId) => {
-                                                          const service = services.find(s => s.id === serviceId);
-                                                          return total + (service?.duration || 30);
-                                                        }, 0);
-                                                      }
-                                                    } catch (e) {
-                                                      console.warn('Error parsing services_data for wait time calculation:', e);
-                                                    }
-                                                  }
-                                                  
-                                                  // Fallback to service_id
-                                                  if (!duration && apt.service_id) {
-                                                    const service = services.find(s => s.id === apt.service_id);
-                                                    duration = service?.duration || 30;
-                                                  }
-                                                  
-                                                  totalWaitTime += duration || 30;
-                                                });
-                                                
-                                                return totalWaitTime >= 60 
-                                                  ? `${Math.floor(totalWaitTime / 60)}h ${totalWaitTime % 60}m`
-                                                  : `${totalWaitTime}m`;
-                                              })()}
-                                            </div>
-                                            <div className="text-muted">Est. Wait Time</div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  );
-                })}
-                </div>
-              ) : (
-                <div className="text-center">
-                  <p className="text-muted">Loading barbers...</p>
+              <div className="input-group">
+                <span className="input-group-text bg-white border-end-0">
+                  <i className="bi bi-calendar-event text-primary"></i>
+                </span>
+                <input
+                  type="date"
+                  className="form-control border-start-0 ps-0"
+                  id="appointmentDate"
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  onBlur={(e) => handleDateChange(e.target.value)}
+                  min={today}
+                  max={maxDateStr}
+                  required
+                />
+              </div>
+              {dateValidationMessage && (
+                <div className="alert alert-warning py-2 px-3 mt-2 mb-0 small border-0 shadow-sm">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  {dateValidationMessage}
                 </div>
               )}
             </div>
-          </div>
-                      
-        </>
-      )}
-      {/* Barber Availability Warning */}
-      {selectedBarber && selectedDate && (
-        <div className="row mt-3">
-          <div className="col-12">
-            {checkingAvailability ? (
-              <div className="alert alert-info d-flex align-items-center">
-                <div className="spinner-border spinner-border-sm me-2" role="status">
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-                Checking barber availability...
+
+            <div className="mb-4">
+              <div className="form-check form-switch p-3 bg-white rounded-3 shadow-sm mb-3">
+                <input
+                  className="form-check-input ms-0 me-3"
+                  type="checkbox"
+                  id="bookForFriend"
+                  checked={bookForFriend}
+                  onChange={(e) => handleBookForFriendChange(e.target.checked)}
+                  style={{ width: '2.5em', height: '1.25em' }}
+                />
+                <label className="form-check-label fw-bold d-flex align-items-center" htmlFor="bookForFriend">
+                  <i className="bi bi-person-plus me-2 text-primary"></i>
+                  Book for a Child
+                </label>
               </div>
-            ) : barberAvailability && !barberAvailability.isAvailable ? (
-              <div className={`alert ${barberAvailability.type === 'day_off' ? 'alert-warning' : 
-                barberAvailability.type === 'offline' ? 'alert-danger' : 
-                barberAvailability.type === 'busy' ? 'alert-warning' : 'alert-secondary'} d-flex align-items-center`}>
-                <i className={`bi ${barberAvailability.type === 'day_off' ? 'bi-calendar-x' : 
-                  barberAvailability.type === 'offline' ? 'bi-person-x' : 
-                  barberAvailability.type === 'busy' ? 'bi-clock' : 'bi-exclamation-triangle'} me-2`}></i>
-                <div>
-                  <strong>⚠️ Barber Unavailable</strong>
-                  <div className="small">{barberAvailability.reason}</div>
-                  {barberAvailability.endDate && barberAvailability.endDate !== selectedDate && (
-                    <div className="small text-muted">
-                      Available again: {new Date(barberAvailability.endDate).toLocaleDateString()}
+
+              {bookForFriend && (
+                <div className="card border-0 shadow-sm rounded-3 p-3 animate-fade-in">
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold">Child's Name</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      value={friendName}
+                      onChange={(e) => handleFriendNameChange(e.target.value)}
+                      placeholder="Enter name"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold">Guardian Phone</label>
+                    <input
+                      type="tel"
+                      className="form-control form-control-sm"
+                      value={friendPhone}
+                      onChange={(e) => handleFriendPhoneChange(e.target.value)}
+                      placeholder="Enter phone"
+                    />
+                  </div>
+                  <div className="mb-0">
+                    <label className="form-label small fw-bold">Child's Email</label>
+                    <div className="d-flex flex-column gap-2">
+                      <input
+                        type="email"
+                        className={`form-control form-control-sm ${friendEmailError ? 'is-invalid' : ''}`}
+                        value={friendEmail}
+                        onChange={(e) => handleFriendEmailChange(e.target.value)}
+                        placeholder="Enter email"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={handleSendVerificationClick}
+                        disabled={!isFriendEmailValid || friendVerification?.sending || isFriendEmailVerified}
+                      >
+                        {friendVerification?.sending ? <span className="spinner-border spinner-border-sm"></span> : 'Verify Email'}
+                      </button>
+                    </div>
+                    {isOtpSectionVisible && (
+                      <div className="input-group input-group-sm mt-2">
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Code"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          maxLength={6}
+                        />
+                        <button className="btn btn-primary" type="button" onClick={handleVerifyOTPClick}>Verify</button>
+                      </div>
+                    )}
+                    {isFriendEmailVerified && <p className="text-success small mt-2 mb-0"><i className="bi bi-check-circle me-1"></i>Verified</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {selectedDate && !existingAppointment && !bookForFriend && (
+              <div className="alert alert-info py-2 px-3 m-0 small border-0 shadow-sm mt-auto">
+                <i className="bi bi-shield-check me-2 text-info"></i>
+                One appointment per day maximum.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Barber Selection */}
+        <div className="col-lg-8">
+          {selectedDate ? (
+            <div className="d-flex flex-column gap-4 h-100">
+              {/* Recommendations Section */}
+              <div className="card border-0 rounded-4 p-3 p-lg-4 shadow-sm" style={{ background: '#fff9f0' }}>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h5 className="mb-0 fw-bold">
+                    <i className="bi bi-star-fill me-2 text-warning"></i>
+                    Recommended for You
+                  </h5>
+                  <button
+                    className="btn btn-sm btn-light rounded-circle shadow-sm"
+                    onClick={() => setShowRecommendations(!showRecommendations)}
+                  >
+                    {showRecommendations ? <i className="bi bi-chevron-up"></i> : <i className="bi bi-chevron-down"></i>}
+                  </button>
+                </div>
+
+                {showRecommendations && (
+                  <div className="row g-3 barber-selection-row">
+                    {barberRecommendations && barberRecommendations.length > 0 ? (
+                      (() => {
+                        const serviceDuration = bookingData.selectedServices.length > 0
+                          ? calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)
+                          : 30;
+
+                        return barberRecommendations
+                          .filter(rec => {
+                            if (!rec || !rec.barber) return false;
+                            const queue = barberQueues[rec.barber.id];
+                            const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
+                            return queue && canAccommodate && !queue.isFullCapacity;
+                          })
+                          .slice(0, 3)
+                          .map((rec, index) => (
+                            <div key={rec.barber.id} className="col-md-4">
+                              <div className={`card barber-card h-100 border-0 shadow-sm ${selectedBarber === rec.barber.id ? 'border-primary ring-2 ring-primary ring-opacity-50' : ''}`}
+                                onClick={() => handleBarberSelect(rec.barber.id)}>
+                                <div className="card-body p-3">
+                                  <div className="d-flex justify-content-between align-items-start mb-3">
+                                    <div className="text-truncate me-2">
+                                      <h6 className="fw-bold mb-0 text-truncate d-flex align-items-center">
+                                        <span className="text-truncate flex-shrink-1">{rec.barber.full_name}</span>
+                                        <span className="mx-2 text-muted fw-normal opacity-50">|</span>
+                                        <span className="extra-small text-muted fw-normal d-inline-flex align-items-center flex-shrink-0">
+                                          <i className="bi bi-star-fill text-warning me-1" style={{ fontSize: '0.8em' }}></i>
+                                          {rec.barber.average_rating || '0'}
+                                          <span className="opacity-50 ms-1" style={{ fontSize: '0.9em' }}>({rec.barber.total_ratings || 0})</span>
+                                        </span>
+                                      </h6>
+                                    </div>
+                                    <span className="badge bg-warning text-dark rounded-pill">#{index + 1}</span>
+                                  </div>
+                                  <div className="mb-2 d-flex flex-wrap gap-1">
+                                    {rec.barber.skills?.split(',').slice(0, 2).map((skill, i) => (
+                                      <span key={i} className="badge bg-light text-dark extra-small rounded-1">{skill.trim()}</span>
+                                    ))}
+                                  </div>
+                                  <button className={`btn btn-sm w-100 mt-2 ${selectedBarber === rec.barber.id ? 'btn-primary' : 'btn-outline-primary'}`}>
+                                    {selectedBarber === rec.barber.id ? 'Selected' : 'Choose'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ));
+                      })()
+                    ) : (
+                      <div className="col-12 py-3 text-center text-muted">Finding best matches...</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* All Barbers Section */}
+              <div className="flex-grow-1">
+                <div className="d-flex align-items-center justify-content-between mb-3 px-1">
+                  <h5 className="mb-0 fw-bold">Choose Your Barber</h5>
+                  <span className="badge bg-light text-dark border">{barbers?.length || 0} Available</span>
+                </div>
+
+                <div className="row g-3 barber-selection-row">
+                  {barbers && barbers.length > 0 ? (
+                    barbers.map((barber) => {
+                      const queue = barberQueues[barber.id];
+                      const isSelected = selectedBarber === barber.id;
+                      const availability = barberAvailabilityStatus[barber.id];
+                      const isUnavailable = availability && !availability.isAvailable;
+
+                      const serviceDuration = bookingData.selectedServices.length > 0
+                        ? calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)
+                        : 30;
+                      const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
+                      const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
+                      const isDisabled = isFullSlot || isUnavailable;
+
+                      return (
+                        <div key={barber.id} className="col-md-4">
+                          <div
+                            className={`card barber-card h-100 shadow-sm ${isSelected ? 'border-primary ring-2 ring-primary ring-opacity-20' : 'border-0'} ${isDisabled ? 'opacity-50 grayscale' : ''}`}
+                            onClick={() => !isDisabled && handleBarberSelect(barber.id)}
+                          >
+                            <div className="card-body p-3">
+                              <div className="d-flex justify-content-between align-items-start mb-3">
+                                <div className="text-truncate me-2">
+                                  <h6 className="fw-bold mb-0 text-truncate d-flex align-items-center">
+                                    <span className="text-truncate flex-shrink-1">{barber.full_name}</span>
+                                    <span className="mx-2 text-muted fw-normal opacity-50">|</span>
+                                    <span className="extra-small text-muted fw-normal d-inline-flex align-items-center flex-shrink-0">
+                                      <i className="bi bi-star-fill text-warning me-1" style={{ fontSize: '0.8em' }}></i>
+                                      {barber.average_rating || '0'}
+                                      <span className="opacity-50 ms-1" style={{ fontSize: '0.9em' }}>({barber.total_ratings || 0})</span>
+                                    </span>
+                                  </h6>
+                                </div>
+                                {isUnavailable ? (
+                                  <span className="badge bg-danger rounded-pill px-2">Offline</span>
+                                ) : isFullSlot ? (
+                                  <span className="badge bg-secondary rounded-pill px-2">Full</span>
+                                ) : (
+                                  <span className="badge bg-success rounded-pill px-2">Available</span>
+                                )}
+                              </div>
+
+                              <div className="mt-auto pt-2 border-top">
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <span className="small text-muted"><i className="bi bi-people me-1"></i>Queue:</span>
+                                  <span className="small fw-bold">{queue?.queueCount || 0} people</span>
+                                </div>
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <span className="small text-muted"><i className="bi bi-clock me-1"></i>Wait:</span>
+                                  <span className="small fw-bold text-primary">{queue?.estimatedWait ? `${queue.estimatedWait}m` : '0m'}</span>
+                                </div>
+                              </div>
+
+                              <div className="d-flex gap-2 mt-3 mb-3">
+                                <button
+                                  className={`btn btn-sm flex-grow-1 ${isSelected ? 'btn-primary' : isDisabled ? 'btn-light disabled' : 'btn-outline-primary'}`}
+                                  disabled={isDisabled}
+                                >
+                                  {isSelected ? 'Selected' : isDisabled ? 'Unavailable' : 'Select'}
+                                </button>
+                              </div>
+
+                              {queue && (
+                                <div className="mt-2 p-2 bg-light rounded-3 small border border-light-subtle">
+                                  <div className="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
+                                    <span className="fw-bold extra-small text-uppercase text-muted letter-spacing-1">Current Queue</span>
+                                    {queue.appointments?.length > 0 && (
+                                      <span className="badge bg-white text-primary border extra-small">{queue.appointments.length}</span>
+                                    )}
+                                  </div>
+                                  {queue.appointments?.length > 0 ? (
+                                    <div className="d-flex flex-column gap-2 mt-2">
+                                      {queue.appointments.slice(0, 3).map((apt, i) => (
+                                        <div key={i} className="d-flex justify-content-between extra-small align-items-center p-1 px-2 rounded-2 bg-white shadow-sm border border-light">
+                                          <span className="text-truncate fw-medium">
+                                            <i className={`bi bi-circle-fill me-2 ${apt.status === 'ongoing' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '0.5em' }}></i>
+                                            {apt.status === 'ongoing' ? 'Currently Serving' : `Position #${i + 1}`}
+                                          </span>
+                                          <span className="badge bg-light text-muted fw-normal">{apt.total_duration || 30}m</span>
+                                        </div>
+                                      ))}
+                                      {queue.appointments.length > 3 && (
+                                        <div className="text-center extra-small text-muted py-1 border-top mt-1">
+                                          <i className="bi bi-three-dots me-1"></i>
+                                          {queue.appointments.length - 3} more waiting in line
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-2 text-muted extra-small">
+                                      <i className="bi bi-calendar-event me-1"></i>
+                                      No active appointments
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="col-12 py-5 text-center bg-light rounded-4">
+                      <i className="bi bi-person-x fs-1 text-muted mb-3 d-block"></i>
+                      <p className="text-muted">No barbers available for this date.</p>
                     </div>
                   )}
                 </div>
               </div>
-            ) : barberAvailability && barberAvailability.isAvailable ? (
-              <div className="alert alert-success d-flex align-items-center">
-                <i className="bi bi-check-circle me-2"></i>
-                <div>
-                  <strong>✅ Barber Available</strong>
-                  <div className="small">This barber is available for the selected date</div>
-                </div>
+            </div>
+          ) : (
+            <div className="h-100 d-flex flex-column align-items-center justify-content-center bg-light rounded-4 border p-5 text-center">
+              <div className="bg-white rounded-circle p-4 shadow-sm mb-4">
+                <i className="bi bi-calendar-check fs-1 text-primary"></i>
               </div>
-            ) : null}
-          </div>
+              <h5 className="fw-bold">Please Select a Date</h5>
+              <p className="text-muted">Choose a date on the left to see available barbers and their schedules</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Navigation */}
-      <div className="row mt-4">
+      {/* Navigation Footer */}
+      <div className="row mt-5 border-top pt-4">
         <div className="col-12 d-flex justify-content-end">
           <button
-            className="btn btn-primary btn-lg"
+            className="btn btn-primary btn-lg px-5 rounded-pill shadow"
             onClick={handleNext}
-            disabled={!selectedDate || !selectedBarber || (barberAvailability && !barberAvailability.isAvailable)}
+            disabled={!selectedDate || !selectedBarber || (barberAvailabilityStatus[selectedBarber] && !barberAvailabilityStatus[selectedBarber].isAvailable)}
           >
-            {(barberAvailability && !barberAvailability.isAvailable) ? 'Barber Unavailable' : 
-             'Next: Select Services'}
+            Next: Select Services
             <i className="bi bi-arrow-right ms-2"></i>
           </button>
-                    </div>
-                      </div>
-                    </div>
+        </div>
+      </div>
     </div>
   );
 };
 
 
 // Step 2: Services and Add-ons
-const Step2ServicesAndAddons = ({ 
-  bookingData, 
-  updateBookingData, 
-  onNext, 
-  onPrev, 
-  services, 
-  addOns 
+const Step2ServicesAndAddons = ({
+  bookingData,
+  updateBookingData,
+  onNext,
+  onPrev,
+  services,
+  addOns
 }) => {
   const [selectedServices, setSelectedServices] = useState(bookingData.selectedServices || []);
   const [selectedAddOns, setSelectedAddOns] = useState(bookingData.selectedAddOns || []);
@@ -6754,16 +3911,31 @@ const Step2ServicesAndAddons = ({
   }, [specialRequests, setSpecialRequests, updateBookingData]);
 
   const handleServiceToggle = (serviceId) => {
-    setSelectedServices(prev => 
-      prev.includes(serviceId) 
-        ? [] // Deselect if already selected
-        : [serviceId] // Select only this service (single selection)
-    );
+    const service = services.find(s => s.id === serviceId);
+    const isNowSelected = !selectedServices.includes(serviceId);
+
+    setSelectedServices(isNowSelected ? [serviceId] : []);
+
+    // If selecting a service that conflicts with current add-ons, clear them
+    if (isNowSelected && service) {
+      const serviceName = service.name?.toLowerCase() || '';
+      if (serviceName.includes('emperor')) {
+        setSelectedAddOns(prev => prev.filter(id => {
+          const addon = addOns.find(a => a.id === id);
+          return !addon?.name?.toLowerCase().includes('Hair Spa');
+        }));
+      } else if (serviceName.includes('superior')) {
+        setSelectedAddOns(prev => prev.filter(id => {
+          const addon = addOns.find(a => a.id === id);
+          return !addon?.name?.toLowerCase().includes('Hair Color');
+        }));
+      }
+    }
   };
 
   const handleAddOnToggle = (addonId) => {
-    setSelectedAddOns(prev => 
-      prev.includes(addonId) 
+    setSelectedAddOns(prev =>
+      prev.includes(addonId)
         ? prev.filter(id => id !== addonId)
         : [...prev, addonId]
     );
@@ -6774,28 +3946,14 @@ const Step2ServicesAndAddons = ({
       const service = services.find(s => s.id === serviceId);
       return total + (service?.price || 0);
     }, 0);
-    
+
     const addOnsTotal = selectedAddOns.reduce((total, addonId) => {
       const addon = addOns.find(a => a.id === addonId);
       if (addon) {
         return total + (addon.price || 0);
       }
-      
-      // Legacy mapping for addon prices (fallback)
-      const legacyPriceMapping = {
-        'addon1': 50.00, // Beard Trim
-        'addon2': 30.00, // Hot Towel Treatment
-        'addon3': 80.00, // Scalp Massage
-        'addon4': 40.00, // Hair Wash
-        'addon5': 25.00, // Styling
-        'addon6': 35.00, // Hair Wax Application
-        'addon7': 20.00, // Eyebrow Trim
-        'addon8': 20.00, // Mustache Trim
-        'addon9': 45.00, // Face Mask
-        'addon10': 60.00  // Hair Treatment
-      };
-      
-      return total + (legacyPriceMapping[addonId] || 0);
+
+      return total + (LEGACY_PRICE_MAPPING[addonId] || 0);
     }, 0);
 
     return servicesTotal + addOnsTotal;
@@ -6812,174 +3970,193 @@ const Step2ServicesAndAddons = ({
   };
 
   return (
-    <div className="card-body p-4">
-                      <div className="row">
-        <div className="col-12">
-          <h4 className="mb-4">
-            <i className="bi bi-list-check me-2 text-primary"></i>
-            Select Services & Add-ons
-          </h4>
-                          </div>
-                    </div>
+    <div className="card-body p-3 p-md-4">
+      <div className="d-flex align-items-center mb-4">
+        <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
+          <i className="bi bi-scissors fs-4 text-primary"></i>
+        </div>
+        <div>
+          <h4 className="mb-0 fw-bold text-dark">Services & Add-ons</h4>
+          <p className="text-muted small mb-0">Customize your haircut experience</p>
+        </div>
+      </div>
 
-                    {/* Services Selection */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <h5 className="mb-3">
-            <i className="bi bi-scissors me-2"></i>
-            Services <small className="text-muted">(Select 1)</small>
+      {/* Services Selection */}
+      <div className="mb-5">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5 className="mb-0 fw-bold">
+            <i className="bi bi-star me-2 text-primary"></i>
+            Primary Services
           </h5>
-          <div className="row g-3">
-            {services && services.length > 0 ? services.map((service) => (
-              <div key={service.id} className="col-md-6 col-lg-4">
-                <div 
-                  className={`card service-card h-100 ${selectedServices.includes(service.id) ? 'border-primary bg-primary bg-opacity-10' : ''}`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => handleServiceToggle(service.id)}
-                >
-                              <div className="card-body p-3">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <h6 className="card-title mb-0">{service.name}</h6>
-                                      <span className="badge bg-success">{formatPrice(service.price)}</span>
-                                    </div>
-                                    <p className="text-muted small mb-2">{service.description}</p>
-                    <div className="d-flex justify-content-between align-items-center">
-                                      <small className="text-muted">
-                                        <i className="bi bi-clock me-1"></i>
-                        {service.duration} mins
-                                      </small>
-                      {selectedServices.includes(service.id) && (
-                        <i className="bi bi-check-circle-fill text-primary"></i>
-                      )}
-                                    </div>
-                                </div>
-                              </div>
-                            </div>
-            )) : (
-              <div className="col-12 text-center">
-                <p className="text-muted">Loading services...</p>
-                          </div>
-            )}
-          </div>
-                      </div>
-                    </div>
+          <span className="badge bg-light text-dark border">Select 1</span>
+        </div>
 
-                    {/* Add-ons Selection */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <h5 className="mb-3">
-            <i className="bi bi-plus-circle me-2"></i>
-            Add-ons <small className="text-muted">(Select Multiple)</small>
+        <div className="row g-3">
+          {services && services.length > 0 ? services.map((service) => (
+            <div key={service.id} className="col-md-6 col-lg-4">
+              <div
+                className={`card barber-card h-100 ${selectedServices.includes(service.id) ? 'border-primary bg-primary bg-opacity-5' : 'border-0 shadow-sm'}`}
+                onClick={() => handleServiceToggle(service.id)}
+              >
+                <div className="card-body p-3 d-flex flex-column">
+                  <div className="d-flex justify-content-between align-items-start mb-2">
+                    <h6 className="fw-bold mb-0">{service.name}</h6>
+                    <span className="fw-bold text-success">{formatPrice(service.price)}</span>
+                  </div>
+                  <p className="text-muted small mb-3 flex-grow-1">{service.description}</p>
+                  <div className="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
+                    <small className="text-muted">
+                      <i className="bi bi-clock me-1"></i>
+                      {service.duration} mins
+                    </small>
+                    {selectedServices.includes(service.id) ? (
+                      <span className="badge bg-primary rounded-pill"><i className="bi bi-check-lg"></i></span>
+                    ) : (
+                      <span className="text-primary small fw-bold">Select</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )) : (
+            <div className="col-12 text-center py-5">
+              <div className="spinner-border text-primary mb-3"></div>
+              <p className="text-muted">Loading services...</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add-ons Selection */}
+      <div className="mb-5">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5 className="mb-0 fw-bold">
+            <i className="bi bi-plus-circle me-2 text-primary"></i>
+            Extra add-ons
           </h5>
-          <div className="row g-3">
-            {addOns && addOns.length > 0 ? addOns.map((addon) => (
+          <span className="badge bg-light text-dark border">Multiple allowed</span>
+        </div>
+
+        <div className="row g-3">
+          {addOns && addOns.length > 0 ? addOns.map((addon) => {
+            const selectedServiceObj = services.find(s => selectedServices.includes(s.id));
+            const serviceName = selectedServiceObj?.name?.toLowerCase() || '';
+            const addonName = addon.name?.toLowerCase() || '';
+
+            let isDisabled = false;
+            if (serviceName.includes('emperor') && addonName.includes('hair spa')) isDisabled = true;
+            if (serviceName.includes('superior') && addonName.includes('hair color')) isDisabled = true;
+
+            const isSelected = selectedAddOns.includes(addon.id);
+
+            return (
               <div key={addon.id} className="col-md-6 col-lg-4">
-                <div 
-                  className={`card addon-card h-100 ${selectedAddOns.includes(addon.id) ? 'border-warning bg-warning bg-opacity-10' : ''}`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => handleAddOnToggle(addon.id)}
+                <div
+                  className={`card barber-card h-100 ${isSelected ? 'border-warning bg-warning bg-opacity-5' : 'border-0 shadow-sm'} ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                  onClick={() => !isDisabled && handleAddOnToggle(addon.id)}
+                  title={isDisabled ? `Not available with ${selectedServiceObj?.name}` : ''}
                 >
-                  <div className="card-body p-3">
+                  <div className="card-body p-3 d-flex flex-column">
                     <div className="d-flex justify-content-between align-items-start mb-2">
-                      <h6 className="card-title mb-0">{addon.name}</h6>
-                      <span className="badge bg-warning text-dark">{formatPrice(addon.price)}</span>
-                          </div>
-                    <p className="text-muted small mb-2">{addon.description}</p>
-                                      <div className="d-flex justify-content-between align-items-center">
-                      <small className="text-muted">
+                      <h6 className="fw-bold mb-0 small">{addon.name}</h6>
+                      <span className="small fw-bold text-warning-emphasis">{formatPrice(addon.price)}</span>
+                    </div>
+                    <div className="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
+                      <small className="text-muted extra-small">
                         <i className="bi bi-clock me-1"></i>
                         {addon.duration} mins
                       </small>
-                      {selectedAddOns.includes(addon.id) && (
-                        <i className="bi bi-check-circle-fill text-warning"></i>
+                      {isSelected ? (
+                        <span className="badge bg-warning text-dark rounded-pill"><i className="bi bi-check-lg"></i></span>
+                      ) : isDisabled ? (
+                        <span className="text-muted extra-small fw-bold">N/A</span>
+                      ) : (
+                        <span className="text-warning small fw-bold">Add</span>
                       )}
-                                        </div>
-                                      </div>
-                                  </div>
-                                </div>
-            )) : (
-              <div className="col-12 text-center">
-                <p className="text-muted">Loading add-ons...</p>
-                              </div>
-            )}
-                            </div>
-                        </div>
-                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="col-12 text-center py-4 bg-light rounded-3">
+              <p className="text-muted mb-0">No add-ons available</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Special Requests */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <label htmlFor="specialRequests" className="form-label fw-bold">
-            <i className="bi bi-chat-text me-2 text-primary"></i>
-            Special Requests
-                      </label>
-                      <textarea
-                        className="form-control"
-            id="specialRequests"
-                        rows="3"
-            value={specialRequests}
-            onChange={(e) => setSpecialRequests(e.target.value)}
-            placeholder="Any special instructions or requests for your barber..."
-          />
-        </div>
-                    </div>
+      <div className="mb-5">
+        <label htmlFor="specialRequests" className="form-label fw-bold">
+          <i className="bi bi-chat-dots me-2 text-primary"></i>
+          Any special instructions?
+        </label>
+        <textarea
+          className="form-control border-0 shadow-sm rounded-4 p-3"
+          id="specialRequests"
+          rows="3"
+          value={specialRequests}
+          onChange={(e) => setSpecialRequests(e.target.value)}
+          placeholder="e.g., Specific style, allergies, or questions..."
+        />
+      </div>
 
-      {/* Total Price */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="alert alert-success">
-            <h6 className="mb-0">
-              <i className="bi bi-calculator me-2"></i>
-              Total: {formatPrice(calculateTotal())}
-            </h6>
+      {/* Floating Summary Bar (Mobile Only or Bottom Fixed) */}
+      <div className="alert alert-primary border-0 shadow-sm rounded-4 p-3 mb-5">
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 className="mb-1 fw-bold">Current Total</h6>
+            <p className="mb-0 small text-primary-emphasis">
+              {selectedServices.length} Service {selectedAddOns.length > 0 ? `+ ${selectedAddOns.length} Add-on(s)` : ''}
+            </p>
+          </div>
+          <div className="text-end">
+            <h4 className="mb-0 fw-bold">{formatPrice(calculateTotal())}</h4>
           </div>
         </div>
-                  </div>
+      </div>
 
-      {/* Navigation */}
-      <div className="row mt-4">
+      {/* Navigation Footer */}
+      <div className="row mt-5 border-top pt-4">
         <div className="col-12 d-flex justify-content-between">
           <button
-            className="btn btn-outline-secondary btn-lg"
+            className="btn btn-light btn-lg px-4 rounded-pill border"
             onClick={onPrev}
           >
             <i className="bi bi-arrow-left me-2"></i>
             Back
           </button>
           <button
-            className="btn btn-primary btn-lg"
+            className="btn btn-primary btn-lg px-5 rounded-pill shadow"
             onClick={handleNext}
             disabled={selectedServices.length === 0}
           >
-            Next: Review & Confirm
-            <i className="bi bi-arrow-right ms-2"></i>
+            Review Booking
+            <i className="bi bi-pencil-square ms-2"></i>
           </button>
-                            </div>
-                          </div>
+        </div>
+      </div>
     </div>
   );
 };
 // Step 3: Queue Summary
-const Step3QueueSummary = ({ 
-  bookingData, 
-  updateBookingData, 
-  onPrev, 
-  onEdit, 
-  barbers, 
-  services, 
-  addOns, 
-  barberQueues, 
-  user, 
-  isRebooking, 
-  rebookingAppointment, 
-  onSubmit, 
+const Step3QueueSummary = ({
+  bookingData,
+  updateBookingData,
+  onPrev,
+  onEdit,
+  barbers,
+  services,
+  addOns,
+  barberQueues,
+  user,
+  isRebooking,
+  rebookingAppointment,
+  onSubmit,
   loading,
-  timeSlots,
-  getQueuePosition,
-  getNextSlotRange,
   calculateTotalDuration,
-  getEstimatedStartTime,
-  getEstimatedEndTime,
+
   wouldCrossLunchBreak,
   isRefreshing,
   setIsRefreshing,
@@ -6996,7 +4173,7 @@ const Step3QueueSummary = ({
   const queue = barberQueues[bookingData.selectedBarber];
   const [estimatedStartTime, setEstimatedStartTime] = useState('Loading...');
   const [estimatedEndTime, setEstimatedEndTime] = useState('Loading...');
-  
+
   // Real-time status state
   const [realTimeStatus, setRealTimeStatus] = useState({
     queueStatus: null,
@@ -7011,11 +4188,11 @@ const Step3QueueSummary = ({
       if (bookingData.selectedBarber) {
         try {
           setStatusLoading(true);
-          
+
           const serviceDuration = calculateTotalDuration(
-            bookingData.selectedServices, 
-            bookingData.selectedAddOns, 
-            services, 
+            bookingData.selectedServices,
+            bookingData.selectedAddOns,
+            services,
             addOns
           );
 
@@ -7027,19 +4204,20 @@ const Step3QueueSummary = ({
               serviceDuration,
               bookingData.isUrgent || false
             );
-            
+
             // Convert to 12-hour format if needed
             const startTime = queueInfo.estimatedStartTime;
-            const formattedStartTime = startTime && startTime.includes(':') 
+            const formattedStartTime = startTime && startTime.includes(':')
               ? (startTime.length === 5 ? convertTo12Hour(startTime) : startTime)
               : startTime;
-            
+
             setEstimatedStartTime(formattedStartTime);
             setEstimatedEndTime(queueInfo.estimatedEndTime);
 
-          setRealTimeStatus({
+            setRealTimeStatus({
               queueStatus: {
                 nextQueuePosition: queueInfo.queuePosition,
+                totalInQueue: queueInfo.totalInQueue,
                 queueLength: queueInfo.totalInQueue - 1,
                 estimatedWaitTime: queueInfo.estimatedWaitTime
               },
@@ -7057,7 +4235,7 @@ const Step3QueueSummary = ({
               bookingData.selectedTimeSlot,
               serviceDuration
             );
-            
+
             if (scheduledInfo.hasConflict) {
               setEstimatedStartTime('Conflict Detected');
               setEstimatedEndTime('Please Reschedule');
@@ -7065,7 +4243,7 @@ const Step3QueueSummary = ({
               setEstimatedStartTime(bookingData.selectedTimeSlot);
               setEstimatedEndTime(scheduledInfo.endTime);
             }
-            
+
             setRealTimeStatus({
               queueStatus: null,
               availability: {
@@ -7074,8 +4252,8 @@ const Step3QueueSummary = ({
                 conflictMessage: scheduledInfo.conflictMessage,
                 recommendedSlots: scheduledInfo.recommendedSlots || []
               },
-            lastUpdated: new Date().toLocaleTimeString()
-          });
+              lastUpdated: new Date().toLocaleTimeString()
+            });
           }
 
         } catch (error) {
@@ -7096,413 +4274,419 @@ const Step3QueueSummary = ({
       const service = services.find(s => s.id === serviceId);
       return total + (service?.price || 0);
     }, 0);
-    
+
     const addOnsTotal = bookingData.selectedAddOns.reduce((total, addonId) => {
       const addon = addOns.find(a => a.id === addonId);
       if (addon) {
         return total + (addon.price || 0);
       }
-      
-      // Legacy mapping for addon prices (fallback)
-      const legacyPriceMapping = {
-        'addon1': 50.00, // Beard Trim
-        'addon2': 30.00, // Hot Towel Treatment
-        'addon3': 80.00, // Scalp Massage
-        'addon4': 40.00, // Hair Wash
-        'addon5': 25.00, // Styling
-        'addon6': 35.00, // Hair Wax Application
-        'addon7': 20.00, // Eyebrow Trim
-        'addon8': 20.00, // Mustache Trim
-        'addon9': 45.00, // Face Mask
-        'addon10': 60.00  // Hair Treatment
-      };
-      
-      return total + (legacyPriceMapping[addonId] || 0);
+
+      return total + (LEGACY_PRICE_MAPPING[addonId] || 0);
     }, 0);
 
     return servicesTotal + addOnsTotal;
   };
 
   return (
-    <div className="container-fluid px-2 px-md-4 py-3 py-md-5">
+    <div className="container-fluid px-2 px-md-4 py-4 py-md-5 animate-fade-in">
       <style>{`
-        .queue-card {
+        .summary-card {
+          border: none;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+          border-radius: 24px;
+          overflow: hidden;
+          background: #ffffff;
+        }
+        .info-card {
+          background: #f8f9fa;
+          border-radius: 20px;
+          border: 1px solid rgba(0,0,0,0.05);
           transition: all 0.3s ease;
         }
-        
-        .queue-stat {
-          transition: all 0.3s ease;
-        }
-        
-        .queue-stat:hover {
+        .info-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          border-color: var(--bs-primary);
         }
-      `}</style>
+        .queue-badge-container {
+          position: relative;
+          width: 160px;
+          height: 160px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .queue-ring-outer {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          border: 2px dashed #e9ecef;
+          animation: rotate-dashed 20s linear infinite;
+        }
+        @keyframes rotate-dashed {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .queue-pulse {
+          position: absolute;
+          width: 140px;
+          height: 140px;
+          border-radius: 50%;
+          background: rgba(25, 135, 84, 0.05);
+          animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+        @keyframes pulse-ring {
+          0% { transform: scale(0.8); opacity: 0.5; }
+          50% { transform: scale(1.1); opacity: 0.3; }
+          100% { transform: scale(0.8); opacity: 0.5; }
+        }
+        .queue-inner {
+          position: relative;
+          width: 130px;
+          height: 130px;
+          background: white;
+          border-radius: 50%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+          z-index: 2;
+          border: 4px solid #fff;
+        }
+        .queue-number {
+          font-size: 4rem;
+          font-weight: 800;
+          line-height: 1;
+          margin-bottom: -5px;
+          background: linear-gradient(135deg, #198754 0%, #0d6efd 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          display: block;
+        }
+        .queue-label {
+          font-size: 0.7rem;
+          font-weight: 700;
+          text-uppercase;
+          color: #6c757d;
+          letter-spacing: 1.5px;
+        }
+        .total-price-card {
+          background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+          border-radius: 20px;
+          color: white;
+          box-shadow: 0 10px 20px rgba(25, 135, 84, 0.2);
+        }
+        .edit-btn-pill {
+          padding: 4px 12px;
+          border-radius: 50px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .service-item {
+          padding: 12px;
+          border-bottom: 1px dashed rgba(0,0,0,0.1);
+        }
+        .service-item:last-child {
+          border-bottom: none;
+        }
+        .queue-number-v2 {
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: #0d6efd;
+        background: #f0f7ff;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 20px;
+        border: 2px solid #e0eeff;
+        box-shadow: 0 8px 20px rgba(13, 110, 253, 0.1);
+      }
+      .stat-box-v2 {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 16px;
+        text-align: center;
+        flex: 1;
+        border: 1px solid #eee;
+        transition: all 0.2s ease;
+      }
+      .stat-box-v2:hover {
+        background: #fff;
+        border-color: #0d6efd;
+        transform: translateY(-2px);
+      }
+      .animate-pulse-subtle {
+        animation: pulse-subtle 2s infinite;
+      }
+      @keyframes pulse-subtle {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.05); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @media (max-width: 576px) {
+        .queue-number-v2 {
+          width: 70px;
+          height: 70px;
+          font-size: 2rem;
+        }
+        .stat-box-v2 .h3 {
+          font-size: 1.5rem !important;
+        }
+        .stat-box-v2 .extra-small {
+          font-size: 0.6rem !important;
+        }
+        .summary-card {
+          padding: 1.25rem !important;
+        }
+        .info-card.mobile-row {
+          flex-direction: column !important;
+          text-align: center;
+        }
+        .info-card.mobile-row .queue-number-v2 {
+          margin-right: 0 !important;
+          margin-bottom: 1rem;
+        }
+      }
+    `}</style>
+
       <div className="container-xl">
         <div className="row justify-content-center">
-          <div className="col-12 col-xxl-10">
-            <div className="bg-white p-4 p-lg-5 rounded-3 shadow-sm border">
-              <div className="text-center mb-4">
-                <h3 className="mb-2 fw-bold text-dark">
-                  <i className="bi bi-clipboard-check me-2 text-primary"></i>
-                  Review & Confirm Your Booking
-                </h3>
-                <p className="text-muted mb-0">Please review your appointment details before confirming</p>
+          <div className="col-12 col-lg-10 col-xl-8">
+            <div className="summary-card p-4 p-lg-5">
+              {/* Header Section */}
+              <div className="text-center mb-5">
+                <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-bold mb-3">
+                  <i className="bi bi-shield-check me-2"></i>Final Confirmation
+                </span>
+                <h2 className="display-6 fw-bold text-dark">Review Your Booking</h2>
+                <p className="text-muted">Almost there! Double-check your appointment details below.</p>
               </div>
-              
-              {/* Queue Position and Expected Arrival */}
-              {bookingData && bookingData.appointmentType === 'queue' && (
-                <div className="text-center mb-4">
-                  <label className="text-muted mb-3 d-block">Your Queue Position:</label>
-                  {realTimeStatus.queueStatus ? (
-                    <>
-                      <div className="mb-3">
-                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle bg-success text-white" 
-                             style={{ 
-                               width: '120px', 
-                               height: '120px', 
-                               fontSize: '3rem',
-                               fontWeight: 'bold',
-                               boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
-                             }}>
-                          {realTimeStatus.queueStatus.nextQueuePosition || '?'}
-                        </div>
+
+              {/* Queue Visualization */}
+              {bookingData?.appointmentType === 'queue' && (
+                <div className="mb-5 p-3 p-sm-4 bg-white border-0 shadow-sm rounded-4 position-relative overflow-hidden">
+                  <div className="d-flex justify-content-between align-items-start mb-4">
+                    <div className="d-flex align-items-center flex-grow-1">
+                      <div className="queue-number-v2 me-3 me-sm-4">
+                        {statusLoading ? (
+                          <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        ) : (
+                          `#${realTimeStatus.queueStatus?.nextQueuePosition || '?'}`
+                        )}
                       </div>
-                      {estimatedStartTime && estimatedStartTime !== 'Loading...' && estimatedStartTime !== 'N/A' && (
-                        <p className="text-dark mb-0 fs-5">
-                          <strong>Expected Arrival:</strong> {estimatedStartTime}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="mb-3">
-                      <div className="d-inline-flex align-items-center justify-content-center rounded-circle bg-secondary text-white" 
-                           style={{ 
-                             width: '120px', 
-                             height: '120px', 
-                             fontSize: '3rem',
-                             fontWeight: 'bold'
-                           }}>
-                        ?
+                      <div>
+                        <h5 className="mb-0 fw-bold h5 h4-sm">Queue Reservation</h5>
+                        <p className="text-muted mb-0 small">Spot with <strong>{selectedBarber?.full_name || 'Selected Barber'}</strong></p>
                       </div>
+                    </div>
+                    <div className="d-none d-md-block">
+                      <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2">
+                        <i className="bi bi-broadcast me-2 animate-pulse-subtle"></i>
+                        Live Estimate
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Mobile-only badge row */}
+                  <div className="d-md-none mb-4 text-center">
+                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2">
+                      <i className="bi bi-broadcast me-2 animate-pulse-subtle"></i>
+                      Live Queue Estimate
+                    </span>
+                  </div>
+
+                  <div className="d-flex gap-3 mb-4">
+                    <div className="stat-box-v2">
+                      <div className="text-primary fw-bold h3 mb-0">
+                        {statusLoading ? '...' : (realTimeStatus.queueStatus?.estimatedWaitTime || '0')}
+                      </div>
+                      <div className="text-muted extra-small text-uppercase fw-bold ls-1">Minutes Wait</div>
+                    </div>
+                    <div className="stat-box-v2">
+                      <div className="text-success fw-bold h3 mb-0">
+                        {statusLoading ? '...' : (realTimeStatus.queueStatus?.queueLength || '0')}
+                      </div>
+                      <div className="text-muted extra-small text-uppercase fw-bold ls-1">People Ahead</div>
+                    </div>
+                  </div>
+
+                  {!statusLoading && estimatedStartTime && estimatedStartTime !== 'Loading...' && (
+                    <div className="d-flex flex-column align-items-center gap-2 border-top pt-4 mt-2">
+                      <div className="bg-success bg-opacity-10 text-success rounded-pill px-3 px-sm-4 py-2 fw-bold small">
+                        <i className="bi bi-clock-fill me-2"></i>Estimated Arrival: <span className="text-dark">{estimatedStartTime}</span>
+                      </div>
+                      <p className="extra-small text-muted mb-0 text-center px-2">Time accounts for services ahead and average pace.</p>
                     </div>
                   )}
                 </div>
               )}
-              
-              {/* Lunch Break Conflict Warning */}
-              {(() => {
-                if (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot) {
-                  const totalDuration = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
-                  if (wouldCrossLunchBreak(bookingData.selectedTimeSlot, totalDuration)) {
-                    return (
-                      <div className="row justify-content-center mb-4">
-                        <div className="col-12 col-lg-12 col-xl-10">
-                          <div className="alert alert-danger border-0 shadow-sm">
-                            <div className="d-flex align-items-center">
-                              <i className="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
-                              <div>
-                                <h6 className="mb-1 fw-bold">Lunch Break Conflict Detected!</h6>
-                                <p className="mb-0">
-                                  Your selected time slot ({bookingData.selectedTimeSlot}) with {totalDuration}-minute service would cross the lunch break period (12:00 PM - 1:00 PM). 
-                                  Please go back and choose a different time slot or reduce your service duration.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+
+              {/* Booking Grid */}
+              <div className="row g-4 mb-5">
+                {/* Date and Barber Column */}
+                <div className="col-md-6">
+                  <div className="h-100 d-flex flex-column gap-4">
+                    {/* Date Card */}
+                    <div className="info-card p-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-calendar3 me-2"></i>Date</div>
+                        <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(1)}>Edit</button>
                       </div>
-                    );
-                  }
-                }
-                return null;
-              })()}
+                      <div className="fs-5 fw-bold text-dark">{bookingData.selectedDate}</div>
+                    </div>
 
-              <div className="row justify-content-center">
-                {/* Unified Booking & Queue Summary */}
-                <div className="col-12 col-lg-12 col-xl-10">
-                  <div className="card border-success shadow-sm" style={{ borderWidth: '2px' }}>
-                    <div className="card-body p-3 p-md-4 p-lg-5">
-                      {/* Date - Mobile Responsive */}
-                      <div className="row g-3 mb-4">
-                        <div className="col-12">
-                          <div className="d-flex  flex-md-row align-items-start align-items-md-center justify-content-between">
-                            <div className="flex-grow-1 mb-2 mb-md-0">
-                              <label className="form-label text-muted small mb-1">
-                                <i className="bi bi-calendar me-1"></i>
-                                Appointment Date:
-                              </label>
-                              <div className="fw-bold text-dark fs-6">{bookingData.selectedDate}</div>
-                            </div>
-                            <button 
-                              className="btn btn-sm btn-outline-primary"
-                              onClick={() => onEdit(1)}
-                              style={{ transition: 'all 0.3s ease' }}
-                            >
-                              <i className="bi bi-pencil me-1"></i>
-                              <span className="d-none d-sm-inline">Edit</span>
-                            </button>
-                          </div>
-                        </div>
+                    {/* Barber Card */}
+                    <div className="info-card p-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-person-fill me-2"></i>Barber</div>
+                        <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(1)}>Edit</button>
                       </div>
-
-                      {/* Barber - Mobile Responsive */}
-                      <div className="row g-3 mb-4">
-                        <div className="col-12">
-                          <div className="d-flex  flex-md-row align-items-start align-items-md-center justify-content-between">
-                            <div className="flex-grow-1 mb-2 mb-md-0">
-                              <label className="form-label text-muted small mb-1">
-                                <i className="bi bi-person me-1"></i>
-                                <span className="d-none d-sm-inline">Selected Barber</span>
-                                <span className="d-sm-none">Barber</span>
-                              </label>
-                              <div className="fw-bold text-dark fs-6">{selectedBarber?.full_name}</div>
-                            </div>
-                            <button 
-                              className="btn btn-sm btn-outline-primary"
-                              onClick={() => onEdit(1)}
-                            >
-                              <i className="bi bi-pencil me-1"></i>
-                              <span className="d-none d-sm-inline">Edit</span>
-                            </button>
-                          </div>
+                      <div className="d-flex align-items-center">
+                        <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
+                          <i className="bi bi-person-badge text-primary fs-5"></i>
                         </div>
+                        <div className="fw-bold text-dark fs-5">{selectedBarber?.full_name}</div>
                       </div>
+                    </div>
+                  </div>
+                </div>
 
-                      {/* Services - Mobile Responsive */}
-                      <div className="row g-3 mb-4">
-  <div className="col-12">
-    {/* Header Section */}
-    <div className="d-flex flex-md-row justify-content-between align-items-start align-items-md-center mb-3">
-      {/* Left: Label */}
-      <div className="d-flex align-items-center gap-2 mb-2 mb-md-0">
-        <i className="bi bi-scissors text-muted fs-5"></i>
-        <span className="text-muted small">Selected Services:</span>
-      </div>
-
-      {/* Right: Button */}
-      <div className="text-start text-md-end">
-        <button
-          className="btn btn-sm btn-outline-primary"
-          onClick={() => onEdit(2)}
-        >
-          <i className="bi bi-pencil me-1"></i>
-          <span className="d-none d-sm-inline">Edit</span>
-        </button>
-      </div>
-    </div>
-
-    {/* Content Section */}
-    <div className="bg-light p-3 rounded">
-      {bookingData.selectedServices && services ? (
-        bookingData.selectedServices.map(serviceId => {
-          const service = services.find(s => s.id === serviceId);
-          return (
-            <div
-              key={serviceId}
-              className="d-flex justify-content-between align-items-center py-2 border-bottom"
-            >
-              <div>
-                <span className="fw-medium">{service?.name}</span>
-                <small className="text-muted d-block">
-                  <i className="bi bi-clock me-1"></i>
-                  {service?.duration} Mins
-                </small>
-              </div>
-              <span className="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 fw-bold">{formatPrice(service?.price)}</span>
-            </div>
-          );
-        })
-      ) : (
-        <p className="text-muted mb-0 text-center py-3">
-          <i className="bi bi-info-circle me-1"></i>
-          No services selected
-        </p>
-      )}
-    </div>
-  </div>
-</div>
-                      {/* Add-ons - Mobile Responsive */}
-                      {bookingData.selectedAddOns.length > 0 && (
-                        <div className="row g-3 mb-4">
-                          <div className="col-12">
-                            <label className="form-label text-muted small mb-1">
-                              <i className="bi bi-plus-circle me-1"></i>
-                              Additional Service:
-                            </label>
-                            <div className="bg-light p-3 rounded">
-                              {bookingData.selectedAddOns && addOns ? bookingData.selectedAddOns.map(addonId => {
-                                const addon = addOns.find(a => a.id === addonId);
-                                return (
-                                  <div key={addonId} className="d-flex justify-content-between align-items-center py-2 border-bottom">
-                                    <div>
-                                      <span className="fw-medium">{addon?.name}</span>
-                                      <small className="text-muted d-block">
-                                        <i className="bi bi-clock me-1"></i>
-                                        {addon?.duration} Mins
-                                      </small>
-                                    </div>
-                                    <span className="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 fw-bold">{formatPrice(addon?.price)}</span>
-                                  </div>
-                                );
-                              }) : (
-                                <p className="text-muted mb-0 text-center py-3">
-                                  <i className="bi bi-info-circle me-1"></i>
-                                  No add-ons selected
-                                </p>
-                              )}
+                {/* Services Column */}
+                <div className="col-md-6">
+                  <div className="info-card h-100 p-3">
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-scissors me-2"></i>Selected Services</div>
+                      <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(2)}>Edit</button>
+                    </div>
+                    <div className="services-list">
+                      {bookingData.selectedServices?.map(serviceId => {
+                        const service = services.find(s => s.id === serviceId);
+                        return (
+                          <div key={serviceId} className="service-item d-flex justify-content-between align-items-center">
+                            <div>
+                              <div className="fw-bold text-dark mb-0 small">{service?.name}</div>
+                              <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{service?.duration} mins</div>
                             </div>
+                            <div className="fw-bold text-primary small">{formatPrice(service?.price)}</div>
                           </div>
-                        </div>
-                      )}
-
-                      {/* Special Requests */}
-                      {bookingData.specialRequests && (
-                        <div className="row g-3 mb-4">
-                          <div className="col-12">
-                            <label className="form-label text-muted small mb-1">Special Requests</label>
-                            <div className="bg-light p-3 rounded">
-                              <p className="text-muted mb-0">{bookingData.specialRequests}</p>
+                        );
+                      })}
+                      {bookingData.selectedAddOns?.map(addonId => {
+                        const addon = addOns.find(a => a.id === addonId);
+                        return (
+                          <div key={addonId} className="service-item d-flex justify-content-between align-items-center">
+                            <div>
+                              <div className="fw-bold text-dark mb-0 small">{addon?.name} <span className="badge bg-light text-muted fw-normal ms-1">Add-on</span></div>
+                              <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{addon?.duration} mins</div>
                             </div>
+                            <div className="fw-bold text-primary small">{formatPrice(addon?.price)}</div>
                           </div>
-                        </div>
-                      )}
-
-                      {/* Service Duration Info */}
-                      <div className="row mb-4">
-                        <div className="col-12">
-                          <div className="bg-light rounded p-3 border">
-                            <div className="d-flex justify-content-between align-items-center">
-                              <div>
-                                <div className="text-muted small mb-1">Total Service Duration:</div>
-                                <div className="fw-bold text-dark fs-5">
-                                  {calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} minutes
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    
-
-                      {/* Child Info */}
-                      {bookingData.bookForFriend && (
-                        <div className="row mb-3">
-                          <div className="col-12">
-                            <div className="alert alert-info border-0 shadow-sm">
-                              <div className="d-flex align-items-center mb-2">
-                                <i className="bi bi-person-check me-2 fs-5 text-info"></i>
-                                <h6 className="mb-0 text-info fw-bold">Booking for Child</h6>
-                              </div>
-                              <div className="row g-2">
-                                <div className="col-md-6">
-                                  <div className="d-flex align-items-center">
-                                    <i className="bi bi-person me-2 text-primary"></i>
-                                    <span className="fw-bold text-dark me-2">Name:</span>
-                                    <span className="badge bg-primary bg-opacity-25 text-primary px-3 py-2 rounded-pill">
-                                      {bookingData.friendName}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="col-md-6">
-                                  <div className="d-flex align-items-center">
-                                    <i className="bi bi-telephone me-2 text-success"></i>
-                                    <span className="fw-bold text-dark me-2">Guardian Contact:</span>
-                                    <span className="badge bg-success bg-opacity-25 text-success px-3 py-2 rounded-pill">
-                                      {bookingData.friendPhone}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="row g-2 mt-2">
-                                <div className="col-md-6">
-                                  <div className="d-flex align-items-center">
-                                    <i className="bi bi-envelope me-2 text-info"></i>
-                                    <span className="fw-bold text-dark me-2">Child Email:</span>
-                                    <span className="badge bg-info bg-opacity-25 text-info px-3 py-2 rounded-pill">
-                                      {bookingData.friendEmail}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="col-md-6">
-                                  <div className="d-flex align-items-center">
-                                    <i className={`bi ${friendVerification?.verified ? 'bi-shield-check text-success' : 'bi-shield-exclamation text-warning'} me-2`}></i>
-                                    <span className="fw-bold text-dark me-2">Email Status:</span>
-                                    <span className={`badge ${friendVerification?.verified ? 'bg-success bg-opacity-25 text-success' : 'bg-warning bg-opacity-25 text-warning'} px-3 py-2 rounded-pill`}>
-                                      {friendVerification?.verified ? 'Verified' : 'Pending Verification'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Total Price */}
-                      <div className="row mt-3">
-                        <div className="col-12">
-                          <div className="bg-success text-white p-4 rounded shadow-sm" style={{ backgroundColor: '#198754' }}>
-                            <div className="d-flex align-items-center justify-content-between">
-                              <div>
-                                <h5 className="mb-0 fw-bold text-white">Total Price</h5>
-                                <small className="text-white opacity-75">Including all services & add-ons</small>
-                              </div>
-                              <div className="text-end">
-                                <span className="badge bg-white text-success fs-4 px-3 py-2" style={{ fontWeight: 'bold' }}>
-                                  {formatPrice(calculateTotal())}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 pt-3 border-top text-end">
+                      <span className="text-muted small">Total duration: </span>
+                      <span className="fw-bold text-dark">{calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} mins</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <hr className="my-4 my-lg-5" />
+              {/* Special Requests */}
+              {bookingData.specialRequests && (
+                <div className="info-card p-3 mb-5">
+                  <div className="small text-muted fw-bold text-uppercase mb-2"><i className="bi bi-chat-left-text me-2"></i>Special Instructions</div>
+                  <div className="p-2 bg-white rounded-3 border-start border-4 border-primary italic">
+                    <p className="mb-0 text-muted small">{bookingData.specialRequests}</p>
+                  </div>
+                </div>
+              )}
 
-              {/* Enhanced Button Layout */}
-              <div className="row g-3 mb-4">
-                <div className="col-12 col-md-4 order-2 order-md-1">
+              {/* Child Info Section */}
+              {bookingData.bookForFriend && (
+                <div className="info-card p-3 mb-5 border-info border-start border-4 bg-info bg-opacity-5">
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <div className="d-flex align-items-center mb-3">
+                        <div className="bg-info bg-opacity-10 p-2 rounded-circle me-2">
+                          <i className="bi bi-person-hearts text-info fs-5"></i>
+                        </div>
+                        <div className="fw-bold text-info">Booking for Child</div>
+                      </div>
+                    </div>
+                    <div className="col-sm-6">
+                      <div className="text-muted extra-small fw-bold text-uppercase">Child Name</div>
+                      <div className="fw-bold text-dark">{bookingData.friendName}</div>
+                    </div>
+                    <div className="col-sm-6">
+                      <div className="text-muted extra-small fw-bold text-uppercase">Contact Info</div>
+                      <div className="fw-bold text-dark">{bookingData.friendPhone}</div>
+                    </div>
+                    <div className="col-12 mt-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className={`badge ${friendVerification?.verified ? 'bg-success' : 'bg-warning'} px-2 py-1`}>
+                          <i className={`bi ${friendVerification?.verified ? 'bi-patch-check-fill' : 'bi-exclamation-circle-fill'} me-1`}></i>
+                          {friendVerification?.verified ? 'Email Verified' : 'Verification Pending'}
+                        </span>
+                        <span className="text-muted small">{bookingData.friendEmail}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Final Summary Card */}
+              <div className="total-price-card p-4 mb-5">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h5 className="mb-0 fw-bold">Grand Total</h5>
+                    <p className="mb-0 small opacity-75">All items included</p>
+                  </div>
+                  <div className="text-end">
+                    <div className="display-5 fw-bold">{formatPrice(calculateTotal())}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="row g-3">
+                <div className="col-md-4 order-2 order-md-1">
                   <button
                     type="button"
-                    className="btn btn-outline-secondary btn-lg w-100 py-3"
+                    className="btn btn-outline-secondary btn-lg w-100 py-3 rounded-pill fw-bold"
                     onClick={onPrev}
                   >
-                    <i className="bi bi-arrow-left me-2"></i>
-                    Back
+                    <i className="bi bi-arrow-left me-2"></i>Back
                   </button>
                 </div>
-                <div className="col-12 col-md-8 order-1 order-md-2">
+                <div className="col-md-8 order-1 order-md-2">
                   <button
                     type="submit"
-                    className="btn btn-success btn-lg w-100 py-3 fw-bold"
+                    className="btn btn-success btn-lg w-100 py-3 rounded-pill fw-bold shadow-sm"
                     disabled={
-                      loading || 
-                    !bookingData.selectedBarber || 
-                    bookingData.selectedServices.length === 0 || 
-                    !bookingData.selectedDate ||
-                    (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase())) ||
-                    (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot && 
-                     wouldCrossLunchBreak(bookingData.selectedTimeSlot, calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)))
-                  }
+                      loading ||
+                      !bookingData.selectedBarber ||
+                      bookingData.selectedServices.length === 0 ||
+                      !bookingData.selectedDate ||
+                      (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase())) ||
+                      (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot &&
+                        wouldCrossLunchBreak(bookingData.selectedTimeSlot, calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)))
+                    }
                     onClick={onSubmit}
                   >
                     {loading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        {isRebooking ? 'Processing...' : 'Processing...'}
-                      </>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                     ) : (
-                      <>
-                        <i className="bi bi-check-circle me-2"></i>
-                        {isRebooking ? 'Confirm Reschedule Request' : 'Confirm Booking Request'}
-                      </>
+                      <i className="bi bi-check-circle-fill me-2"></i>
                     )}
+                    {isRebooking ? 'Confirm Reschedule' : 'Confirm & Book Now'}
                   </button>
                 </div>
               </div>
@@ -7513,6 +4697,5 @@ const Step3QueueSummary = ({
     </div>
   );
 };
-
 
 export default BookAppointment;

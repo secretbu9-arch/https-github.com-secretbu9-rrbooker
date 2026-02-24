@@ -1,6 +1,6 @@
 // components/common/NotificationPermission.js
 import React, { useState, useEffect } from 'react';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 
 const NotificationPermission = ({ onPermissionGranted }) => {
   const [permissionStatus, setPermissionStatus] = useState('unknown');
@@ -29,10 +29,10 @@ const NotificationPermission = ({ onPermissionGranted }) => {
     try {
       // Initialize push service which will request permissions
       await PushService.initialize();
-      
+
       // Check status after initialization
       await checkPermissionStatus();
-      
+
       if (onPermissionGranted) {
         onPermissionGranted();
       }
@@ -89,20 +89,20 @@ const NotificationPermission = ({ onPermissionGranted }) => {
       <div className="d-flex align-items-center">
         <div className="me-3">
           {permissionStatus === 'granted' ? (
-            <i className="bi bi-bell-fill fs-4"></i>
+            <i className="bi bi-bell-fill fs-5"></i>
           ) : permissionStatus === 'denied' ? (
-            <i className="bi bi-bell-slash fs-4"></i>
+            <i className="bi bi-bell-slash fs-5"></i>
           ) : (
-            <i className="bi bi-bell fs-4"></i>
+            <i className="bi bi-bell fs-5"></i>
           )}
         </div>
         <div className="flex-grow-1">
-          <h6 className="alert-heading mb-1">
-            {permissionStatus === 'granted' ? 'Notifications Enabled' : 
-             permissionStatus === 'denied' ? 'Notifications Blocked' : 
-             'Enable Notifications'}
-          </h6>
-          <p className="mb-0">{statusInfo.message}</p>
+          <div className="alert-heading fw-bold mb-1 small">
+            {permissionStatus === 'granted' ? 'Notifications Enabled' :
+              permissionStatus === 'denied' ? 'Notifications Blocked' :
+                'Enable Notifications'}
+          </div>
+          <div className="mb-0 small">{statusInfo.message}</div>
         </div>
         {statusInfo.showButton && (
           <div className="ms-3">

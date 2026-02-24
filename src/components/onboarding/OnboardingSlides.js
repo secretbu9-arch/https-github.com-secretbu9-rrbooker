@@ -1,7 +1,7 @@
 // components/onboarding/OnboardingSlides.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 import './OnboardingSlides.css';
 
 // Inline barbershop SVG illustrations (merged from BarberIllustrations.js)

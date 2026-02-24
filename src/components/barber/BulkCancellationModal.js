@@ -130,7 +130,7 @@ const BulkCancellationModal = ({ isOpen, onClose, barberId, selectedDate, onSucc
       if (updateError) throw updateError;
 
       // Send notifications to customers using centralized service (prevents duplicates)
-      const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
       
       for (const appointment of selectedAppointmentData) {
         try {

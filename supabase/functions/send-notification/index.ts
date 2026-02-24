@@ -30,7 +30,7 @@ interface FCMResponse {
   error?: string
 }
 
-serve(async (req) => {
+serve(async (req: any) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -51,18 +51,18 @@ serve(async (req) => {
     // Get the request body
     const requestBody = await req.json()
     console.log('📥 Request body received:', JSON.stringify(requestBody, null, 2))
-    
+
     const { userId, title, body, type = 'general' } = requestBody
     const data = requestBody.data && typeof requestBody.data === 'object' ? requestBody.data : {}
-    
+
     console.log('📊 Processed data:', JSON.stringify(data, null, 2))
 
     if (!userId || !title || !body) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: userId, title, body' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
@@ -79,25 +79,25 @@ serve(async (req) => {
 
     if (!devices || devices.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           message: 'No devices found for user',
           devices: []
         }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
 
     // Send notifications to each device
     const results: FCMResponse[] = []
-    
+
     for (const device of devices) {
       try {
         // Safely prepare the data object without spread syntax
-        let safeData = {}
+        let safeData: Record<string, any> = {}
         try {
           if (data && typeof data === 'object' && !Array.isArray(data)) {
             // Manually copy properties to avoid spread syntax issues
@@ -112,21 +112,21 @@ serve(async (req) => {
           console.error('Error processing data object:', error)
           safeData = {}
         }
-        
+
         // Create the final data object without spread syntax
         const finalData = Object.assign({}, safeData, {
           type,
           userId,
           timestamp: new Date().toISOString()
         })
-        
+
         const result = await sendToDevice(device.token, device.platform, {
           title,
           body,
           data: finalData
-        })
+        }, supabaseClient) // Pass supabaseClient for cleanup
         results.push(result)
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error sending to device ${device.token}:`, error)
         results.push({
           success: false,
@@ -149,48 +149,74 @@ serve(async (req) => {
         results,
         devices: devices.length
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in send-notification function:', error)
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message,
-        success: false 
+        success: false
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
   }
 })
 
-async function sendToDevice(token: string, platform: string, payload: any): Promise<FCMResponse> {
+async function sendToDevice(token: string, platform: string, payload: any, supabaseClient: any): Promise<FCMResponse> {
   // Prefer HTTP v1 if service account is configured
   const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT')
   const projectId = Deno.env.get('FIREBASE_PROJECT_ID')
 
-  console.log('🔧 sendToDevice called with:', { 
-    tokenLength: token?.length || 0, 
-    platform, 
+  console.log('🔧 sendToDevice called with:', {
+    tokenLength: token?.length || 0,
+    platform,
     hasServiceAccount: !!serviceAccountJson,
-    hasProjectId: !!projectId 
+    hasProjectId: !!projectId
   })
 
   if (!serviceAccountJson || !projectId) {
     const error = 'GOOGLE_SERVICE_ACCOUNT and FIREBASE_PROJECT_ID must be set for HTTP v1 messaging'
-    console.error('❌ Environment variables missing:', { 
-      hasServiceAccount: !!serviceAccountJson, 
-      hasProjectId: !!projectId 
+    console.error('❌ Environment variables missing:', {
+      hasServiceAccount: !!serviceAccountJson,
+      hasProjectId: !!projectId
     })
     throw new Error(error)
   }
-  return await sendViaHttpV1({ token, projectId, payload })
+
+  const result = await sendViaHttpV1({ token, projectId, payload })
+
+  // Auto-cleanup for "NotRegistered" tokens
+  if (result.success === false && result.error && (
+    result.error.includes('NotRegistered') ||
+    result.error.includes('requested entity was not found') ||
+    result.error.includes('registration-token-not-registered')
+  )) {
+    console.log(`🧹 Token is no longer valid, removing from database: ${token.substring(0, 10)}...`)
+    try {
+      const { error: deleteError } = await supabaseClient
+        .from('user_devices')
+        .delete()
+        .eq('token', token)
+
+      if (deleteError) {
+        console.error('❌ Failed to delete stale token:', deleteError)
+      } else {
+        console.log('✅ Stale token removed successfully')
+      }
+    } catch (e) {
+      console.error('❌ Unexpected error deleting stale token:', e)
+    }
+  }
+
+  return result
 }
 
 async function sendViaHttpV1({ token, projectId, payload }: { token: string, projectId: string, payload: any }): Promise<FCMResponse> {
@@ -209,15 +235,32 @@ async function sendViaHttpV1({ token, projectId, payload }: { token: string, pro
         priority: 'HIGH',
         notification: {
           sound: 'default',
-          channel_id: 'default',
+          channel_id: 'high_importance',
           color: '#488AFF',
+          notification_priority: 'PRIORITY_MAX',
+          default_sound: true,
+          default_vibrate_timings: true
         }
       },
       webpush: {
+        headers: {
+          Urgency: 'high'
+        },
+        notification: {
+          requireInteraction: true,
+          silent: false
+        },
         fcm_options: { link: getClickAction(payload.data?.type) }
       },
       apns: {
-        payload: { aps: { sound: 'default', badge: 1 } }
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            'interruption-level': 'active',
+            'mutable-content': 1
+          }
+        }
       }
     }
   }
@@ -235,7 +278,7 @@ async function sendViaHttpV1({ token, projectId, payload }: { token: string, pro
   console.log('FCM Response Status:', resp.status)
   console.log('FCM Response Headers:', Object.fromEntries(resp.headers.entries()))
   console.log('FCM Response Body:', text)
-  
+
   let data: any
   try {
     data = JSON.parse(text)
@@ -244,9 +287,9 @@ async function sendViaHttpV1({ token, projectId, payload }: { token: string, pro
     console.error('Parse error:', parseError)
     console.error('Response status:', resp.status)
     console.error('Response headers:', Object.fromEntries(resp.headers.entries()))
-    return { 
-      success: false, 
-      error: `FCM v1 invalid response (${resp.status}): ${text.substring(0, 200)}` 
+    return {
+      success: false,
+      error: `FCM v1 invalid response (${resp.status}): ${text.substring(0, 200)}`
     }
   }
 
@@ -254,7 +297,7 @@ async function sendViaHttpV1({ token, projectId, payload }: { token: string, pro
     console.log('✅ FCM message sent successfully:', data.name)
     return { success: true, messageId: data.name }
   }
-  
+
   const errorMessage = data?.error?.message || `FCM v1 error (${resp.status})`
   console.error('❌ FCM error:', errorMessage)
   console.error('❌ Full error data:', data)
@@ -267,9 +310,9 @@ async function getGoogleAccessToken(): Promise<string> {
     console.error('GOOGLE_SERVICE_ACCOUNT environment variable is not set')
     throw new Error('GOOGLE_SERVICE_ACCOUNT is not set')
   }
-  
+
   console.log('GOOGLE_SERVICE_ACCOUNT found, length:', saJson.length)
-  
+
   let sa: any
   try {
     sa = JSON.parse(saJson)
@@ -308,16 +351,16 @@ async function getGoogleAccessToken(): Promise<string> {
       assertion: jwt,
     })
   })
-  
+
   console.log('OAuth token request status:', resp.status)
   const json = await resp.json()
   console.log('OAuth token response:', json)
-  
+
   if (!resp.ok) {
     console.error('OAuth token request failed:', json)
     throw new Error(json?.error || 'Failed to obtain access token')
   }
-  
+
   console.log('Access token obtained successfully')
   return json.access_token
 }
@@ -338,7 +381,7 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
 
 function getClickAction(type?: string): string {
   const baseUrl = Deno.env.get('SITE_URL') || 'http://localhost:3000'
-  
+
   switch (type) {
     case 'appointment':
       return `${baseUrl}/appointments`

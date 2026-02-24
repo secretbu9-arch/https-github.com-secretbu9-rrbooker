@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/PushService';
+import { PushService } from '../../services/notifications/PushService';
 
 const QueuePriorityManager = () => {
   const [appointments, setAppointments] = useState([]);
@@ -329,7 +329,7 @@ const QueuePriorityManager = () => {
 
       // Send notification to customer about priority change
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: appointment.customer_id,
           title: 'Queue Priority Updated',
@@ -417,7 +417,7 @@ const QueuePriorityManager = () => {
 
       // Send notification to customer
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: appointment.customer_id,
           title: 'Priority Request Approved',
@@ -477,7 +477,7 @@ const QueuePriorityManager = () => {
 
       // Send notification to customer
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: appointment.customer_id,
           title: 'Priority Request Declined',
@@ -774,7 +774,7 @@ const QueuePriorityManager = () => {
 
       // Send notification to customer about position change
       try {
-        const { default: centralizedNotificationService } = await import('../../services/CentralizedNotificationService');
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createQueuePositionNotification({
           userId: appointment.customer_id,
           appointmentId: appointmentId,

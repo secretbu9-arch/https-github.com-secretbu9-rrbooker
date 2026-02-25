@@ -14,6 +14,7 @@ const ManageUsers = () => {
 
     const [selectedUser, setSelectedUser] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -22,6 +23,14 @@ const ManageUsers = () => {
         full_name: '',
         role: '',
         phone: ''
+    });
+
+    const [addFormData, setAddFormData] = useState({
+        full_name: '',
+        email: '',
+        password: '',
+        phone: '',
+        role: 'customer'
     });
 
     useEffect(() => {
@@ -76,6 +85,71 @@ const ManageUsers = () => {
     const handleFormChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleAddFormChange = (e) => {
+        const { name, value } = e.target;
+        setAddFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleCreateUser = async (e) => {
+        e.preventDefault();
+        try {
+            setSaving(true);
+            setError(null);
+
+            // 1. Create the user in Supabase Auth
+            // This will trigger a confirmation email "authenticating the gmail" as requested
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: addFormData.email,
+                password: addFormData.password,
+                options: {
+                    data: {
+                        full_name: addFormData.full_name,
+                        role: addFormData.role,
+                        phone: addFormData.phone
+                    },
+                    // Redirect back to profile or dashboard after verification
+                    emailRedirectTo: `${window.location.origin}/dashboard`
+                }
+            });
+
+            if (authError) throw authError;
+
+            if (authData.user) {
+                // 2. Manually insert into users table if not already handled by trigger
+                // Some setups use triggers, but we'll be safe here
+                const { error: dbError } = await supabase
+                    .from('users')
+                    .upsert([{
+                        id: authData.user.id,
+                        email: addFormData.email,
+                        full_name: addFormData.full_name,
+                        phone: addFormData.phone,
+                        role: addFormData.role
+                    }]);
+
+                if (dbError) {
+                    console.warn('Profile creation error (might already exist):', dbError);
+                }
+
+                alert(`User created successfully! An authentication email has been sent to ${addFormData.email}.`);
+                setShowAddModal(false);
+                setAddFormData({
+                    full_name: '',
+                    email: '',
+                    password: '',
+                    phone: '',
+                    role: 'customer'
+                });
+                fetchUsers();
+            }
+        } catch (error) {
+            console.error('Error creating user:', error);
+            setError('Failed to create user: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleSaveEdit = async (e) => {
@@ -190,6 +264,15 @@ const ManageUsers = () => {
                 <div>
                     <h2 className="mb-0 fw-bold">Manage Users</h2>
                     <p className="text-muted mb-0">Total users: {users.length}</p>
+                </div>
+                <div>
+                    <button
+                        className="btn btn-primary d-flex align-items-center gap-2"
+                        onClick={() => setShowAddModal(true)}
+                    >
+                        <i className="bi bi-person-plus-fill"></i>
+                        <span>Add New User</span>
+                    </button>
                 </div>
             </div>
 
@@ -435,6 +518,108 @@ const ManageUsers = () => {
                     </div>
                 </div>
             )}
+
+            {/* Add User Modal */}
+            {showAddModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow">
+                            <div className="modal-header bg-primary text-white">
+                                <h5 className="modal-title">Add New User</h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowAddModal(false)}
+                                ></button>
+                            </div>
+                            <form onSubmit={handleCreateUser}>
+                                <div className="modal-body">
+                                    <div className="mb-3">
+                                        <label className="form-label fw-bold small">Full Name</label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            name="full_name"
+                                            value={addFormData.full_name}
+                                            onChange={handleAddFormChange}
+                                            required
+                                            placeholder="John Doe"
+                                        />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label fw-bold small">Email Address</label>
+                                        <input
+                                            type="email"
+                                            className="form-control"
+                                            name="email"
+                                            value={addFormData.email}
+                                            onChange={handleAddFormChange}
+                                            required
+                                            placeholder="john@example.com"
+                                        />
+                                        <small className="text-muted">A verification email will be sent to this address.</small>
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label fw-bold small">Password</label>
+                                        <input
+                                            type="password"
+                                            className="form-control"
+                                            name="password"
+                                            value={addFormData.password}
+                                            onChange={handleAddFormChange}
+                                            required
+                                            minLength={8}
+                                            placeholder="Minimum 8 characters"
+                                        />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label fw-bold small">Phone</label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            name="phone"
+                                            value={addFormData.phone}
+                                            onChange={handleAddFormChange}
+                                            placeholder="+639..."
+                                        />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label fw-bold small">Role</label>
+                                        <select
+                                            className="form-select"
+                                            name="role"
+                                            value={addFormData.role}
+                                            onChange={handleAddFormChange}
+                                            required
+                                        >
+                                            <option value="customer">Customer</option>
+                                            <option value="barber">Barber</option>
+                                            <option value="manager">Manager</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-light"
+                                        onClick={() => setShowAddModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary px-4"
+                                        disabled={saving}
+                                    >
+                                        {saving ? 'Creating...' : 'Create & Send Auth Email'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Archive Modal */}
             {showArchiveModal && (

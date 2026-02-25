@@ -34,7 +34,7 @@ class SessionManager {
   // Start tracking user activity
   startActivityTracking() {
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-    
+
     events.forEach(event => {
       document.addEventListener(event, () => {
         this.resetInactivityTimer();
@@ -77,7 +77,7 @@ class SessionManager {
     modal.style.display = 'block';
     modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
     modal.setAttribute('tabindex', '-1');
-    
+
     modal.innerHTML = `
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -104,13 +104,13 @@ class SessionManager {
     // Start countdown
     let timeLeft = 300; // 5 minutes in seconds
     const countdownEl = document.getElementById('countdown');
-    
+
     const countdownInterval = setInterval(() => {
       timeLeft--;
       const minutes = Math.floor(timeLeft / 60);
       const seconds = timeLeft % 60;
       countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      
+
       if (timeLeft <= 0) {
         clearInterval(countdownInterval);
       }
@@ -143,7 +143,7 @@ class SessionManager {
   async handleInactiveLogout() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       // Log the auto-logout event
       if (user) {
         await supabase.from('system_logs').insert({
@@ -176,7 +176,7 @@ class SessionManager {
     notification.style.transform = 'translateX(-50%)';
     notification.style.zIndex = '9999';
     notification.style.minWidth = '400px';
-    
+
     notification.innerHTML = `
       <h6 class="alert-heading">Session Expired</h6>
       <p class="mb-0">You have been logged out due to inactivity. Please log in again to continue.</p>
@@ -197,20 +197,28 @@ class SessionManager {
   async extendSession() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session) {
         // Refresh the session
         const { data: { session: newSession }, error } = await supabase.auth.refreshSession();
-        
+
         if (error) throw error;
-        
+
         // Reset inactivity timer
         this.resetInactivityTimer();
-        
+
         return newSession;
       }
     } catch (error) {
       console.error('Error extending session:', error);
+
+      // If refresh fails with an invalid token error, force a logout
+      if (error.message?.includes('Refresh Token Not Found') ||
+        error.message?.includes('Invalid Refresh Token')) {
+        console.error('Session extension failed: Invalid Refresh Token. Logging out...');
+        this.handleInactiveLogout();
+      }
+
       throw error;
     }
   }
@@ -218,10 +226,10 @@ class SessionManager {
   // Get time until logout
   getTimeUntilLogout() {
     if (!this.timeout) return 0;
-    
+
     const currentTime = Date.now();
     const logoutTime = this.timeout._idleStart + this.timeout._idleTimeout;
-    
+
     return Math.max(0, logoutTime - currentTime);
   }
 }

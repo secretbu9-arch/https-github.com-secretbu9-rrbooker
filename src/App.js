@@ -121,12 +121,32 @@ function App() {
       sessionManager.initialize();
 
       // Get session on mount
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.warn('Session error during initialization:', sessionError);
+        // If specifically an invalid refresh token error, clear everything
+        if (sessionError.message?.includes('Refresh Token Not Found') ||
+          sessionError.message?.includes('Invalid Refresh Token')) {
+          console.error('Critical Auth Error: Session unrecoverable. Clearing storage...');
+          await supabase.auth.signOut();
+          setSession(null);
+          setLoading(false);
+          setIsInitialized(true);
+          return;
+        }
+      }
 
       console.log('Initial session check:', session?.user?.id);
 
       if (session?.user) {
-        await fetchUserRole(session.user.id);
+        try {
+          await fetchUserRole(session.user.id);
+        } catch (roleError) {
+          console.error('Error fetching role during init:', roleError);
+          // Don't block the whole app if just the role fetch fails
+          setUserRole('customer');
+        }
       }
 
       setSession(session);
@@ -142,14 +162,11 @@ function App() {
       // Listen for auth changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
-        console.log('User metadata:', session?.user?.user_metadata);
 
         setSession(session);
 
         if (session?.user) {
-          // Important: Need to wait for the role to be properly set
           await fetchUserRole(session.user.id);
-          // Initialize/refresh push notifications
           PushService.initialize();
         } else {
           setUserRole(null);
@@ -158,8 +175,15 @@ function App() {
 
       return () => subscription.unsubscribe();
     } catch (error) {
-      console.error('Error initializing app:', error);
+      console.error('Fatal initialization error:', error);
+      // If we're here, something really went wrong. Try to recover by clearing auth
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        localStorage.clear(); // Last resort
+      }
       setLoading(false);
+      setIsInitialized(true);
     }
   };
 
@@ -193,11 +217,28 @@ function App() {
         .single();
 
       if (error) {
-        console.error('Error fetching user role from DB:', error);
+        // ONLY attempt to create a user if the error specifically says "no rows found"
+        // PGRST116 is the PostgREST code for "JSON object requested, but no rows returned"
+        const isUserNotFound = error.code === 'PGRST116';
+
+        if (!isUserNotFound) {
+          console.error('Database query error (not a "user not found" error):', error);
+          debugInfo.errors.push({ source: 'db.users.select', error });
+
+          // If it's an AbortError or connection issue, don't try to create a user
+          // because they likely already exist but the query failed.
+          if (error.message?.includes('AbortError') || error.code === 'ERR_NETWORK') {
+            setUserRole('customer'); // Default fallback without trying to insert
+            setDebug(debugInfo);
+            return;
+          }
+        }
+
+        console.log('Error fetching user role, checking if creation is needed:', error.code);
         debugInfo.errors.push({ source: 'db.users.select', error });
 
-        // User not found in users table or other error
-        if (userData.user) {
+        // User not found in users table OR specifically PGRST116
+        if (userData.user && isUserNotFound) {
           // Determine role from metadata or use default
           let role = 'customer'; // default role
 

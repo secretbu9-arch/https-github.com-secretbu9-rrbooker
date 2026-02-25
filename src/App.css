@@ -108,6 +108,46 @@
   opacity: 1;
 }
 
+/* Premium Dashboard Cards */
+.serve-next-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border-left: 5px solid #16a34a !important;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+  box-shadow: 0 4px 15px rgba(22, 163, 74, 0.1);
+}
+
+.serve-next-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(22, 163, 74, 0.2);
+}
+
+.currently-serving-card {
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+  border-left: 5px solid var(--secondary-color) !important;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.1);
+}
+
+.currently-serving-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(52, 152, 219, 0.2);
+}
+
+.review-card-premium {
+  transition: all 0.3s ease;
+  border: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.review-card-premium:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
 /* Quick action cards (especially for customer dashboard) */
 .quick-action-card {
   border: none;

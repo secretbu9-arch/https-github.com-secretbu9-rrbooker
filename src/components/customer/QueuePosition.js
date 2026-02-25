@@ -51,6 +51,7 @@ const QueuePosition = ({ appointmentId }) => {
         .from('appointments')
         .select(`
           id,
+          customer_id,
           barber_id,
           appointment_date,
           appointment_time,
@@ -146,7 +147,7 @@ const QueuePosition = ({ appointmentId }) => {
       // Use the enhanced PushService for proper notification delivery
       if (newPosition < oldPosition) {
         // Only send notifications for position improvements
-        await PushService.sendQueuePositionNotification(newPosition, appointmentId);
+        await PushService.sendQueuePositionNotification(appointment.customer_id, newPosition, appointmentId);
         console.log(`✅ Queue position notification sent via PushService for position #${newPosition}`);
       }
     } catch (error) {

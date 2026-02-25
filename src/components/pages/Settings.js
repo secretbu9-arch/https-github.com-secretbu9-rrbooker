@@ -37,6 +37,64 @@ const Settings = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Password strength checker
+  const checkPasswordStrength = (password) => {
+    const checks = {
+      length: password.length >= 8,
+      lowercase: /[a-z]/.test(password),
+      uppercase: /[A-Z]/.test(password),
+      number: /\d/.test(password),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+      noSpaces: !/\s/.test(password)
+    };
+
+    const score = Object.values(checks).filter(Boolean).length;
+
+    let strength = 'weak';
+    let color = '#ff6b6b';
+
+    if (score >= 5) {
+      strength = 'strong';
+      color = '#51cf66';
+    } else if (score >= 3) {
+      strength = 'medium';
+      color = '#ffc107';
+    }
+
+    return { checks, score, strength, color };
+  };
+
+  const generateSuggestedPassword = () => {
+    const length = 12;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()+";
+    let retVal = "";
+
+    // Ensure we meet all requirements
+    retVal += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+    retVal += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    retVal += "0123456789"[Math.floor(Math.random() * 10)];
+    retVal += "!@#$%^&*()"[Math.floor(Math.random() * 10)];
+
+    for (let i = 4, n = charset.length; i < length; ++i) {
+      retVal += charset.charAt(Math.floor(Math.random() * n));
+    }
+
+    // Shuffle the result
+    return retVal.split('').sort(() => 0.5 - Math.random()).join('');
+  };
+
+  const handleSuggestPassword = (e) => {
+    if (e) e.preventDefault();
+    const suggested = generateSuggestedPassword();
+    setPasswordData(prev => ({
+      ...prev,
+      newPassword: suggested,
+      confirmPassword: suggested
+    }));
+    setShowPassword(true);
+    setShowConfirmPassword(true);
+  };
+
   useEffect(() => {
     fetchUserData();
     checkPushStatus();
@@ -207,8 +265,10 @@ const Settings = () => {
         throw new Error('New passwords do not match');
       }
 
-      if (passwordData.newPassword.length < 8) {
-        throw new Error('Password must be at least 8 characters long');
+      // Validate password strength
+      const passwordStrength = checkPasswordStrength(passwordData.newPassword);
+      if (passwordStrength.score < 3) {
+        throw new Error('Password is too weak. Please include at least 3 requirements (uppercase, lowercase, number, or special character).');
       }
 
       if (!user?.email) {
@@ -585,7 +645,54 @@ const Settings = () => {
                                 >
                                   <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                                 </button>
+                                <button
+                                  className="btn btn-outline-secondary"
+                                  type="button"
+                                  onClick={handleSuggestPassword}
+                                  title="Suggest a strong password"
+                                >
+                                  <i className="bi bi-magic"></i>
+                                </button>
                               </div>
+
+                              {passwordData.newPassword && checkPasswordStrength(passwordData.newPassword).score < 3 && (
+                                <div className="text-danger mt-1" style={{ fontSize: '0.8rem' }}>
+                                  <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                  Password is too weak
+                                </div>
+                              )}
+
+                              {/* Password Strength Indicator */}
+                              {passwordData.newPassword && (
+                                <div className="password-strength-container mt-2">
+                                  <div className="password-strength-bar" style={{
+                                    width: '100%',
+                                    height: '4px',
+                                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                    borderRadius: '2px',
+                                    overflow: 'hidden',
+                                    marginBottom: '0.5rem'
+                                  }}>
+                                    <div
+                                      className="password-strength-fill"
+                                      style={{
+                                        height: '100%',
+                                        transition: 'all 0.3s ease',
+                                        width: `${(checkPasswordStrength(passwordData.newPassword).score / 6) * 100}%`,
+                                        backgroundColor: checkPasswordStrength(passwordData.newPassword).color
+                                      }}
+                                    ></div>
+                                  </div>
+                                  <div className="password-strength-text d-flex justify-content-between" style={{ fontSize: '0.8rem', fontWeight: '600' }}>
+                                    <span style={{ color: checkPasswordStrength(passwordData.newPassword).color }}>
+                                      {checkPasswordStrength(passwordData.newPassword).strength.toUpperCase()}
+                                    </span>
+                                    <span className="text-muted" style={{ fontWeight: '400' }}>
+                                      ({checkPasswordStrength(passwordData.newPassword).score}/6)
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             <div className="col-md-6 mb-3">
@@ -609,10 +716,52 @@ const Settings = () => {
                                   <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                                 </button>
                               </div>
+                              {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
+                                <div className="text-danger mt-1" style={{ fontSize: '0.8rem' }}>Passwords do not match</div>
+                              )}
+                              {passwordData.confirmPassword && passwordData.newPassword === passwordData.confirmPassword && (
+                                <div className="text-success mt-1" style={{ fontSize: '0.8rem' }}>✓ Passwords match</div>
+                              )}
                             </div>
                           </div>
 
-                          <button type="submit" className="btn btn-primary" disabled={saving}>
+                          {/* Password Requirements */}
+                          {/* Password Requirements */}
+                          <div className="password-requirements mb-3 p-3 rounded" style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                          }}>
+                            <div className="requirements-title mb-2" style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F8A34A' }}>
+                              Password Requirements:
+                            </div>
+                            <div className="row">
+                              {[
+                                { key: 'length', text: 'At least 8 characters' },
+                                { key: 'lowercase', text: 'One lowercase letter (a-z)' },
+                                { key: 'uppercase', text: 'One uppercase letter (A-Z)' },
+                                { key: 'number', text: 'One number (0-9)' },
+                                { key: 'special', text: 'One special character (!@#$%^&*)' },
+                                { key: 'noSpaces', text: 'No spaces' }
+                              ].map((req) => (
+                                <div key={req.key} className="col-6 mb-1">
+                                  <div className="requirement d-flex align-items-center gap-2" style={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: '500',
+                                    color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#28a745' : 'rgba(255, 255, 255, 0.6)'
+                                  }}>
+                                    <i className={`bi ${checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
+                                    {req.text}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="btn btn-primary"
+                            disabled={saving || !passwordData.newPassword || checkPasswordStrength(passwordData.newPassword).score < 3 || passwordData.newPassword !== passwordData.confirmPassword}
+                          >
                             {saving ? (
                               <>
                                 <span className="spinner-border spinner-border-sm me-2"></span>
@@ -763,7 +912,7 @@ const Settings = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

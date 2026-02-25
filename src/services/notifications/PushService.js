@@ -669,7 +669,7 @@ class PushServiceImpl {
   }
 
   // Send specific queue position notifications
-  async sendQueuePositionNotification(position, appointmentId = null) {
+  async sendQueuePositionNotification(userId, position, appointmentId = null) {
     let title = '';
     let body = '';
     let data = {
@@ -698,8 +698,8 @@ class PushServiceImpl {
 
     console.log('🔔 Sending queue position notification:', { title, body, data });
 
-    // Use local notification directly for immediate delivery
-    await this.showLocalNotification(title, body, data);
+    // Use sendNotificationToUser which handles both remote push and local fallback
+    await this.sendNotificationToUser(userId, title, body, data);
   }
 
   // Send appointment confirmation notification
@@ -716,15 +716,8 @@ class PushServiceImpl {
     }
 
     // Send proper push notification to user
+    // This method handles the fallback to local notifications automatically
     await this.sendNotificationToUser(appointmentData.customer_id || appointmentData.user_id, title, body, {
-      type: 'appointment_pending',
-      appointment_id: appointmentData.id?.toString() || '',
-      queue_position: appointmentData.queue_position?.toString() || '',
-      friend_name: appointmentData.friend_name?.toString() || ''
-    });
-
-    // Also show local notification as backup
-    await this.showLocalNotification(title, body, {
       type: 'appointment_pending',
       appointment_id: appointmentData.id?.toString() || '',
       queue_position: appointmentData.queue_position?.toString() || '',

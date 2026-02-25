@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { passwordResetOTPService } from '../../services/auth/PasswordResetOTPService';
 import './Login.css'; // Reuse Login styles
+import './Register.css'; // Shared password component styles
 
 const ResetPassword = () => {
   const [step, setStep] = useState(1); // 1: email+password, 2: OTP sent, 3: verify OTP
@@ -19,11 +20,65 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Password strength checker
+  const checkPasswordStrength = (password) => {
+    const checks = {
+      length: password.length >= 8,
+      lowercase: /[a-z]/.test(password),
+      uppercase: /[A-Z]/.test(password),
+      number: /\d/.test(password),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+      noSpaces: !/\s/.test(password)
+    };
+
+    const score = Object.values(checks).filter(Boolean).length;
+
+    let strength = 'weak';
+    let color = '#ff6b6b';
+
+    if (score >= 5) {
+      strength = 'strong';
+      color = '#51cf66';
+    } else if (score >= 3) {
+      strength = 'medium';
+      color = '#ffc107';
+    }
+
+    return { checks, score, strength, color };
+  };
+
+  const generateSuggestedPassword = () => {
+    const length = 12;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()+";
+    let retVal = "";
+
+    // Ensure we meet all requirements
+    retVal += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+    retVal += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    retVal += "0123456789"[Math.floor(Math.random() * 10)];
+    retVal += "!@#$%^&*()"[Math.floor(Math.random() * 10)];
+
+    for (let i = 4, n = charset.length; i < length; ++i) {
+      retVal += charset.charAt(Math.floor(Math.random() * n));
+    }
+
+    // Shuffle the result
+    return retVal.split('').sort(() => 0.5 - Math.random()).join('');
+  };
+
+  const handleSuggestPassword = () => {
+    const suggested = generateSuggestedPassword();
+    setNewPassword(suggested);
+    setConfirmPassword(suggested);
+    setShowPassword(true);
+    setShowConfirmPassword(true);
+  };
+
   // Check for token in URL (from email link)
   useEffect(() => {
     const token = searchParams.get('token');
     const type = searchParams.get('type');
-    
+
     if (token && type === 'recovery') {
       // User came from email link, extract email from URL or session
       const emailFromUrl = searchParams.get('email');
@@ -48,8 +103,9 @@ const ResetPassword = () => {
     }
 
     // Validate password strength
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters long');
+    const passwordStrength = checkPasswordStrength(newPassword);
+    if (passwordStrength.score < 3) {
+      setError('Password is too weak. Please include at least 3 requirements (uppercase, lowercase, number, or special character).');
       return;
     }
 
@@ -79,6 +135,18 @@ const ResetPassword = () => {
       return;
     }
 
+    // Validate password strength (especially for recovery links)
+    const passwordStrength = checkPasswordStrength(newPassword);
+    if (passwordStrength.score < 3) {
+      setError('Password is too weak. Please include at least 3 requirements.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -101,7 +169,7 @@ const ResetPassword = () => {
 
       if (data?.success) {
         setSuccess('Password has been reset successfully! Redirecting to login...');
-        
+
         // Redirect to login after 2 seconds
         setTimeout(() => {
           navigate('/login');
@@ -138,9 +206,9 @@ const ResetPassword = () => {
       <div className="dark-slide-card login-card">
         <div className="barber-logo">
           <div className="logo-image-container">
-            <img 
-              src="/rrbooker-logo-3.png" 
-              alt="RAF & ROX Barbershop" 
+            <img
+              src="/rrbooker-logo-3.png"
+              alt="RAF & ROX Barbershop"
               className="auth-logo"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -159,11 +227,11 @@ const ResetPassword = () => {
         </div>
 
         {error && (
-          <div className="error-alert" role="alert" style={{ 
-            backgroundColor: '#ff6b6b', 
-            color: 'white', 
-            padding: '0.75rem', 
-            borderRadius: '8px', 
+          <div className="error-alert" role="alert" style={{
+            backgroundColor: '#ff6b6b',
+            color: 'white',
+            padding: '0.75rem',
+            borderRadius: '8px',
             marginBottom: '1rem',
             fontSize: '0.9rem'
           }}>
@@ -172,11 +240,11 @@ const ResetPassword = () => {
         )}
 
         {success && (
-          <div className="success-alert" role="alert" style={{ 
-            backgroundColor: '#51cf66', 
-            color: 'white', 
-            padding: '0.75rem', 
-            borderRadius: '8px', 
+          <div className="success-alert" role="alert" style={{
+            backgroundColor: '#51cf66',
+            color: 'white',
+            padding: '0.75rem',
+            borderRadius: '8px',
             marginBottom: '1rem',
             fontSize: '0.9rem'
           }}>
@@ -220,6 +288,93 @@ const ResetPassword = () => {
                 >
                   <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                 </button>
+                <button
+                  type="button"
+                  className="password-toggle-btn suggestion-btn"
+                  onClick={handleSuggestPassword}
+                  tabIndex="-1"
+                  title="Suggest a strong password"
+                  style={{ right: '40px' }}
+                >
+                  <i className="bi bi-magic"></i>
+                </button>
+              </div>
+
+              {newPassword && checkPasswordStrength(newPassword).score < 3 && (
+                <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                  Password is too weak
+                </div>
+              )}
+
+              {/* Password Strength Indicator */}
+              {newPassword && (
+                <div className="password-strength-container" style={{ marginTop: '0.5rem' }}>
+                  <div className="password-strength-bar" style={{
+                    width: '100%',
+                    height: '4px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                    marginBottom: '0.5rem'
+                  }}>
+                    <div
+                      className="password-strength-fill"
+                      style={{
+                        height: '100%',
+                        transition: 'all 0.3s ease',
+                        width: `${(checkPasswordStrength(newPassword).score / 6) * 100}%`,
+                        backgroundColor: checkPasswordStrength(newPassword).color
+                      }}
+                    ></div>
+                  </div>
+                  <div className="password-strength-text" style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.8rem',
+                    fontWeight: '600'
+                  }}>
+                    <span style={{ color: checkPasswordStrength(newPassword).color }}>
+                      {checkPasswordStrength(newPassword).strength.toUpperCase()}
+                    </span>
+                    <span className="password-score" style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '400' }}>
+                      ({checkPasswordStrength(newPassword).score}/6)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Password Requirements */}
+              <div className="password-requirements" style={{
+                marginTop: '0.75rem',
+                padding: '0.75rem',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div className="requirements-title" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '0.5rem' }}>
+                  Password Requirements:
+                </div>
+                {[
+                  { key: 'length', text: 'At least 8 characters' },
+                  { key: 'lowercase', text: 'One lowercase letter (a-z)' },
+                  { key: 'uppercase', text: 'One uppercase letter (A-Z)' },
+                  { key: 'number', text: 'One number (0-9)' },
+                  { key: 'special', text: 'One special character (!@#$%^&*)' },
+                  { key: 'noSpaces', text: 'No spaces' }
+                ].map((req) => (
+                  <div key={req.key} className={`requirement ${checkPasswordStrength(newPassword).checks[req.key] ? 'met' : 'unmet'}`} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.75rem',
+                    marginBottom: '0.25rem',
+                    color: checkPasswordStrength(newPassword).checks[req.key] ? '#51cf66' : 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    <i className={`bi ${checkPasswordStrength(newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ fontSize: '0.8rem' }}></i>
+                    {req.text}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -245,12 +400,18 @@ const ResetPassword = () => {
                   <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                 </button>
               </div>
+              {confirmPassword && newPassword !== confirmPassword && (
+                <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>Passwords do not match</div>
+              )}
+              {confirmPassword && newPassword === confirmPassword && (
+                <div className="form-success" style={{ color: '#51cf66', fontSize: '0.8rem', marginTop: '0.25rem' }}>✓ Passwords match</div>
+              )}
             </div>
 
             <button
               type="submit"
               className="action-button"
-              disabled={loading}
+              disabled={loading || !newPassword || checkPasswordStrength(newPassword).score < 3 || newPassword !== confirmPassword}
             >
               {loading ? (
                 <span className="spinner" role="status" aria-hidden="true"></span>
@@ -273,16 +434,16 @@ const ResetPassword = () => {
                 className="dark-input"
                 placeholder="Enter 6-digit OTP code"
                 maxLength={6}
-                style={{ 
-                  textAlign: 'center', 
-                  fontSize: '1.5rem', 
+                style={{
+                  textAlign: 'center',
+                  fontSize: '1.5rem',
                   letterSpacing: '0.5rem',
                   fontFamily: 'monospace'
                 }}
               />
-              <p style={{ 
-                fontSize: '0.85rem', 
-                color: 'rgba(255, 255, 255, 0.6)', 
+              <p style={{
+                fontSize: '0.85rem',
+                color: 'rgba(255, 255, 255, 0.6)',
                 marginTop: '0.5rem',
                 textAlign: 'center'
               }}>
@@ -290,10 +451,147 @@ const ResetPassword = () => {
               </p>
             </div>
 
+            {/* Added password field for recovery flow if skipping step 1 (email link) */}
+            {searchParams.get('token') && (
+              <div className="security-warning" style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '1.25rem',
+                borderRadius: '16px',
+                marginBottom: '1.5rem',
+                color: 'white',
+                textAlign: 'left'
+              }}>
+                <div style={{ fontWeight: '600', marginBottom: '1rem', color: '#F8A34A', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="bi bi-shield-lock-fill"></i>
+                  Create Your New Password
+                </div>
+
+                <div className="form-group mb-3">
+                  <label style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '0.4rem', display: 'block' }}>New Password</label>
+                  <div className="password-input-container">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      className="dark-input"
+                      placeholder="Enter new password"
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                    </button>
+                    <button
+                      type="button"
+                      className="password-toggle-btn suggestion-btn"
+                      onClick={handleSuggestPassword}
+                      tabIndex="-1"
+                      title="Suggest a strong password"
+                      style={{ right: '40px' }}
+                    >
+                      <i className="bi bi-magic"></i>
+                    </button>
+                  </div>
+
+                  {newPassword && checkPasswordStrength(newPassword).score < 3 && (
+                    <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                      Password is too weak
+                    </div>
+                  )}
+
+                  {/* Tiny Strength Bar for Recovery Flow */}
+                  {newPassword && (
+                    <div className="password-strength-bar" style={{
+                      width: '100%',
+                      height: '3px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      borderRadius: '2px',
+                      marginTop: '0.5rem',
+                      overflow: 'hidden'
+                    }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          transition: 'all 0.3s ease',
+                          width: `${(checkPasswordStrength(newPassword).score / 6) * 100}%`,
+                          backgroundColor: checkPasswordStrength(newPassword).color
+                        }}
+                      ></div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group mb-3">
+                  <label style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '0.4rem', display: 'block' }}>Confirm New Password</label>
+                  <div className="password-input-container">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      className="dark-input"
+                      placeholder="Confirm new password"
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                    </button>
+                  </div>
+                  {confirmPassword && newPassword !== confirmPassword && (
+                    <div style={{ color: '#ff6b6b', fontSize: '0.75rem', marginTop: '0.25rem' }}>Passwords do not match</div>
+                  )}
+                </div>
+
+                {/* Requirements Checklist */}
+                <div style={{
+                  padding: '0.75rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.5rem', color: 'rgba(255, 255, 255, 0.5)' }}>Requirements:</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 1rem' }}>
+                    {[
+                      { key: 'length', text: '8+ Characters' },
+                      { key: 'lowercase', text: 'Lowercase' },
+                      { key: 'uppercase', text: 'Uppercase' },
+                      { key: 'number', text: 'Number' },
+                      { key: 'special', text: 'Special' },
+                    ].map((req) => (
+                      <div key={req.key} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.7rem',
+                        color: checkPasswordStrength(newPassword).checks[req.key] ? '#51cf66' : 'rgba(255, 255, 255, 0.3)'
+                      }}>
+                        <i className={`bi ${checkPasswordStrength(newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
+                        {req.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               className="action-button"
-              disabled={loading || otpCode.length < 6}
+              disabled={
+                loading ||
+                otpCode.length < 6 ||
+                (searchParams.get('token') && (checkPasswordStrength(newPassword).score < 3 || newPassword !== confirmPassword))
+              }
             >
               {loading ? (
                 <span className="spinner" role="status" aria-hidden="true"></span>
@@ -324,7 +622,7 @@ const ResetPassword = () => {
           </p>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

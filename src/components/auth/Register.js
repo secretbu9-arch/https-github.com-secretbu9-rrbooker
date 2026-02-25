@@ -15,7 +15,7 @@ const Register = () => {
     phone: '',
     role: 'customer' // Default role is customer
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -27,12 +27,12 @@ const Register = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Handle phone number with +63 prefix
     if (name === 'phone') {
       // Remove all non-digit characters
       let digits = value.replace(/\D/g, '');
-      
+
       // If user is typing, extract only digits after +63
       if (value.startsWith('+63')) {
         // Get digits after +63
@@ -41,15 +41,15 @@ const Register = () => {
         // If user typed 63 first, remove it and get remaining digits
         digits = digits.substring(2);
       }
-      
+
       // Limit to 10 digits
       if (digits.length > 10) {
         digits = digits.substring(0, 10);
       }
-      
+
       // Add +63 prefix if we have digits
       const formatted = digits.length > 0 ? `+63${digits}` : '';
-      
+
       setFormData(prev => ({
         ...prev,
         [name]: formatted
@@ -74,10 +74,10 @@ const Register = () => {
     };
 
     const score = Object.values(checks).filter(Boolean).length;
-    
+
     let strength = 'weak';
     let color = '#ff6b6b';
-    
+
     if (score >= 5) {
       strength = 'strong';
       color = '#51cf66';
@@ -87,6 +87,36 @@ const Register = () => {
     }
 
     return { checks, score, strength, color };
+  };
+
+  const generateSuggestedPassword = () => {
+    const length = 12;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()+";
+    let retVal = "";
+
+    // Ensure we meet all requirements
+    retVal += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+    retVal += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    retVal += "0123456789"[Math.floor(Math.random() * 10)];
+    retVal += "!@#$%^&*()"[Math.floor(Math.random() * 10)];
+
+    for (let i = 4, n = charset.length; i < length; ++i) {
+      retVal += charset.charAt(Math.floor(Math.random() * n));
+    }
+
+    // Shuffle the result
+    return retVal.split('').sort(() => 0.5 - Math.random()).join('');
+  };
+
+  const handleSuggestPassword = () => {
+    const suggested = generateSuggestedPassword();
+    setFormData(prev => ({
+      ...prev,
+      password: suggested,
+      confirmPassword: suggested
+    }));
+    setShowPassword(true);
+    setShowConfirmPassword(true);
   };
 
   // Validation functions
@@ -163,10 +193,10 @@ const Register = () => {
       }
 
       console.log('Starting registration with role:', formData.role);
-      
+
       // Proceed with registration without fake-user/scam analysis
       console.log('Proceeding with registration...');
-      
+
       // Sign up user with metadata and email verification
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -189,24 +219,24 @@ const Register = () => {
       // Check if email verification is required
       if (authData.user && !authData.user.email_confirmed_at) {
         setSuccess('Registration successful! Please check your email and click the verification link to activate your account. You will be redirected to login after verification.');
-        
+
         // Log successful registration
         await supabase.from('system_logs').insert({
           user_id: authData.user.id,
           action: 'user_register_with_verification',
-          details: { 
+          details: {
             email: formData.email,
             role: formData.role
           }
         });
-        
+
         setLoading(false);
         return;
       }
 
       // Wait for auth to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       if (!authData.user) {
         throw new Error('User creation failed or confirmation required');
       }
@@ -235,7 +265,7 @@ const Register = () => {
       await supabase.from('system_logs').insert({
         user_id: authData.user.id,
         action: 'user_register_success',
-        details: { 
+        details: {
           email: formData.email,
           role: formData.role
         }
@@ -255,21 +285,21 @@ const Register = () => {
         }, 2000);
       } else {
         console.log('Sign in successful, user role should be:', formData.role);
-        
+
         // Extra step: update session with role information
         const { error: sessionError } = await supabase.auth.refreshSession();
         if (sessionError) {
           console.error('Session refresh error:', sessionError);
         }
-        
+
         setSuccess('Registration successful! Redirecting...');
-        
+
         setTimeout(() => {
           // Force reload to ensure all auth data is updated
           window.location.href = '/dashboard';
         }, 1000);
       }
-      
+
     } catch (error) {
       console.error('Registration error:', error);
       setError(error.message || 'Failed to register. Please try again.');
@@ -281,24 +311,24 @@ const Register = () => {
   return (
     <div className="dark-onboarding">
       <div className="dark-slide-card register-card">
-         <div className="barber-logo">
-           <div className="logo-image-container">
-               <img 
-                src="/rrbooker-logo-3.png" 
-                alt="RAF & ROX Barbershop" 
-                className="auth-logo"
-               onError={(e) => {
-                 e.target.style.display = 'none';
-                 e.target.nextSibling.style.display = 'block';
-               }}
-             />
-             <span className="logo-fallback-text" style={{ display: 'none' }}>R&R</span>
-           </div>
-           <div className="logo-text">
-             <h1>R&RBooker</h1>
-             <p>Create Account</p>
-           </div>
-         </div>
+        <div className="barber-logo">
+          <div className="logo-image-container">
+            <img
+              src="/rrbooker-logo-3.png"
+              alt="RAF & ROX Barbershop"
+              className="auth-logo"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'block';
+              }}
+            />
+            <span className="logo-fallback-text" style={{ display: 'none' }}>R&R</span>
+          </div>
+          <div className="logo-text">
+            <h1>R&RBooker</h1>
+            <p>Create Account</p>
+          </div>
+        </div>
 
         {error && (
           <div className="error-alert" role="alert">
@@ -415,13 +445,30 @@ const Register = () => {
               >
                 <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
               </button>
+              <button
+                type="button"
+                className="password-toggle-btn suggestion-btn"
+                onClick={handleSuggestPassword}
+                tabIndex="-1"
+                title="Suggest a strong password"
+                style={{ right: '40px' }}
+              >
+                <i className="bi bi-magic"></i>
+              </button>
             </div>
-            
+
+            {formData.password && checkPasswordStrength(formData.password).score < 3 && (
+              <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                Password is too weak
+              </div>
+            )}
+
             {/* Password Strength Indicator */}
             {formData.password && (
               <div className="password-strength-container">
                 <div className="password-strength-bar">
-                  <div 
+                  <div
                     className="password-strength-fill"
                     style={{
                       width: `${(checkPasswordStrength(formData.password).score / 6) * 100}%`,
@@ -441,32 +488,36 @@ const Register = () => {
             )}
 
             {/* Password Requirements */}
-            <div className="password-requirements">
-              <div className="requirements-title">Password Requirements:</div>
-              <div className={`requirement ${checkPasswordStrength(formData.password).checks.length ? 'met' : 'unmet'}`}>
-                <i className={`bi ${checkPasswordStrength(formData.password).checks.length ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
-                At least 8 characters
+            <div className="password-requirements" style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <div className="requirements-title" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '0.5rem' }}>
+                Password Requirements:
               </div>
-              <div className={`requirement ${checkPasswordStrength(formData.password).checks.lowercase ? 'met' : 'unmet'}`}>
-                <i className={`bi ${checkPasswordStrength(formData.password).checks.lowercase ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
-                One lowercase letter (a-z)
-              </div>
-              <div className={`requirement ${checkPasswordStrength(formData.password).checks.uppercase ? 'met' : 'unmet'}`}>
-                <i className={`bi ${checkPasswordStrength(formData.password).checks.uppercase ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
-                One uppercase letter (A-Z)
-              </div>
-              <div className={`requirement ${checkPasswordStrength(formData.password).checks.number ? 'met' : 'unmet'}`}>
-                <i className={`bi ${checkPasswordStrength(formData.password).checks.number ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
-                One number (0-9)
-              </div>
-              <div className={`requirement ${checkPasswordStrength(formData.password).checks.special ? 'met' : 'unmet'}`}>
-                <i className={`bi ${checkPasswordStrength(formData.password).checks.special ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
-                One special character (!@#$%^&*)
-              </div>
-              <div className={`requirement ${checkPasswordStrength(formData.password).checks.noSpaces ? 'met' : 'unmet'}`}>
-                <i className={`bi ${checkPasswordStrength(formData.password).checks.noSpaces ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
-                No spaces
-              </div>
+              {[
+                { key: 'length', text: 'At least 8 characters' },
+                { key: 'lowercase', text: 'One lowercase letter (a-z)' },
+                { key: 'uppercase', text: 'One uppercase letter (A-Z)' },
+                { key: 'number', text: 'One number (0-9)' },
+                { key: 'special', text: 'One special character (!@#$%^&*)' },
+                { key: 'noSpaces', text: 'No spaces' }
+              ].map((req) => (
+                <div key={req.key} className={`requirement ${checkPasswordStrength(formData.password).checks[req.key] ? 'met' : 'unmet'}`} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.75rem',
+                  marginBottom: '0.25rem',
+                  color: checkPasswordStrength(formData.password).checks[req.key] ? '#51cf66' : 'rgba(255, 255, 255, 0.5)'
+                }}>
+                  <i className={`bi ${checkPasswordStrength(formData.password).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ fontSize: '0.8rem' }}></i>
+                  {req.text}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -504,13 +555,13 @@ const Register = () => {
           <div className="form-group">
             <label htmlFor="phone">Phone Number</label>
             <div style={{ position: 'relative' }}>
-              <img 
+              <img
                 src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png"
                 alt="Philippines"
-                style={{ 
-                  position: 'absolute', 
-                  left: '12px', 
-                  top: '50%', 
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
                   transform: 'translateY(-50%)',
                   width: '20px',
                   height: '15px',
@@ -551,7 +602,7 @@ const Register = () => {
           <button
             type="submit"
             className="action-button"
-            disabled={loading}
+            disabled={loading || !formData.password || checkPasswordStrength(formData.password).score < 3 || formData.password !== formData.confirmPassword}
           >
             {loading ? (
               <span className="spinner" role="status" aria-hidden="true"></span>
@@ -565,8 +616,8 @@ const Register = () => {
             Already have an account? <Link to="/login">Sign in</Link>
           </p>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

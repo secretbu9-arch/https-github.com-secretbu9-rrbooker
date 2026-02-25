@@ -93,29 +93,8 @@ class AutoCancelNoShowService {
           shouldCancel = this.shouldCancelAppointment(appointmentTime, currentTime, cutoffTime, appointment);
           estimatedStartTime = appointmentTime;
         }
-        // Check if it's a queue appointment (for today)
-        else if (appointment.appointment_type === 'queue' && appointment.queue_position && appointment.appointment_date === today) {
-          // Get all appointments for this barber on this date
-          const key = `${appointment.barber_id}_${appointment.appointment_date}`;
-          const barberAppointments = appointmentsByBarberDate[key] || [];
-
-          // Calculate estimated start time based on queue position
-          estimatedStartTime = this.calculateQueueStartTime(
-            appointment.appointment_date,
-            appointment.queue_position,
-            appointment.barber_id,
-            barberAppointments.filter(apt =>
-              apt.queue_position < appointment.queue_position &&
-              apt.appointment_type === 'queue' &&
-              apt.id !== appointment.id
-            )
-          );
-
-          if (estimatedStartTime) {
-            // Check if estimated start time has passed (with grace period)
-            shouldCancel = this.shouldCancelAppointment(estimatedStartTime, currentTime, cutoffTime, appointment);
-          }
-        }
+        // Removed: Auto-cancellation of queue appointments based on estimates.
+        // Queue appointments should only be cancelled at the end of the day to avoid premature cancellations.
 
         if (shouldCancel) {
           const timeDisplay = estimatedStartTime || appointment.appointment_time || 'scheduled time';
@@ -154,7 +133,7 @@ class AutoCancelNoShowService {
           // Create notification for customer
           if (appointment.customer_id) {
             try {
-              const { CentralizedNotificationService } = await import('./CentralizedNotificationService');
+              const { default: CentralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
               await CentralizedNotificationService.createNotification({
                 userId: appointment.customer_id,
                 title: 'Appointment Cancelled',
@@ -175,7 +154,7 @@ class AutoCancelNoShowService {
           // Create notification for barber
           if (appointment.barber_id) {
             try {
-              const { CentralizedNotificationService } = await import('./CentralizedNotificationService');
+              const { default: CentralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
               await CentralizedNotificationService.createNotification({
                 userId: appointment.barber_id,
                 title: 'Appointment Auto-Cancelled',
@@ -417,8 +396,42 @@ class AutoCancelNoShowService {
           if (!cancelError) {
             cancelledAppointments.push(appointment);
 
-            // Create notifications (similar to scheduled appointments)
-            // ... (notification code similar to above)
+            // Create notification for customer
+            if (appointment.customer_id) {
+              try {
+                const { default: CentralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
+                await CentralizedNotificationService.createNotification({
+                  userId: appointment.customer_id,
+                  title: 'Queue Appointment Cancelled',
+                  message: 'Your queue appointment was automatically cancelled because it remained unserved at the end of business hours.',
+                  type: 'appointment_cancelled',
+                  appointmentId: appointment.id,
+                  data: { reason: 'end_of_day_unserved' }
+                });
+              } catch (notifError) {
+                console.error('Error creating customer notification:', notifError);
+              }
+            }
+
+            // Create notification for barber
+            if (appointment.barber_id) {
+              try {
+                const { default: CentralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
+                await CentralizedNotificationService.createNotification({
+                  userId: appointment.barber_id,
+                  title: 'Queue Entry Expired',
+                  message: `Queue entry for ${appointment.customer?.full_name || 'customer'} was expired at the end of the day.`,
+                  type: 'appointment_cancelled',
+                  appointmentId: appointment.id,
+                  data: {
+                    reason: 'end_of_day_unserved',
+                    customer_name: appointment.customer?.full_name
+                  }
+                });
+              } catch (notifError) {
+                console.error('Error creating barber notification:', notifError);
+              }
+            }
           }
         }
       }

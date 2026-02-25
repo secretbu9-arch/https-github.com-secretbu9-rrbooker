@@ -409,7 +409,7 @@ const BookAppointment = () => {
         .select('*')
         .eq('customer_id', user.id)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'pending']);
+        .in('status', ['scheduled', 'confirmed', 'pending', 'ongoing', 'completed']);
 
       if (error) {
         console.error('❌ Supabase error in checkExistingAppointment:', error);
@@ -2409,6 +2409,20 @@ const BookAppointment = () => {
         throw new Error('User not logged in');
       }
 
+      // Final double-booking check if not booking for a friend
+      if (!bookingData.bookForFriend) {
+        const { data: existingApts } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('customer_id', user.id)
+          .eq('appointment_date', bookingData.selectedDate)
+          .in('status', ['scheduled', 'confirmed', 'pending', 'ongoing', 'completed']);
+
+        if (existingApts && existingApts.length > 0) {
+          throw new Error('You already have an appointment for this date (active or completed). You can only book once per day for yourself.');
+        }
+      }
+
       if (!bookingData.selectedBarber) {
         throw new Error('No barber selected');
       }
@@ -2866,6 +2880,9 @@ const BookAppointment = () => {
         unifiedSlots={unifiedSlots}
         alternativeBarbers={alternativeBarbers}
         friendVerification={friendVerification}
+        onSendFriendVerification={sendFriendVerificationCode}
+        onVerifyFriendVerification={verifyFriendVerificationCode}
+        onResetFriendVerification={resetFriendVerification}
       />}
 
 
@@ -2984,8 +3001,31 @@ const Step1DateTypeAndBarber = ({
   };
 
   const handleFriendPhoneChange = (value) => {
-    setFriendPhone(value);
-    updateBookingData({ friendPhone: value });
+    // Ensure the value starts with +63 and only contains digits after that
+    let cleaned = value;
+    if (!cleaned.startsWith('+63')) {
+      const digits = cleaned.replace(/\D/g, '');
+      // If starts with 0 (traditional PH format), strip it and add +63
+      if (digits.startsWith('0')) {
+        cleaned = '+63' + digits.substring(1);
+      } else if (digits.startsWith('63')) {
+        cleaned = '+' + digits;
+      } else {
+        cleaned = '+63' + digits;
+      }
+    } else {
+      // Keep +63 and only allow digits
+      const digits = cleaned.substring(3).replace(/\D/g, '');
+      cleaned = '+63' + digits;
+    }
+
+    // Limit to +63 + 10 digits
+    if (cleaned.length > 13) {
+      cleaned = cleaned.substring(0, 13);
+    }
+
+    setFriendPhone(cleaned);
+    updateBookingData({ friendPhone: cleaned });
   };
 
   const handleFriendEmailChange = (value) => {
@@ -3365,7 +3405,7 @@ const Step1DateTypeAndBarber = ({
 
     // Check for existing appointment before proceeding
     if (existingAppointment && !bookForFriend) {
-      setError('You already have an appointment on this date. Please choose a different date or book for a child.');
+      setError('You already have an appointment on this date (including completed ones). You can only book once per day for yourself.');
       return;
     }
 
@@ -3597,60 +3637,117 @@ const Step1DateTypeAndBarber = ({
               </div>
 
               {bookForFriend && (
-                <div className="card border-0 shadow-sm rounded-3 p-3 animate-fade-in">
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold">Child's Name</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      value={friendName}
-                      onChange={(e) => handleFriendNameChange(e.target.value)}
-                      placeholder="Enter name"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold">Guardian Phone</label>
-                    <input
-                      type="tel"
-                      className="form-control form-control-sm"
-                      value={friendPhone}
-                      onChange={(e) => handleFriendPhoneChange(e.target.value)}
-                      placeholder="Enter phone"
-                    />
-                  </div>
-                  <div className="mb-0">
-                    <label className="form-label small fw-bold">Child's Email</label>
-                    <div className="d-flex flex-column gap-2">
-                      <input
-                        type="email"
-                        className={`form-control form-control-sm ${friendEmailError ? 'is-invalid' : ''}`}
-                        value={friendEmail}
-                        onChange={(e) => handleFriendEmailChange(e.target.value)}
-                        placeholder="Enter email"
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={handleSendVerificationClick}
-                        disabled={!isFriendEmailValid || friendVerification?.sending || isFriendEmailVerified}
-                      >
-                        {friendVerification?.sending ? <span className="spinner-border spinner-border-sm"></span> : 'Verify Email'}
-                      </button>
+                <div className="card border-0 shadow-sm rounded-4 p-4 mt-3 bg-white animate-fade-in border-start border-4 border-primary">
+                  <div className="d-flex align-items-center mb-3">
+                    <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
+                      <i className="bi bi-person-heart text-primary fs-5"></i>
                     </div>
-                    {isOtpSectionVisible && (
-                      <div className="input-group input-group-sm mt-2">
+                    <div>
+                      <h6 className="mb-0 fw-bold">Child's Information</h6>
+                      <p className="text-muted extra-small mb-0">Please provide details for the child booking</p>
+                    </div>
+                  </div>
+
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <label className="form-label small fw-bold text-secondary text-uppercase mb-1" style={{ fontSize: '0.7rem' }}>Child's Name</label>
+                      <div className="input-group input-group-sm">
+                        <span className="input-group-text bg-light border-end-0"><i className="bi bi-person text-muted"></i></span>
                         <input
                           type="text"
-                          className="form-control"
-                          placeholder="Code"
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value)}
-                          maxLength={6}
+                          className="form-control border-start-0 ps-0"
+                          value={friendName}
+                          onChange={(e) => handleFriendNameChange(e.target.value)}
+                          placeholder="Enter child's full name"
+                          style={{ borderRadius: '0 8px 8px 0' }}
                         />
-                        <button className="btn btn-primary" type="button" onClick={handleVerifyOTPClick}>Verify</button>
                       </div>
-                    )}
-                    {isFriendEmailVerified && <p className="text-success small mt-2 mb-0"><i className="bi bi-check-circle me-1"></i>Verified</p>}
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label small fw-bold text-secondary text-uppercase mb-1" style={{ fontSize: '0.7rem' }}>Guardian Phone Number</label>
+                      <div className="input-group input-group-sm">
+                        <span className="input-group-text bg-light border-end-0 fw-bold text-primary" style={{ minWidth: '55px' }}>+63</span>
+                        <input
+                          type="tel"
+                          className="form-control border-start-0 ps-0"
+                          value={friendPhone.replace('+63', '')}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length <= 10) handleFriendPhoneChange('+63' + val);
+                          }}
+                          placeholder="9XX XXX XXXX"
+                          style={{ borderRadius: '0 8px 8px 0' }}
+                        />
+                      </div>
+                      <div className="form-text extra-small mt-1 text-muted" style={{ fontSize: '0.65rem' }}>
+                        <i className="bi bi-info-circle me-1"></i>
+                        Used for appointment alerts & status updates
+                      </div>
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label small fw-bold text-secondary text-uppercase mb-1" style={{ fontSize: '0.7rem' }}>Verification Email</label>
+                      <div className="input-group input-group-sm">
+                        <span className="input-group-text bg-light border-end-0"><i className="bi bi-envelope text-muted"></i></span>
+                        <input
+                          type="email"
+                          className={`form-control border-start-0 ps-0 ${friendEmailError ? 'is-invalid' : ''}`}
+                          value={friendEmail}
+                          onChange={(e) => handleFriendEmailChange(e.target.value)}
+                          placeholder="guardian@example.com"
+                          disabled={isFriendEmailVerified}
+                          style={{ borderRadius: isFriendEmailVerified ? '0 8px 8px 0' : '0' }}
+                        />
+                        {!isFriendEmailVerified && (
+                          <button
+                            className="btn btn-primary px-3"
+                            type="button"
+                            onClick={handleSendVerificationClick}
+                            disabled={!isFriendEmailValid || friendVerification?.sending}
+                            style={{ borderRadius: '0 8px 8px 0' }}
+                          >
+                            {friendVerification?.sending ? <span className="spinner-border spinner-border-sm"></span> : <i className="bi bi-send-fill"></i>}
+                          </button>
+                        )}
+                      </div>
+
+                      {isOtpSectionVisible && (
+                        <div className="bg-light p-3 rounded-3 mt-3 border border-primary border-opacity-25 shadow-sm animate-fade-in">
+                          <label className="form-label small fw-bold mb-2 d-block">Enter 6-Digit Verification Code</label>
+                          <div className="input-group input-group-sm">
+                            <input
+                              type="text"
+                              className="form-control fw-bold text-center"
+                              placeholder="0 0 0 0 0 0"
+                              value={otpCode}
+                              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                              maxLength={6}
+                              style={{ fontSize: '1.2rem', letterSpacing: '4px', borderRadius: '8px 0 0 8px' }}
+                            />
+                            <button className="btn btn-primary fw-bold px-3" type="button" onClick={handleVerifyOTPClick} style={{ borderRadius: '0 8px 8px 0' }}>Verify</button>
+                          </div>
+                          <div className="mt-2 d-flex justify-content-between align-items-center">
+                            <small className="text-muted extra-small">Didn't get the code?</small>
+                            <button className="btn btn-link p-0 extra-small text-decoration-none fw-bold" onClick={handleSendVerificationClick}>Resend Code</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {isFriendEmailVerified && (
+                        <div className="d-flex align-items-center text-success small fw-bold mt-2 bg-success bg-opacity-10 p-2 rounded-2 border border-success border-opacity-25">
+                          <i className="bi bi-check-circle-fill me-2 fs-6"></i>
+                          Verification Email Confirmed
+                        </div>
+                      )}
+
+                      {friendEmailError && (
+                        <div className="text-danger extra-small mt-2 px-1">
+                          <i className="bi bi-exclamation-circle-fill me-1"></i>
+                          {friendEmailError}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -4167,8 +4264,18 @@ const Step3QueueSummary = ({
   calculateRealTimeAvailability,
   unifiedSlots,
   alternativeBarbers,
-  friendVerification
+  friendVerification,
+  onSendFriendVerification,
+  onVerifyFriendVerification,
+  onResetFriendVerification
 }) => {
+  const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState('');
+
+  const normalizedEmail = (bookingData.friendEmail || '').trim().toLowerCase();
+  const isOtpSectionVisible = bookingData.bookForFriend && friendVerification?.sent && friendVerification.email === normalizedEmail && !friendVerification?.verified;
+  const isFriendEmailVerified = bookingData.bookForFriend && friendVerification?.verified && friendVerification.email === normalizedEmail;
+  const isFriendEmailValid = FRIEND_EMAIL_REGEX.test(normalizedEmail);
   const selectedBarber = barbers.find(b => b.id === bookingData.selectedBarber);
   const queue = barberQueues[bookingData.selectedBarber];
   const [estimatedStartTime, setEstimatedStartTime] = useState('Loading...');
@@ -4471,7 +4578,7 @@ const Step3QueueSummary = ({
 
               {/* Queue Visualization */}
               {bookingData?.appointmentType === 'queue' && (
-                <div className="mb-5 p-3 p-sm-4 bg-white border-0 shadow-sm rounded-4 position-relative overflow-hidden">
+                <div className="mb-3 p-3 p-sm-4 bg-white border-0 shadow-sm rounded-4 position-relative overflow-hidden">
                   <div className="d-flex justify-content-between align-items-start mb-4">
                     <div className="d-flex align-items-center flex-grow-1">
                       <div className="queue-number-v2 me-3 me-sm-4">
@@ -4494,14 +4601,6 @@ const Step3QueueSummary = ({
                     </div>
                   </div>
 
-                  {/* Mobile-only badge row */}
-                  <div className="d-md-none mb-4 text-center">
-                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2">
-                      <i className="bi bi-broadcast me-2 animate-pulse-subtle"></i>
-                      Live Queue Estimate
-                    </span>
-                  </div>
-
                   <div className="d-flex gap-3 mb-4">
                     <div className="stat-box-v2">
                       <div className="text-primary fw-bold h3 mb-0">
@@ -4522,14 +4621,13 @@ const Step3QueueSummary = ({
                       <div className="bg-success bg-opacity-10 text-success rounded-pill px-3 px-sm-4 py-2 fw-bold small">
                         <i className="bi bi-clock-fill me-2"></i>Estimated Arrival: <span className="text-dark">{estimatedStartTime}</span>
                       </div>
-                      <p className="extra-small text-muted mb-0 text-center px-2">Time accounts for services ahead and average pace.</p>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Booking Grid */}
-              <div className="row g-4 mb-5">
+              <div className="row g-4 mb-3">
                 {/* Date and Barber Column */}
                 <div className="col-md-6">
                   <div className="h-100 d-flex flex-column gap-4">
@@ -4544,7 +4642,7 @@ const Step3QueueSummary = ({
 
                     {/* Barber Card */}
                     <div className="info-card p-3">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="d-flex justify-content-between align-items-center mb-0">
                         <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-person-fill me-2"></i>Barber</div>
                         <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(1)}>Edit</button>
                       </div>
@@ -4611,32 +4709,85 @@ const Step3QueueSummary = ({
 
               {/* Child Info Section */}
               {bookingData.bookForFriend && (
-                <div className="info-card p-3 mb-5 border-info border-start border-4 bg-info bg-opacity-5">
-                  <div className="row g-3">
-                    <div className="col-12">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="bg-info bg-opacity-10 p-2 rounded-circle me-2">
-                          <i className="bi bi-person-hearts text-info fs-5"></i>
+                <div className="info-card p-4 mb-5 border-start border-4 border-primary shadow-sm" style={{ background: 'linear-gradient(to right, #f8fbff, #ffffff)' }}>
+                  <div className="d-flex align-items-center mb-4">
+                    <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
+                      <i className="bi bi-person-heart text-primary fs-4"></i>
+                    </div>
+                    <div>
+                      <h5 className="mb-0 fw-bold text-dark">Child Booking Details</h5>
+                      <p className="text-muted extra-small mb-0">Verified Guest Information</p>
+                    </div>
+                  </div>
+
+                  <div className="row g-4">
+                    <div className="col-sm-6">
+                      <div className="text-secondary extra-small fw-bold text-uppercase mb-1" style={{ letterSpacing: '1px' }}>Child Name</div>
+                      <div className="d-flex align-items-center">
+                        <i className="bi bi-person me-2 text-primary"></i>
+                        <span className="fw-bold text-dark fs-6">{bookingData.friendName}</span>
+                      </div>
+                    </div>
+                    <div className="col-sm-6">
+                      <div className="text-secondary extra-small fw-bold text-uppercase mb-1" style={{ letterSpacing: '1px' }}>Contact Number</div>
+                      <div className="d-flex align-items-center text-primary fw-bold">
+                        <i className="bi bi-telephone-fill me-2"></i>
+                        <span className="fs-6">{bookingData.friendPhone}</span>
+                      </div>
+                    </div>
+                    <div className="col-12 mt-3 pt-3 border-top border-light">
+                      <div className="d-flex flex-wrap align-items-center gap-3">
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-envelope me-2 text-muted"></i>
+                          <span className="text-dark fw-medium small">{bookingData.friendEmail}</span>
                         </div>
-                        <div className="fw-bold text-info">Booking for Child</div>
-                      </div>
-                    </div>
-                    <div className="col-sm-6">
-                      <div className="text-muted extra-small fw-bold text-uppercase">Child Name</div>
-                      <div className="fw-bold text-dark">{bookingData.friendName}</div>
-                    </div>
-                    <div className="col-sm-6">
-                      <div className="text-muted extra-small fw-bold text-uppercase">Contact Info</div>
-                      <div className="fw-bold text-dark">{bookingData.friendPhone}</div>
-                    </div>
-                    <div className="col-12 mt-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <span className={`badge ${friendVerification?.verified ? 'bg-success' : 'bg-warning'} px-2 py-1`}>
-                          <i className={`bi ${friendVerification?.verified ? 'bi-patch-check-fill' : 'bi-exclamation-circle-fill'} me-1`}></i>
-                          {friendVerification?.verified ? 'Email Verified' : 'Verification Pending'}
+                        <span className={`badge ${isFriendEmailVerified ? 'bg-success' : 'bg-warning'} bg-opacity-10 ${isFriendEmailVerified ? 'text-success' : 'text-warning'} border ${isFriendEmailVerified ? 'border-success' : 'border-warning'} border-opacity-25 px-3 py-2 rounded-pill`}>
+                          <i className={`bi ${isFriendEmailVerified ? 'bi-patch-check-fill' : 'bi-exclamation-circle-fill'} me-2`}></i>
+                          {isFriendEmailVerified ? 'Email Verified' : 'Verification Pending'}
                         </span>
-                        <span className="text-muted small">{bookingData.friendEmail}</span>
+
+                        {!isFriendEmailVerified && !isOtpSectionVisible && (
+                          <button
+                            className="btn btn-sm btn-primary rounded-pill px-3"
+                            onClick={() => onSendFriendVerification(bookingData.friendEmail, bookingData.friendName)}
+                            disabled={friendVerification?.sending || !isFriendEmailValid}
+                          >
+                            {friendVerification?.sending ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-send-fill me-1"></i>}
+                            Verify Now
+                          </button>
+                        )}
                       </div>
+
+                      {isOtpSectionVisible && (
+                        <div className="bg-white p-3 rounded-3 mt-3 border border-primary border-opacity-25 shadow-sm animate-fade-in">
+                          <label className="form-label small fw-bold mb-2 d-block">Enter Verification Code</label>
+                          <div className="input-group input-group-sm">
+                            <input
+                              type="text"
+                              className="form-control fw-bold text-center"
+                              placeholder="000000"
+                              value={otpCode}
+                              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                              maxLength={6}
+                              style={{ fontSize: '1.2rem', letterSpacing: '4px', borderRadius: '8px 0 0 8px' }}
+                            />
+                            <button
+                              className="btn btn-primary fw-bold px-3"
+                              type="button"
+                              onClick={() => onVerifyFriendVerification(otpCode)}
+                              disabled={otpCode.length !== 6}
+                              style={{ borderRadius: '0 8px 8px 0' }}
+                            >
+                              Verify Code
+                            </button>
+                          </div>
+                          {otpError && <div className="text-danger extra-small mt-2">{otpError}</div>}
+                          <div className="mt-2 d-flex justify-content-between align-items-center">
+                            <small className="text-muted extra-small">Didn't get the code?</small>
+                            <button className="btn btn-link p-0 extra-small text-decoration-none fw-bold" onClick={() => onSendFriendVerification(bookingData.friendEmail, bookingData.friendName)}>Resend Code</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

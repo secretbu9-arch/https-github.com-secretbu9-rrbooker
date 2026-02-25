@@ -127,6 +127,9 @@ const BarberQueue = () => {
       if (error) throw error;
       setUser(user);
     } catch (err) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        return; // Silent bypass
+      }
       console.error('Error getting current user:', err);
       setError('Failed to authenticate user');
       setLoading(false);

@@ -18,17 +18,17 @@ const Notifications = () => {
     const onResize = () => setIsMobile(window.innerWidth < 992); // Bootstrap lg breakpoint
     onResize();
     window.addEventListener('resize', onResize);
-    
+
     // Set up real-time subscription for notifications
     const setupSubscription = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        
+
         if (!user) return;
-        
+
         // Use a unique channel name to avoid conflicts with multiple instances
         const channelName = `notifications-${user.id}`;
-        
+
         // Check if subscription already exists for this channel
         const existingChannel = supabase.getChannels().find(ch => ch.topic === channelName);
         if (existingChannel) {
@@ -36,16 +36,16 @@ const Notifications = () => {
           subscriptionRef.current = existingChannel;
           return;
         }
-        
+
         const subscription = supabase
           .channel(channelName)
-          .on('postgres_changes', 
-            { 
-              event: 'INSERT', 
-              schema: 'public', 
+          .on('postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
               table: 'notifications',
               filter: `user_id=eq.${user.id}`
-            }, 
+            },
             (payload) => {
               // Check if notification already exists in state to prevent duplicates
               setNotifications(prev => {
@@ -56,7 +56,7 @@ const Notifications = () => {
                 }
                 return [payload.new, ...prev];
               });
-              
+
               // Increment unread count if notification is unread
               if (!payload.new.read) {
                 setUnreadCount(prev => prev + 1);
@@ -64,13 +64,17 @@ const Notifications = () => {
             }
           )
           .subscribe();
-        
+
         subscriptionRef.current = subscription;
       } catch (err) {
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          console.log('Notification subscription setup aborted silently');
+          return;
+        }
         console.error('Error setting up notification subscription:', err);
       }
     };
-    
+
     setupSubscription();
 
     return () => {
@@ -98,7 +102,7 @@ const Notifications = () => {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return;
 
       const { data, error } = await supabase
@@ -111,11 +115,14 @@ const Notifications = () => {
       if (error) throw error;
 
       setNotifications(data || []);
-      
+
       // Count unread
       const unread = data?.filter(notification => !notification.read).length || 0;
       setUnreadCount(unread);
     } catch (err) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        return; // Silent bypass
+      }
       console.error('Error fetching notifications:', err);
       setError('Failed to load notifications');
     } finally {
@@ -131,16 +138,16 @@ const Notifications = () => {
         .eq('id', notificationId);
 
       if (error) throw error;
-      
+
       // Update local state
-      setNotifications(prevNotifications => 
-        prevNotifications.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, read: true } 
+      setNotifications(prevNotifications =>
+        prevNotifications.map(notification =>
+          notification.id === notificationId
+            ? { ...notification, read: true }
             : notification
         )
       );
-      
+
       // Update unread count
       setUnreadCount(prevCount => Math.max(0, prevCount - 1));
     } catch (err) {
@@ -151,7 +158,7 @@ const Notifications = () => {
   const handleMarkAllAsRead = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return;
 
       const { error } = await supabase
@@ -161,12 +168,12 @@ const Notifications = () => {
         .eq('read', false);
 
       if (error) throw error;
-      
+
       // Update local state
-      setNotifications(prevNotifications => 
+      setNotifications(prevNotifications =>
         prevNotifications.map(notification => ({ ...notification, read: true }))
       );
-      
+
       // Update unread count
       setUnreadCount(0);
     } catch (err) {
@@ -176,11 +183,11 @@ const Notifications = () => {
 
   const formatNotificationTime = (timestamp) => {
     if (!timestamp) return '';
-    
+
     const date = new Date(timestamp);
     const now = new Date();
     const diffMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffMinutes < 1) {
       return 'Just now';
     } else if (diffMinutes < 60) {
@@ -227,12 +234,12 @@ const Notifications = () => {
         .eq('id', notificationId);
 
       if (error) throw error;
-      
+
       // Update local state
-      setNotifications(prevNotifications => 
+      setNotifications(prevNotifications =>
         prevNotifications.filter(notification => notification.id !== notificationId)
       );
-      
+
       // Update unread count if needed
       const deletedNotification = notifications.find(n => n.id === notificationId);
       if (deletedNotification && !deletedNotification.read) {
@@ -251,7 +258,7 @@ const Notifications = () => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return;
 
       const { error } = await supabase
@@ -260,7 +267,7 @@ const Notifications = () => {
         .eq('user_id', user.id);
 
       if (error) throw error;
-      
+
       // Update local state
       setNotifications([]);
       setUnreadCount(0);
@@ -272,7 +279,7 @@ const Notifications = () => {
   // Render notification content (shared between mobile and desktop) - without header and filters
   const renderNotificationContent = () => (
     <>
-      
+
       {loading ? (
         <div className="p-3 text-center">
           <div className="spinner-border spinner-border-sm text-primary" role="status">
@@ -288,29 +295,28 @@ const Notifications = () => {
         <div className="p-4 text-center text-muted">
           <i className="bi bi-bell-slash fs-4 mb-2"></i>
           <p className="mb-0">
-            {filter === 'all' ? 'No notifications' : 
-             filter === 'unread' ? 'No unread notifications' : 
-             'No read notifications'}
+            {filter === 'all' ? 'No notifications' :
+              filter === 'unread' ? 'No unread notifications' :
+                'No read notifications'}
           </p>
         </div>
       ) : (
         <>
           {getFilteredNotifications().slice(0, 6).map(notification => (
-            <div 
-              key={notification.id} 
+            <div
+              key={notification.id}
               className={`notification-item p-2 p-sm-3 border-bottom ${!notification.read ? 'bg-light' : ''}`}
             >
               <div className="d-flex">
                 <div className="me-2 me-sm-3 flex-shrink-0">
-                  <div className={`rounded-circle bg-${
-                    notification.type === 'appointment' ? 'primary' :
-                    notification.type === 'queue' ? 'success' :
-                    notification.type === 'reminder' ? 'warning' :
-                    'secondary'
-                  } bg-opacity-10 p-2 text-center`} style={{ 
-                    width: isMobile ? '35px' : '40px', 
-                    height: isMobile ? '35px' : '40px' 
-                  }}>
+                  <div className={`rounded-circle bg-${notification.type === 'appointment' ? 'primary' :
+                      notification.type === 'queue' ? 'success' :
+                        notification.type === 'reminder' ? 'warning' :
+                          'secondary'
+                    } bg-opacity-10 p-2 text-center`} style={{
+                      width: isMobile ? '35px' : '40px',
+                      height: isMobile ? '35px' : '40px'
+                    }}>
                     <i className={`bi ${getNotificationIcon(notification.type)}`} style={{ fontSize: isMobile ? '0.9rem' : '1rem' }}></i>
                   </div>
                 </div>
@@ -324,7 +330,7 @@ const Notifications = () => {
                   <p className="mb-1 small" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)', wordBreak: 'break-word' }}>{notification.message}</p>
                   <div className="d-flex gap-2 flex-wrap">
                     {!notification.read && (
-                      <button 
+                      <button
                         className="btn btn-sm btn-link text-decoration-none p-0"
                         onClick={() => handleMarkAsRead(notification.id)}
                         style={{ fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)' }}
@@ -333,7 +339,7 @@ const Notifications = () => {
                         <span className="d-none d-sm-inline">Mark as read</span>
                       </button>
                     )}
-                    <button 
+                    <button
                       className="btn btn-sm btn-link text-decoration-none p-0 text-danger"
                       onClick={() => handleDeleteNotification(notification.id)}
                       title="Delete notification"
@@ -346,10 +352,10 @@ const Notifications = () => {
               </div>
             </div>
           ))}
-          
+
           <div className="p-3 text-center">
-            <Link 
-              to="/notifications" 
+            <Link
+              to="/notifications"
               className="btn btn-sm btn-link text-decoration-none"
               onClick={() => setShowNotifications(false)}
             >
@@ -363,7 +369,7 @@ const Notifications = () => {
 
   return (
     <div className="dropdown" style={{ position: 'relative' }}>
-      <button 
+      <button
         className="btn btn-link text-decoration-none position-relative text-white"
         onClick={() => setShowNotifications(!showNotifications)}
         aria-expanded={showNotifications}
@@ -376,10 +382,10 @@ const Notifications = () => {
           </span>
         )}
       </button>
-      
+
       {/* Click outside to close - only on mobile */}
       {showNotifications && isMobile && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             top: 0,
@@ -392,14 +398,14 @@ const Notifications = () => {
           onClick={() => setShowNotifications(false)}
         />
       )}
-      
+
       {showNotifications && (
         <>
           {/* Mobile: Fixed position modal-like dropdown */}
           {isMobile ? (
-            <div 
+            <div
               className="show shadow"
-              style={{ 
+              style={{
                 width: 'calc(100vw - 20px)',
                 maxWidth: 'calc(100vw - 20px)',
                 height: 'calc(100vh - 80px)',
@@ -422,7 +428,7 @@ const Notifications = () => {
               }}
             >
               {/* Arrow pointing to bell - Mobile (centered) */}
-              <div 
+              <div
                 style={{
                   position: 'absolute',
                   top: '-8px',
@@ -441,7 +447,7 @@ const Notifications = () => {
               <div className="d-flex flex-column gap-2 p-3 border-bottom" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 1 }}>
                 <div className="d-flex justify-content-between align-items-center">
                   <h6 className="mb-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>Notifications</h6>
-                  <button 
+                  <button
                     className="btn btn-sm btn-link text-decoration-none"
                     onClick={() => setShowNotifications(false)}
                     style={{ fontSize: '1.2rem', padding: '0.25rem', minWidth: '36px', minHeight: '36px' }}
@@ -449,14 +455,14 @@ const Notifications = () => {
                     <i className="bi bi-x-lg"></i>
                   </button>
                 </div>
-                
+
                 {/* Filter Buttons - Mobile */}
                 <div className="btn-group w-100" role="group" style={{ flexWrap: 'nowrap' }}>
                   <button
                     type="button"
                     className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setFilter('all')}
-                    style={{ 
+                    style={{
                       fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)',
                       padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.4rem, 1.2vw, 0.6rem)',
                       flex: '1 1 0',
@@ -470,7 +476,7 @@ const Notifications = () => {
                     type="button"
                     className={`btn btn-sm ${filter === 'unread' ? 'btn-warning' : 'btn-outline-warning'}`}
                     onClick={() => setFilter('unread')}
-                    style={{ 
+                    style={{
                       fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)',
                       padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.4rem, 1.2vw, 0.6rem)',
                       flex: '1 1 0',
@@ -484,7 +490,7 @@ const Notifications = () => {
                     type="button"
                     className={`btn btn-sm ${filter === 'read' ? 'btn-success' : 'btn-outline-success'}`}
                     onClick={() => setFilter('read')}
-                    style={{ 
+                    style={{
                       fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)',
                       padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.4rem, 1.2vw, 0.6rem)',
                       flex: '1 1 0',
@@ -495,15 +501,15 @@ const Notifications = () => {
                     Read ({notifications.length - unreadCount})
                   </button>
                 </div>
-                
+
                 {/* Mobile action buttons */}
                 <div className="d-flex gap-2 flex-wrap">
                   {unreadCount > 0 && (
-                    <button 
+                    <button
                       className="btn btn-sm btn-primary flex-fill"
                       onClick={handleMarkAllAsRead}
-                      style={{ 
-                        fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', 
+                      style={{
+                        fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
                         padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
                         minHeight: '36px',
                         fontWeight: '500'
@@ -513,11 +519,11 @@ const Notifications = () => {
                       Mark all as read
                     </button>
                   )}
-                  <button 
+                  <button
                     className="btn btn-sm btn-outline-danger flex-fill"
                     onClick={handleDeleteAllNotifications}
-                    style={{ 
-                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', 
+                    style={{
+                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
                       padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
                       minHeight: '36px',
                       fontWeight: '500'
@@ -535,9 +541,9 @@ const Notifications = () => {
             </div>
           ) : (
             /* Desktop: Dropdown menu */
-            <div 
-              className="dropdown-menu dropdown-menu-end show shadow" 
-              style={{ 
+            <div
+              className="dropdown-menu dropdown-menu-end show shadow"
+              style={{
                 width: 'auto',
                 minWidth: '420px',
                 maxWidth: '500px',
@@ -557,7 +563,7 @@ const Notifications = () => {
               }}
             >
               {/* Arrow pointing to bell - Desktop (aligned to bell icon) */}
-              <div 
+              <div
                 style={{
                   position: 'absolute',
                   top: '-8px',
@@ -572,7 +578,7 @@ const Notifications = () => {
                 }}
               />
               {/* Shadow arrow for better visibility */}
-              <div 
+              <div
                 style={{
                   position: 'absolute',
                   top: '-9px',
@@ -584,14 +590,14 @@ const Notifications = () => {
                   borderBottom: '9px solid rgba(0,0,0,0.1)',
                   zIndex: 0
                 }}
-              /            >
+              />
               {/* Desktop header with actions and filters */}
               <div className="d-flex flex-column gap-2 p-2 p-sm-3 border-bottom">
                 <div className="d-flex justify-content-between align-items-center">
                   <h6 className="mb-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>Notifications</h6>
                   <div className="d-flex gap-2">
                     {unreadCount > 0 && (
-                      <button 
+                      <button
                         className="btn btn-sm btn-link text-decoration-none"
                         onClick={handleMarkAllAsRead}
                         style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', padding: '0.25rem 0.5rem' }}
@@ -599,7 +605,7 @@ const Notifications = () => {
                         Mark all as read
                       </button>
                     )}
-                    <button 
+                    <button
                       className="btn btn-sm btn-link text-decoration-none text-danger"
                       onClick={handleDeleteAllNotifications}
                       style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)', padding: '0.25rem 0.5rem' }}
@@ -608,14 +614,14 @@ const Notifications = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 {/* Filter Buttons - Desktop */}
                 <div className="btn-group w-100" role="group">
                   <button
                     type="button"
                     className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
                     onClick={() => setFilter('all')}
-                    style={{ 
+                    style={{
                       fontSize: 'clamp(0.7rem, 1.8vw, 0.875rem)',
                       padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
                       flex: '1 1 auto'
@@ -627,7 +633,7 @@ const Notifications = () => {
                     type="button"
                     className={`btn btn-sm ${filter === 'unread' ? 'btn-warning' : 'btn-outline-warning'}`}
                     onClick={() => setFilter('unread')}
-                    style={{ 
+                    style={{
                       fontSize: 'clamp(0.7rem, 1.8vw, 0.875rem)',
                       padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
                       flex: '1 1 auto'
@@ -639,7 +645,7 @@ const Notifications = () => {
                     type="button"
                     className={`btn btn-sm ${filter === 'read' ? 'btn-success' : 'btn-outline-success'}`}
                     onClick={() => setFilter('read')}
-                    style={{ 
+                    style={{
                       fontSize: 'clamp(0.7rem, 1.8vw, 0.875rem)',
                       padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
                       flex: '1 1 auto'

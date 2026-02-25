@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { PushService } from '../../services/notifications/PushService';
 import logoImage from '../../assets/images/raf-rok-logo.png';
-import { ROUTES } from '../utils/constants';
+import { ROUTES, QUEUE_SETTINGS } from '../utils/constants';
 import RescheduleModal from '../barber/RescheduleModal';
 import addOnsService from '../../services/booking/AddOnsService';
+import FriendBookingDisplay from '../common/FriendBookingDisplay';
 
 const BarberDashboard = () => {
   const [todaySchedule, setTodaySchedule] = useState([]);
@@ -34,6 +34,9 @@ const BarberDashboard = () => {
   const [debounceTimeout, setDebounceTimeout] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [availableServices, setAvailableServices] = useState([]);
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
+  const [walkInForm, setWalkInForm] = useState({ customerName: '', serviceId: '', notes: '' });
 
   useEffect(() => {
     getCurrentUser();
@@ -50,6 +53,7 @@ const BarberDashboard = () => {
       getBarberInfo();
       fetchBarberData();
       fetchRecentReviews();
+      fetchServices();
 
       // Set up real-time subscription with enhanced error handling
       const channelName = `barber-dashboard-${user.id}-${Date.now()}`;
@@ -143,6 +147,21 @@ const BarberDashboard = () => {
       console.error('Error getting current user:', error);
       setError('Failed to load user data');
       setLoading(false);
+    }
+  };
+
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setAvailableServices(data || []);
+    } catch (err) {
+      console.error('Error fetching services:', err);
     }
   };
 
@@ -290,7 +309,7 @@ const BarberDashboard = () => {
           try {
             // Calculate total price: base price + urgent fee
             const basePrice = Number(apt.total_price) || Number(apt.service?.price) || 0;
-            const urgentFee = apt.is_urgent ? 100 : 0;
+            const urgentFee = apt.is_urgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0;
             const total = basePrice + urgentFee;
 
             // Ensure it's a valid number
@@ -323,7 +342,7 @@ const BarberDashboard = () => {
           total_price: apt.total_price,
           service_price: apt.service?.price,
           is_urgent: apt.is_urgent,
-          calculated: (Number(apt.total_price) || Number(apt.service?.price) || 0) + (apt.is_urgent ? 100 : 0)
+          calculated: (Number(apt.total_price) || Number(apt.service?.price) || 0) + (apt.is_urgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0)
         }))
       });
 
@@ -505,7 +524,7 @@ const BarberDashboard = () => {
   const getTotalPrice = (appointment) => {
     let total = appointment.total_price || appointment.service?.price || 0;
     if (appointment.is_urgent) {
-      total += 100;
+      total += (QUEUE_SETTINGS.URGENT_FEE || 100);
     }
     return total;
   };
@@ -803,6 +822,58 @@ const BarberDashboard = () => {
     }
   };
 
+  const handleServeWalkIn = async (e) => {
+    e.preventDefault();
+    if (!walkInForm.customerName || !walkInForm.serviceId) {
+      alert('Please provide customer name and select a service');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const selectedService = availableServices.find(s => s.id === walkInForm.serviceId);
+
+      // We use the notes field to store the walk-in name for now as there's no manual name field 
+      // or we can just prepend it to the notes.
+      const walkInNotes = `WALK-IN: ${walkInForm.customerName}${walkInForm.notes ? ' - ' + walkInForm.notes : ''}`;
+
+      const { data, error: insertError } = await supabase
+        .from('appointments')
+        .insert({
+          barber_id: user.id,
+          customer_id: null,
+          appointment_date: new Date().toISOString().split('T')[0],
+          appointment_time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+          status: 'ongoing',
+          service_id: walkInForm.serviceId,
+          total_price: selectedService?.price || 0,
+          total_duration: selectedService?.duration || 30,
+          is_walk_in: true,
+          notes: walkInNotes,
+          appointment_type: 'queue',
+          queue_position: 0
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      setShowWalkInModal(false);
+      setWalkInForm({ customerName: '', serviceId: '', notes: '' });
+      fetchBarberData();
+
+      window.dispatchEvent(new CustomEvent('appointmentStatusChanged', {
+        detail: { appointmentId: data.id, newStatus: 'ongoing', barberId: user.id, timestamp: Date.now() }
+      }));
+
+    } catch (err) {
+      console.error('Error adding walk-in:', err);
+      setError('Failed to start walk-in service: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'available': return 'success';
@@ -911,6 +982,16 @@ const BarberDashboard = () => {
                   </button></li>
                 </ul>
               </div>
+
+              <button
+                className="btn btn-primary d-flex align-items-center shadow-sm ms-2"
+                onClick={() => setShowWalkInModal(true)}
+                style={{ borderRadius: '10px', fontWeight: '600', fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)' }}
+              >
+                <i className="bi bi-person-plus-fill me-2"></i>
+                <span className="d-none d-sm-inline">Serve Walk-in</span>
+                <span className="d-sm-none">Walk-in</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1089,7 +1170,7 @@ const BarberDashboard = () => {
           </div>
         </div>
 
-        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+        <div className="col-6 col-md-4 col-lg-3 mb-2 mb-md-3">
           <div className={`card stats-card bg-gradient-secondary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
             <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
               <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Avg Wait</h6>
@@ -1098,7 +1179,7 @@ const BarberDashboard = () => {
           </div>
         </div>
 
-        <div className="col-12 col-sm-12 col-md-12 col-lg-6 mb-2 mb-md-3">
+        <div className="col-6 col-md-8 col-lg-6 mb-2 mb-md-3">
           <div className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
             <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
               <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Rating</h6>
@@ -1248,100 +1329,130 @@ const BarberDashboard = () => {
         </div>
       )}
 
-      {/* Current Customer */}
-      {currentAppointment && (
-        <div className="card mb-4 border-primary">
-          <div className="card-header bg-primary text-white">
-            <h5 className="mb-0">
-              <i className="bi bi-scissors me-2"></i>
-              Currently Serving
-            </h5>
-          </div>
-          <div className="card-body">
-            <div className="row align-items-center">
-              <div className="col-md-4">
-                <div className="text-center">
-                  <div className="rounded-circle bg-primary bg-opacity-10 p-4 d-inline-block mb-3">
-                    <i className="bi bi-person-circle fs-1 text-primary"></i>
+      {/* Current Customer / Next Up Section */}
+      <div className="mb-4">
+        {!currentAppointment && queueStatus.length > 0 ? (
+          <div className="card serve-next-card shadow-sm">
+            <div className="card-header bg-success text-white border-0">
+              <h5 className="mb-0 fw-bold">
+                <i className="bi bi-play-circle me-2"></i>
+                Ready to Serve Next
+              </h5>
+            </div>
+            <div className="card-body">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <div className="d-flex align-items-center flex-grow-1">
+                  <div className="rounded-circle bg-success bg-opacity-10 p-3 d-flex align-items-center justify-content-center me-3" style={{ width: '60px', height: '60px' }}>
+                    <i className="bi bi-person fs-2 text-success"></i>
                   </div>
-                  <h4>{currentAppointment.customer?.full_name}</h4>
-                  <p className="text-muted">{currentAppointment.customer?.phone}</p>
-                  {currentAppointment.customer?.phone && (
-                    <a href={`tel:${currentAppointment.customer.phone}`} className="btn btn-outline-primary btn-sm">
-                      <i className="bi bi-telephone me-1"></i>Call
+                  <div>
+                    <h5 className="mb-1">{queueStatus[0].customer?.full_name}</h5>
+                    <p className="mb-0 text-muted small">
+                      <i className="bi bi-scissors me-1"></i>
+                      {getServicesDisplay(queueStatus[0])}
+                      <span className="ms-2">
+                        <i className="bi bi-clock me-1"></i>
+                        {queueStatus[0].total_duration || queueStatus[0].service?.duration || 30} min
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="d-grid gap-2 d-md-block">
+                  <button
+                    className="btn btn-success btn-lg px-4"
+                    onClick={() => handleAppointmentStatus(queueStatus[0].id, 'ongoing')}
+                    style={{ fontWeight: '600' }}
+                  >
+                    <i className="bi bi-scissors me-2"></i>
+                    Start Service Now
+                  </button>
+                  {queueStatus[0].customer?.phone && (
+                    <a href={`tel:${queueStatus[0].customer.phone}`} className="btn btn-outline-secondary ms-md-2 mt-2 mt-md-0">
+                      <i className="bi bi-telephone"></i>
                     </a>
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        ) : currentAppointment ? (
+          <div className="card currently-serving-card shadow-sm">
+            <div className="card-header bg-primary text-white border-0">
+              <h5 className="mb-0 fw-bold">
+                <i className="bi bi-scissors me-2"></i>
+                Currently Serving
+              </h5>
+            </div>
+            <div className="card-body">
+              <div className="row align-items-center">
+                <div className="col-md-4">
+                  <div className="text-center">
+                    <div className="rounded-circle bg-primary bg-opacity-10 p-4 d-inline-block mb-3">
+                      <i className="bi bi-person-circle fs-1 text-primary"></i>
+                    </div>
+                    <h4>{currentAppointment.customer?.full_name}</h4>
+                    <p className="text-muted">{currentAppointment.customer?.phone}</p>
+                    {currentAppointment.customer?.phone && (
+                      <a href={`tel:${currentAppointment.customer.phone}`} className="btn btn-outline-primary btn-sm">
+                        <i className="bi bi-telephone me-1"></i>Call
+                      </a>
+                    )}
+                  </div>
+                </div>
 
-              <div className="col-md-5">
-                <h5>Service Details</h5>
-                <p><strong>Services:</strong> {getServicesDisplay(currentAppointment)}</p>
-                <p><strong>Add-ons:</strong> <AddOnsDisplay appointment={currentAppointment} /></p>
-                <p><strong>Total:</strong> <span className="text-success fw-bold">₱{getTotalPrice(currentAppointment)}</span></p>
-                <p><strong>Duration:</strong> {(currentAppointment.total_duration || currentAppointment.service?.duration)} min</p>
-                {currentAppointment.notes && (
-                  <p><strong>Notes:</strong> <span className="bg-light p-2 rounded d-inline-block">{currentAppointment.notes}</span></p>
-                )}
-              </div>
+                <div className="col-md-5">
+                  <h5>Service Details</h5>
+                  <p className="mb-1"><strong>Services:</strong> {getServicesDisplay(currentAppointment)}</p>
+                  <p className="mb-1"><strong>Add-ons:</strong> <AddOnsDisplay appointment={currentAppointment} /></p>
+                  <p className="mb-1"><strong>Total:</strong> <span className="text-success fw-bold">₱{Number(getTotalPrice(currentAppointment)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></p>
+                  <p className="mb-1"><strong>Duration:</strong> {(currentAppointment.total_duration || currentAppointment.service?.duration)} min</p>
+                  {currentAppointment.notes && (
+                    <div className="mt-2 text-start">
+                      <strong>Notes:</strong>
+                      <div className="bg-light p-2 rounded small text-muted mt-1">{currentAppointment.notes}</div>
+                    </div>
+                  )}
+                  <FriendBookingDisplay appointment={currentAppointment} variant="compact" />
+                </div>
 
-              <div className="col-md-3 text-center">
-                <div className="d-grid gap-2">
-                  <button
-                    className="btn btn-warning w-100"
-                    onClick={() => setRescheduleModal({ isOpen: true, appointment: currentAppointment })}
-                    title="Reschedule Appointment"
-                    style={{
-                      minHeight: 'clamp(40px, 9vw, 48px)',
-                      fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
-                      padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    <i className="bi bi-arrow-repeat me-2 d-none d-sm-inline"></i>
-                    <i className="bi bi-arrow-repeat me-1 d-sm-none"></i>
-                    <span className="d-none d-sm-inline">Reschedule</span>
-                    <span className="d-sm-none">Reschedule</span>
-                  </button>
-                  <button
-                    className="btn btn-success w-100"
-                    onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
-                    style={{
-                      minHeight: 'clamp(40px, 9vw, 48px)',
-                      fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
-                      padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    <i className="bi bi-check-circle me-2 d-none d-sm-inline"></i>
-                    <i className="bi bi-check-circle me-1 d-sm-none"></i>
-                    <span className="d-none d-sm-inline">Complete Service</span>
-                    <span className="d-sm-none">Complete</span>
-                  </button>
+                <div className="col-md-3 text-center">
+                  <div className="d-grid gap-2">
+                    <button
+                      className="btn btn-warning w-100"
+                      onClick={() => setRescheduleModal({ isOpen: true, appointment: currentAppointment })}
+                      title="Reschedule Appointment"
+                      style={{
+                        minHeight: 'clamp(40px, 9vw, 48px)',
+                        fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
+                        padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <i className="bi bi-arrow-repeat me-2"></i>
+                      Reschedule
+                    </button>
+                    <button
+                      className="btn btn-success w-100"
+                      onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
+                      style={{
+                        minHeight: 'clamp(40px, 9vw, 48px)',
+                        fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
+                        padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <i className="bi bi-check-circle me-2"></i>
+                      Complete Service
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        ) : null}
+      </div>
 
       <div className="row">
         {/* All Today's Appointments - Reschedule Section */}
@@ -1521,37 +1632,47 @@ const BarberDashboard = () => {
                                 </small>
                               </div>
                               {appointment.status?.toLowerCase() !== 'ongoing' ? (
-                                <button
-                                  className="btn btn-sm"
-                                  onClick={() => {
-                                    console.log('Reschedule button clicked for appointment:', appointment);
-                                    setRescheduleModal({ isOpen: true, appointment: appointment });
-                                  }}
-                                  title="Reschedule Appointment"
-                                  style={{
-                                    background: '#6366f1',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
-                                    fontWeight: '500',
-                                    fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
-                                    whiteSpace: 'nowrap',
-                                    minHeight: 'clamp(36px, 8vw, 40px)',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = '#4f46e5';
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = '#6366f1';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                  }}
-                                >
-                                  <i className="bi bi-arrow-repeat me-1 d-none d-sm-inline"></i>
-                                  <span>Reschedule</span>
-                                </button>
+                                <div className="d-flex gap-2">
+                                  <button
+                                    className="btn btn-sm btn-success"
+                                    onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
+                                    title="Start Service"
+                                    style={{
+                                      borderRadius: '8px',
+                                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                                      fontWeight: '500',
+                                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                                      minHeight: 'clamp(36px, 8vw, 40px)',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                  >
+                                    <i className="bi bi-play-fill"></i>
+                                    <span className="ms-1">Start</span>
+                                  </button>
+                                  <button
+                                    className="btn btn-sm"
+                                    onClick={() => {
+                                      console.log('Reschedule button clicked for appointment:', appointment);
+                                      setRescheduleModal({ isOpen: true, appointment: appointment });
+                                    }}
+                                    title="Reschedule Appointment"
+                                    style={{
+                                      background: '#6366f1',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
+                                      fontWeight: '500',
+                                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                                      whiteSpace: 'nowrap',
+                                      minHeight: 'clamp(36px, 8vw, 40px)',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                  >
+                                    <i className="bi bi-arrow-repeat me-1 d-none d-sm-inline"></i>
+                                    <span>Reschedule</span>
+                                  </button>
+                                </div>
                               ) : (
                                 <button
                                   className="btn btn-sm"
@@ -1642,9 +1763,9 @@ const BarberDashboard = () => {
                   <p className="text-muted">No confirmed appointments today. Check pending requests above.</p>
                 </div>
               ) : (
-                <div className="list-group">
+                <div className="list-group list-group-flush">
                   {queueStatus.slice(0, 5).map((appointment, index) => (
-                    <div key={appointment.id} className={`list-group-item ${index === 0 ? 'border-start border-5 border-primary' : ''}`} style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
+                    <div key={appointment.id} className={`list-group-item px-3 py-3 border-bottom ${index === 0 ? 'bg-light-subtle' : ''}`} style={{ transition: 'background-color 0.2s ease' }}>
                       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                         <div className="d-flex align-items-center w-100 w-md-auto" style={{ minWidth: 0 }}>
                           <div className={`rounded-circle ${appointment.is_urgent ? 'bg-danger' : 'bg-primary'} text-white d-flex align-items-center justify-content-center me-3 flex-shrink-0`} style={{ width: 'clamp(35px, 8vw, 40px)', height: 'clamp(35px, 8vw, 40px)', fontSize: 'clamp(0.8rem, 2vw, 1rem)' }}>
@@ -1669,32 +1790,39 @@ const BarberDashboard = () => {
                                 <span className="badge bg-danger" style={{ fontSize: 'clamp(0.65rem, 1.5vw, 0.75rem)' }}>URGENT</span>
                               </div>
                             )}
+                            <FriendBookingDisplay appointment={appointment} variant="inline" />
                           </div>
-                          <button
-                            className="btn btn-sm btn-warning"
-                            onClick={() => setRescheduleModal({ isOpen: true, appointment: appointment })}
-                            title="Reschedule Appointment"
-                            style={{
-                              minHeight: 'clamp(36px, 8vw, 40px)',
-                              fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
-                              whiteSpace: 'nowrap',
-                              width: '100%',
-                              padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
-                              fontWeight: '500',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'translateY(-1px)';
-                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow = 'none';
-                            }}
-                          >
-                            <i className="bi bi-arrow-repeat me-1 d-none d-sm-inline"></i>
-                            <span>Reschedule</span>
-                          </button>
+                          <div className="d-flex gap-2 w-100 w-md-auto">
+                            <button
+                              className="btn btn-sm btn-success flex-fill"
+                              onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
+                              title="Start Service"
+                              style={{
+                                minHeight: 'clamp(36px, 8vw, 40px)',
+                                fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                                fontWeight: '500',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <i className="bi bi-play-fill me-1"></i>
+                              Serve
+                            </button>
+                            <button
+                              className="btn btn-sm btn-warning flex-fill"
+                              onClick={() => setRescheduleModal({ isOpen: true, appointment: appointment })}
+                              title="Reschedule Appointment"
+                              style={{
+                                minHeight: 'clamp(36px, 8vw, 40px)',
+                                fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+                                whiteSpace: 'nowrap',
+                                fontWeight: '500',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <i className="bi bi-arrow-repeat-none"></i>
+                              Resched
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1740,33 +1868,36 @@ const BarberDashboard = () => {
                 <div className="row">
                   {recentReviews.map((review) => (
                     <div key={review.id} className="col-md-6 col-lg-4 mb-3">
-                      <div className="card h-100 border-0 bg-light">
+                      <div className="card h-100 review-card-premium" style={{ borderRadius: '15px' }}>
                         <div className="card-body p-3">
                           <div className="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                              <h6 className="card-title mb-1">{review.customer?.full_name || 'Anonymous'}</h6>
-                              <div className="d-flex align-items-center">
-                                {[...Array(5)].map((_, i) => (
-                                  <i
-                                    key={i}
-                                    className={`bi bi-star-fill ${i < (review.customer_rating || 0) ? 'text-warning' : 'text-muted'
-                                      }`}
-                                    style={{ fontSize: '0.8rem' }}
-                                  ></i>
-                                ))}
-                                <span className="ms-2 small text-muted">
-                                  {review.customer_rating}/5
-                                </span>
+                            <div className="d-flex align-items-center">
+                              <div className="avatar-circle-sm bg-primary-subtle text-primary me-2 d-flex align-items-center justify-content-center fw-bold" style={{ width: '30px', height: '30px', borderRadius: '50%', fontSize: '0.8rem' }}>
+                                {(review.customer?.full_name || 'A').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <h6 className="card-title mb-0" style={{ fontSize: '0.9rem', fontWeight: '600' }}>{review.customer?.full_name || 'Anonymous'}</h6>
+                                <div className="d-flex align-items-center mt-1">
+                                  {[...Array(5)].map((_, i) => (
+                                    <i
+                                      key={i}
+                                      className={`bi bi-star-fill ${i < (review.customer_rating || 0) ? 'text-warning' : 'text-muted'}`}
+                                      style={{ fontSize: '0.75rem' }}
+                                    ></i>
+                                  ))}
+                                </div>
                               </div>
                             </div>
-                            <small className="text-muted">
-                              {new Date(review.rating_created_at).toLocaleDateString()}
+                            <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                              {new Date(review.rating_created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </small>
                           </div>
-                          {review.review_text && (
-                            <p className="card-text small text-muted mb-0">
+                          {review.review_text ? (
+                            <p className="card-text mt-2 text-dark" style={{ fontSize: '0.85rem', fontStyle: 'italic', lineHeight: '1.4' }}>
                               "{review.review_text}"
                             </p>
+                          ) : (
+                            <p className="card-text mt-2 text-muted small">No written review provided.</p>
                           )}
                         </div>
                       </div>
@@ -1791,11 +1922,72 @@ const BarberDashboard = () => {
         isOpen={rescheduleModal.isOpen}
         onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
         appointment={rescheduleModal.appointment}
-        onSuccess={(request) => {
-          setRescheduleModal({ isOpen: false, appointment: null });
-          fetchBarberData(); // Refresh data after reschedule request
-        }}
+        onRescheduleSuccess={fetchBarberData}
       />
+
+      {/* Walk-in Modal */}
+      {showWalkInModal && (
+        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '20px' }}>
+              <div className="modal-header border-0 pb-0">
+                <h5 className="modal-title fw-bold">Serve Walk-in Customer</h5>
+                <button type="button" className="btn-close" onClick={() => setShowWalkInModal(false)}></button>
+              </div>
+              <form onSubmit={handleServeWalkIn}>
+                <div className="modal-body py-4">
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Customer Name</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-lg"
+                      placeholder="Enter customer name"
+                      value={walkInForm.customerName}
+                      onChange={(e) => setWalkInForm({ ...walkInForm, customerName: e.target.value })}
+                      required
+                      style={{ borderRadius: '12px' }}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Select Service</label>
+                    <select
+                      className="form-select form-select-lg"
+                      value={walkInForm.serviceId}
+                      onChange={(e) => setWalkInForm({ ...walkInForm, serviceId: e.target.value })}
+                      required
+                      style={{ borderRadius: '12px' }}
+                    >
+                      <option value="">Choose a service...</option>
+                      {availableServices.map(service => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} - ₱{service.price} ({service.duration}m)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mb-0">
+                    <label className="form-label fw-semibold">Notes (Optional)</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      placeholder="e.g., Special styling, fade style..."
+                      value={walkInForm.notes}
+                      onChange={(e) => setWalkInForm({ ...walkInForm, notes: e.target.value })}
+                      style={{ borderRadius: '12px' }}
+                    ></textarea>
+                  </div>
+                </div>
+                <div className="modal-footer border-0 pt-0">
+                  <button type="button" className="btn btn-light px-4" onClick={() => setShowWalkInModal(false)} style={{ borderRadius: '10px' }}>Cancel</button>
+                  <button type="submit" className="btn btn-success px-4" style={{ borderRadius: '10px', fontWeight: '600' }}>
+                    <i className="bi bi-play-fill me-1"></i> Start Service
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

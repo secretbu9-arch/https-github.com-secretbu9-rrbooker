@@ -127,14 +127,18 @@ class CentralizedNotificationService {
         .select(`
           *,
           barber:barber_id(full_name),
+          customer:customer_id(full_name),
           service:service_id(name)
         `)
         .eq('id', appointmentId)
         .single();
 
       const barberName = appointment?.barber?.full_name || 'your barber';
+      const customerName = appointment?.customer?.full_name || 'a customer';
       const serviceName = appointment?.service?.name || 'service';
       const appointmentDate = appointment?.appointment_date || '';
+
+      const isBarber = userId === appointment?.barber_id;
 
       // Determine notification content
       let title, message, priority;
@@ -142,34 +146,44 @@ class CentralizedNotificationService {
       switch (status) {
         case 'confirmed':
           title = 'Appointment Confirmed ✅';
-          message = `Your ${serviceName} with ${barberName} has been confirmed. See you there!`;
+          message = isBarber
+            ? `Appointment for ${customerName} (${serviceName}) has been confirmed.`
+            : `Your ${serviceName} with ${barberName} has been confirmed. See you there!`;
           priority = 'high';
           break;
         case 'ongoing':
-          title = 'It\'s your turn! ✂️';
-          message = `${barberName} is ready for you now. Please head over to the chair.`;
+          title = isBarber ? 'Service Started ✂️' : 'It\'s your turn! ✂️';
+          message = isBarber
+            ? `Now serving ${customerName} for ${serviceName}.`
+            : `${barberName} is ready for you now. Please head over to the chair.`;
           priority = 'high';
           break;
         case 'completed':
           title = 'Appointment Completed ✅';
-          message = `Thank you for choosing R&R Booker! We hope you enjoyed your ${serviceName}.`;
+          message = isBarber
+            ? `Service for ${customerName} has been marked as completed.`
+            : `Thank you for choosing R&R Booker! We hope you enjoyed your ${serviceName}.`;
           priority = 'normal';
           break;
         case 'cancelled':
           title = 'Appointment Cancelled ❌';
-          message = `Your appointment for ${serviceName} has been cancelled. Please contact us for details.`;
+          message = isBarber
+            ? `Appointment for ${customerName} has been cancelled.`
+            : `Your appointment for ${serviceName} has been cancelled. Please contact us for details.`;
           priority = 'high';
           break;
         default:
           title = `Appointment ${status.charAt(0).toUpperCase() + status.slice(1)}`;
-          message = `Your ${serviceName} appointment status has been updated to ${status}.`;
+          message = isBarber
+            ? `Appointment for ${customerName} updated to ${status}.`
+            : `Your ${serviceName} appointment status has been updated to ${status}.`;
           priority = 'normal';
       }
 
       // Check for existing notification in last 24 hours
       const { data: existingNotifications, error: checkError } = await supabase
         .from('notifications')
-        .select('id')
+        .select('id, created_at')
         .eq('user_id', userId)
         .eq('data->>appointment_id', appointmentId)
         .eq('data->>status', status)
@@ -179,23 +193,32 @@ class CentralizedNotificationService {
       if (checkError) throw checkError;
 
       if (existingNotifications && existingNotifications.length > 0) {
-        console.log(`🔄 Duplicate notification prevented for appointment ${appointmentId} status ${status}`);
+        const lastNotif = existingNotifications[0];
+        const lastSentAt = new Date(lastNotif.created_at || lastNotif.timestamp || 0).getTime();
+        const secondsSinceLast = (Date.now() - lastSentAt) / 1000;
 
-        // Still send push notification even if database notification is duplicate
-        try {
-          const { PushService } = await import('./PushService');
-          await PushService.sendNotificationToUser(userId, title, message, {
-            type: 'appointment',
-            appointment_id: appointmentId,
-            status,
-            changed_by: changedBy
-          });
-          console.log(`✅ Push notification sent for duplicate prevention: ${title} for user ${userId}`);
-        } catch (pushError) {
-          console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
+        console.log(`🔄 Duplicate notification prevented for appointment ${appointmentId} status ${status}. Last one was ${Math.round(secondsSinceLast)}s ago.`);
+
+        // Only send push if at least 30 seconds have passed since the last one
+        // This prevents "double buzz" from rapid duplicate events
+        if (secondsSinceLast > 30) {
+          try {
+            const { PushService } = await import('./PushService');
+            await PushService.sendNotificationToUser(userId, title, message, {
+              type: 'appointment',
+              appointment_id: appointmentId,
+              status,
+              changed_by: changedBy
+            });
+            console.log(`✅ Push notification sent for duplicate prevention: ${title} for user ${userId}`);
+          } catch (pushError) {
+            console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
+          }
+        } else {
+          console.log(`🚫 Skipping duplicate push notification: too recent (${Math.round(secondsSinceLast)}s ago)`);
         }
 
-        return existingNotifications[0];
+        return lastNotif;
       }
 
       // Create notification
@@ -304,7 +327,7 @@ class CentralizedNotificationService {
       // Check for existing booking notification
       const { data: existingNotifications, error: checkError } = await supabase
         .from('notifications')
-        .select('id')
+        .select('id, created_at')
         .eq('user_id', userId)
         .eq('data->>appointment_id', appointmentId)
         .eq('data->>category', 'booking')
@@ -320,25 +343,33 @@ class CentralizedNotificationService {
         : `You're in the queue! Your appointment with ${barberName} is confirmed. You are #${queuePosition} in line.`;
 
       if (existingNotifications && existingNotifications.length > 0) {
-        console.log(`🔄 Duplicate booking notification prevented for appointment ${appointmentId}`);
+        const lastNotif = existingNotifications[0];
+        const lastSentAt = new Date(lastNotif.created_at || 0).getTime();
+        const secondsSinceLast = (Date.now() - lastSentAt) / 1000;
 
-        // Still send push notification even if database notification is duplicate
-        try {
-          const { PushService } = await import('./PushService');
-          await PushService.sendNotificationToUser(userId, title, message, {
-            type: 'appointment_confirmed',
-            appointment_id: appointmentId,
-            queue_position: queuePosition,
-            estimated_time: estimatedTime,
-            appointment_type: appointmentType,
-            appointment_time: appointmentTime
-          });
-          console.log(`✅ Push notification sent for duplicate prevention: ${title} for user ${userId}`);
-        } catch (pushError) {
-          console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
+        console.log(`🔄 Duplicate booking notification prevented for appointment ${appointmentId}. Last one was ${Math.round(secondsSinceLast)}s ago.`);
+
+        // Only send push if at least 30 seconds have passed since the last one
+        if (secondsSinceLast > 30) {
+          try {
+            const { PushService } = await import('./PushService');
+            await PushService.sendNotificationToUser(userId, title, message, {
+              type: 'appointment_confirmed',
+              appointment_id: appointmentId,
+              queue_position: queuePosition,
+              estimated_time: estimatedTime,
+              appointment_type: appointmentType,
+              appointment_time: appointmentTime
+            });
+            console.log(`✅ Push notification sent for duplicate prevention: ${title} for user ${userId}`);
+          } catch (pushError) {
+            console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
+          }
+        } else {
+          console.log(`🚫 Skipping duplicate booking push: too recent (${Math.round(secondsSinceLast)}s ago)`);
         }
 
-        return existingNotifications[0];
+        return lastNotif;
       }
 
       const notificationData = {
@@ -502,7 +533,7 @@ class CentralizedNotificationService {
         // within the time window, regardless of request_id (to catch duplicates even if request_id differs)
         let query = supabase
           .from('notifications')
-          .select('id')
+          .select('id, created_at')
           .eq('user_id', userId)
           .eq('type', type)
           .eq('title', title)
@@ -558,10 +589,15 @@ class CentralizedNotificationService {
       }
 
       if (existingNotifications && existingNotifications.length > 0) {
-        console.log(`🔄 Duplicate notification prevented for user ${userId} with title "${title}"`);
+        const lastNotif = existingNotifications[0];
+        const lastSentAt = new Date(lastNotif.created_at || 0).getTime();
+        const secondsSinceLast = (Date.now() - lastSentAt) / 1000;
 
-        // Still send push notification even if database notification is duplicate
-        if (channels.includes('push')) {
+        console.log(`🔄 Duplicate notification prevented for user ${userId} with title "${title}". Last one was ${Math.round(secondsSinceLast)}s ago.`);
+
+        // Still send push notification even if database notification is duplicate, 
+        // but ONLY if at least 30 seconds have passed.
+        if (channels.includes('push') && secondsSinceLast > 30) {
           try {
             const { PushService } = await import('./PushService');
             await PushService.sendNotificationToUser(userId, title, message, {
@@ -575,9 +611,11 @@ class CentralizedNotificationService {
           } catch (pushError) {
             console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
           }
+        } else if (channels.includes('push')) {
+          console.log(`🚫 Skipping duplicate push for "${title}": too recent (${Math.round(secondsSinceLast)}s ago)`);
         }
 
-        return existingNotifications[0];
+        return lastNotif;
       }
 
       // Final duplicate check right before inserting (catches race conditions)
@@ -755,7 +793,7 @@ class CentralizedNotificationService {
       // Check for existing queue notification
       const { data: existingNotifications, error: checkError } = await supabase
         .from('notifications')
-        .select('id')
+        .select('id, created_at')
         .eq('user_id', userId)
         .eq('data->>appointment_id', appointmentId)
         .eq('data->>category', 'position_update')
@@ -776,24 +814,32 @@ class CentralizedNotificationService {
       }
 
       if (existingNotifications && existingNotifications.length > 0) {
-        console.log(`🔄 Duplicate queue notification prevented for appointment ${appointmentId}`);
+        const lastNotif = existingNotifications[0];
+        const lastSentAt = new Date(lastNotif.created_at || 0).getTime();
+        const secondsSinceLast = (Date.now() - lastSentAt) / 1000;
 
-        // Still send push notification even if database notification is duplicate
-        try {
-          const { PushService } = await import('./PushService');
-          await PushService.sendNotificationToUser(userId, title, message, {
-            type: 'queue',
-            appointment_id: appointmentId,
-            queue_position: queuePosition,
-            old_position: oldPosition,
-            reason
-          });
-          console.log(`✅ Push notification sent for duplicate prevention: ${title} for user ${userId}`);
-        } catch (pushError) {
-          console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
+        console.log(`🔄 Duplicate queue notification prevented for appointment ${appointmentId}. Last one was ${Math.round(secondsSinceLast)}s ago.`);
+
+        // Only send push if at least 30 seconds have passed
+        if (secondsSinceLast > 30) {
+          try {
+            const { PushService } = await import('./PushService');
+            await PushService.sendNotificationToUser(userId, title, message, {
+              type: 'queue',
+              appointment_id: appointmentId,
+              queue_position: queuePosition,
+              old_position: oldPosition,
+              reason
+            });
+            console.log(`✅ Push notification sent for duplicate prevention: ${title} for user ${userId}`);
+          } catch (pushError) {
+            console.warn('⚠️ Push notification failed for duplicate prevention:', pushError);
+          }
+        } else {
+          console.log(`🚫 Skipping duplicate queue push: too recent (${Math.round(secondsSinceLast)}s ago)`);
         }
 
-        return existingNotifications[0];
+        return lastNotif;
       }
 
       const notificationData = {

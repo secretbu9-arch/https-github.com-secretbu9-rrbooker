@@ -30,19 +30,19 @@ const Navigation = ({ userRole }) => {
 
   useEffect(() => {
     console.log('Current userRole:', userRole);
-    
+
     const fetchCurrentUser = async () => {
       const { data } = await supabase.auth.getUser();
       if (data?.user) {
         setCurrentUser(data.user);
-        
+
         // Fetch user profile for profile picture
         const { data: profileData } = await supabase
           .from('users')
           .select('profile_picture_url, full_name')
           .eq('id', data.user.id)
           .single();
-        
+
         if (profileData) {
           setUserProfile(profileData);
         }
@@ -91,7 +91,7 @@ const Navigation = ({ userRole }) => {
 
     // Setup logout button when component mounts and whenever userRole changes
     setupLogoutButton();
-    
+
     // Setup the button again after a short delay to ensure DOM is fully rendered
     const buttonSetupTimer = setTimeout(setupLogoutButton, 500);
 
@@ -109,11 +109,11 @@ const Navigation = ({ userRole }) => {
 
   // Check if user is admin/manager
   const isAdmin = userRole === 'manager' || userRole === 'admin';
-  
+
   console.log('Is admin?', isAdmin);
 
   return (
-    <nav 
+    <nav
       className={`navbar navbar-expand-lg navbar-dark ${scrolled ? 'scrolled' : ''}`}
       style={{
         background: 'linear-gradient(90deg, #1e1e1e 0%, #2c2c2c 100%)',
@@ -124,22 +124,22 @@ const Navigation = ({ userRole }) => {
       }}
     >
       <div className="container-fluid">
-        <Link 
-          className="navbar-brand d-flex align-items-center" 
+        <Link
+          className="navbar-brand d-flex align-items-center"
           to="/dashboard"
-          style={{ 
+          style={{
             transition: 'transform 0.5s ease',
             transform: scrolled ? 'scale(0.95)' : 'scale(1)'
           }}
         >
           {/* Logo with text */}
           <div className="d-flex align-items-center">
-            <img 
-              src={logoImage} 
-              alt="raf" 
-              height="45" 
+            <img
+              src={logoImage}
+              alt="raf"
+              height="45"
               className="navbar-logo"
-              style={{ 
+              style={{
                 transition: 'all 0.5s ease',
                 filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
                 backgroundColor: '#ffffff',
@@ -148,11 +148,11 @@ const Navigation = ({ userRole }) => {
               }}
             />
             <div className="d-flex flex-column ms-2">
-              <span 
-                className="logo-text text-white fw-bold" 
-                style={{ 
+              <span
+                className="logo-text text-white fw-bold"
+                style={{
                   fontSize: scrolled ? '1.3rem' : '1.5rem',
-                  lineHeight: '1.1', 
+                  lineHeight: '1.1',
                   letterSpacing: '1px',
                   transition: 'all 0.3s ease',
                   textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
@@ -160,11 +160,11 @@ const Navigation = ({ userRole }) => {
               >
                 RAF & ROX
               </span>
-              <span 
-                className="logo-subtitle text-light" 
-                style={{ 
-                  fontSize: '0.7rem', 
-                  letterSpacing: '2px', 
+              <span
+                className="logo-subtitle text-light"
+                style={{
+                  fontSize: '0.7rem',
+                  letterSpacing: '2px',
                   opacity: scrolled ? '0.7' : '0.9',
                   transition: 'all 0.3s ease',
                   transform: scrolled ? 'translateY(-1px)' : 'translateY(0)'
@@ -175,7 +175,7 @@ const Navigation = ({ userRole }) => {
             </div>
           </div>
         </Link>
-        
+
         {/* Mobile: show Notifications to the left of any dropdown/profile (top bar) */}
         <div className="d-lg-none ms-auto me-2 d-flex align-items-center">
           <div className="me-2">
@@ -198,26 +198,26 @@ const Navigation = ({ userRole }) => {
         >
           <span className="navbar-toggler-icon"></span>
         </button>
-        
+
         <div className={`collapse navbar-collapse ${expanded ? "show" : ""}`} id="navbarNav">
           <ul className="navbar-nav ms-auto me-3">
-            <li 
+            <li
               className={`nav-item ${animatedItems.includes(0) ? 'animated-item' : ''}`}
               style={{ transform: animatedItems.includes(0) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(0) ? 1 : 0, transition: 'all 0.5s ease' }}
             >
-              <Link 
-                className={`nav-link ${location.pathname === ROUTES.DASHBOARD ? 'active' : ''}`} 
-                to={ROUTES.DASHBOARD} 
+              <Link
+                className={`nav-link ${location.pathname === ROUTES.DASHBOARD ? 'active' : ''}`}
+                to={ROUTES.DASHBOARD}
                 onClick={handleNavClick}
               >
                 <i className="bi bi-speedometer2 me-1"></i>
                 Dashboard
               </Link>
             </li>
-            
+
             {userRole === 'manager' && (
               <>
-                <li 
+                <li
                   className={`nav-item dropdown ${animatedItems.includes(1) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
@@ -256,6 +256,12 @@ const Navigation = ({ userRole }) => {
                         Orders
                       </Link>
                     </li>
+                    <li>
+                      <Link className="dropdown-item" to="/manage/users" onClick={handleNavClick}>
+                        <i className="bi bi-people me-2"></i>
+                        Users
+                      </Link>
+                    </li>
                     <li><hr className="dropdown-divider" /></li>
                     <li>
                       <Link className="dropdown-item" to={ROUTES.MANAGE_APPOINTMENTS} onClick={handleNavClick}>
@@ -285,55 +291,55 @@ const Navigation = ({ userRole }) => {
                 </li>
               </>
             )}
-            
+
             {userRole === 'barber' && (
               <>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(1) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.SCHEDULE ? 'active' : ''}`} 
-                    to={ROUTES.SCHEDULE} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.SCHEDULE ? 'active' : ''}`}
+                    to={ROUTES.SCHEDULE}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-calendar3 me-1"></i>
                     My Schedule
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(2) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(2) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(2) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.QUEUE ? 'active' : ''}`} 
-                    to={ROUTES.QUEUE} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.QUEUE ? 'active' : ''}`}
+                    to={ROUTES.QUEUE}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-people me-1"></i>
                     Queue
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.BARBER_REVENUE ? 'active' : ''}`} 
-                    to={ROUTES.BARBER_REVENUE} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.BARBER_REVENUE ? 'active' : ''}`}
+                    to={ROUTES.BARBER_REVENUE}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-cash-stack me-1"></i>
                     Revenue
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.DAY_OFF_MANAGER ? 'active' : ''}`} 
-                    to={ROUTES.DAY_OFF_MANAGER} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.DAY_OFF_MANAGER ? 'active' : ''}`}
+                    to={ROUTES.DAY_OFF_MANAGER}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-calendar-x me-1"></i>
@@ -342,68 +348,68 @@ const Navigation = ({ userRole }) => {
                 </li>
               </>
             )}
-            
+
             {userRole === 'customer' && (
               <>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(1) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.BOOK_APPOINTMENT ? 'active' : ''}`} 
-                    to={ROUTES.BOOK_APPOINTMENT} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.BOOK_APPOINTMENT ? 'active' : ''}`}
+                    to={ROUTES.BOOK_APPOINTMENT}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-calendar-plus me-1"></i>
                     Book Appointment
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(2) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(2) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(2) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.MY_APPOINTMENTS ? 'active' : ''}`} 
-                    to={ROUTES.MY_APPOINTMENTS} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.MY_APPOINTMENTS ? 'active' : ''}`}
+                    to={ROUTES.MY_APPOINTMENTS}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-calendar-check me-1"></i>
                     My Appointments
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.HAIRCUT_RECOMMENDER ? 'active' : ''}`} 
-                    to={ROUTES.HAIRCUT_RECOMMENDER} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.HAIRCUT_RECOMMENDER ? 'active' : ''}`}
+                    to={ROUTES.HAIRCUT_RECOMMENDER}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-magic me-1"></i>
                     Haircut Recommender
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === ROUTES.SHOP_PRODUCTS ? 'active' : ''}`} 
-                    to={ROUTES.SHOP_PRODUCTS} 
+                  <Link
+                    className={`nav-link ${location.pathname === ROUTES.SHOP_PRODUCTS ? 'active' : ''}`}
+                    to={ROUTES.SHOP_PRODUCTS}
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-shop me-1"></i>
                     Shop Products
                   </Link>
                 </li>
-                <li 
+                <li
                   className={`nav-item ${animatedItems.includes(5) ? 'animated-item' : ''}`}
                   style={{ transform: animatedItems.includes(5) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(5) ? 1 : 0, transition: 'all 0.5s ease' }}
                 >
-                  <Link 
-                    className={`nav-link ${location.pathname === '/orders' ? 'active' : ''}`} 
-                    to="/orders" 
+                  <Link
+                    className={`nav-link ${location.pathname === '/orders' ? 'active' : ''}`}
+                    to="/orders"
                     onClick={handleNavClick}
                   >
                     <i className="bi bi-bag-check me-1"></i>
@@ -413,7 +419,7 @@ const Navigation = ({ userRole }) => {
               </>
             )}
           </ul>
-          
+
           <ul className="navbar-nav navbar-right d-flex align-items-center">
             {/* Desktop: Notifications next to Profile for role-specific views */}
             {userRole === 'customer' && (
@@ -426,13 +432,13 @@ const Navigation = ({ userRole }) => {
                 <Notifications />
               </li>
             )}
-            
+
             {/* Cart Icon - for Customers */}
             {userRole === 'customer' && (
               <li className="nav-item d-none d-lg-block">
-                <Link 
-                  className={`nav-link ${location.pathname === '/products' ? 'active' : ''}`} 
-                  to="/products" 
+                <Link
+                  className={`nav-link ${location.pathname === '/products' ? 'active' : ''}`}
+                  to="/products"
                   onClick={handleNavClick}
                 >
                   <i className="bi bi-shop me-1"></i>
@@ -440,24 +446,24 @@ const Navigation = ({ userRole }) => {
                 </Link>
               </li>
             )}
-            
+
             {/* Admin Logout Button - Fixed to ensure it's clickable */}
             {isAdmin && (
               <li className="nav-item nav-logout-container ms-lg-3 me-lg-2 d-flex align-items-center">
                 {/* Simple a tag to ensure maximum compatibility */}
-                <a 
+                <a
                   onClick={(e) => {
                     e.preventDefault();
                     handleSignOut();
                   }}
-                  
+
                 >
-                 
-                  
+
+
                 </a>
               </li>
             )}
-            
+
             {/* User Profile Dropdown */}
             <li className="nav-item dropdown">
               <Link
@@ -469,8 +475,8 @@ const Navigation = ({ userRole }) => {
               >
                 <div className="d-flex align-items-center ms-1">
                   {userProfile?.profile_picture_url ? (
-                    <img 
-                      src={userProfile.profile_picture_url} 
+                    <img
+                      src={userProfile.profile_picture_url}
                       alt="Profile"
                       height="32"
                       width="32"
@@ -481,7 +487,7 @@ const Navigation = ({ userRole }) => {
                       }}
                     />
                   ) : (
-                    <div 
+                    <div
                       className="rounded-circle me-2 d-flex align-items-center justify-content-center"
                       style={{
                         width: '32px',
@@ -504,12 +510,12 @@ const Navigation = ({ userRole }) => {
                   </div>
                 </div>
               </Link>
-              <ul className="dropdown-menu dropdown-menu-end custom-dropdown" style={{zIndex: 1031}}>
+              <ul className="dropdown-menu dropdown-menu-end custom-dropdown" style={{ zIndex: 1031 }}>
                 <li className="dropdown-header">
                   <div className="d-flex align-items-center">
                     {userProfile?.profile_picture_url ? (
-                      <img 
-                        src={userProfile.profile_picture_url} 
+                      <img
+                        src={userProfile.profile_picture_url}
                         alt="Profile"
                         height="40"
                         width="40"
@@ -520,7 +526,7 @@ const Navigation = ({ userRole }) => {
                         }}
                       />
                     ) : (
-                      <div 
+                      <div
                         className="rounded-circle me-3 d-flex align-items-center justify-content-center"
                         style={{
                           width: '40px',

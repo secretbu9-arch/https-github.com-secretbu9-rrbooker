@@ -43,6 +43,7 @@ import ManageBarbers from './components/manager/ManageBarbers';
 import ManageServices from './components/manager/ManageServices';
 import ManageProducts from './components/manager/ManageProducts';
 import ManageAppointments from './components/manager/ManageAppointments';
+import ManageUsers from './components/manager/ManageUsers';
 import NotificationManager from './components/manager/NotificationManager';
 import QueuePriorityManager from './components/manager/QueuePriorityManager';
 import Reports from './components/reports/Reports';
@@ -483,6 +484,14 @@ function App() {
             element={
               session && userRole === 'manager' ?
                 <ManageAppointments /> :
+                <Navigate to="/dashboard" replace />
+            }
+          />
+          <Route
+            path="/manage/users"
+            element={
+              session && userRole === 'manager' ?
+                <ManageUsers /> :
                 <Navigate to="/dashboard" replace />
             }
           />

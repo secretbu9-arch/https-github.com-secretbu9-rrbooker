@@ -82,7 +82,7 @@ export const BOOKING_SETTINGS = {
 // Time slots for appointments (Deprecated - Using queue system)
 export const TIME_SLOTS = (() => {
   const slots = [];
-  
+
   // Morning slots: 8:00 AM - 11:30 AM
   for (let hour = 8; hour <= 11; hour++) {
     for (let minute of ['00', '30']) {
@@ -94,7 +94,7 @@ export const TIME_SLOTS = (() => {
       slots.push(`${hour.toString().padStart(2, '0')}:${minute}`);
     }
   }
-  
+
   // Afternoon slots: 1:00 PM - 4:30 PM
   for (let hour = 13; hour <= 16; hour++) {
     for (let minute of ['00', '30']) {
@@ -103,39 +103,39 @@ export const TIME_SLOTS = (() => {
       slots.push(`${hour.toString().padStart(2, '0')}:${minute}`);
     }
   }
-  
+
   return slots;
 })();
 
 // Date format options
 export const DATE_FORMATS = {
-  SHORT: { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
+  SHORT: {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
   },
-  MEDIUM: { 
-    weekday: 'short', 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
+  MEDIUM: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
   },
-  LONG: { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  LONG: {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   },
-  TIME: { 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  TIME: {
+    hour: '2-digit',
+    minute: '2-digit'
   },
-  DATETIME: { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  DATETIME: {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   }
 };
 
@@ -145,10 +145,10 @@ export const ROUTES = {
   LOGIN: '/login',
   REGISTER: '/register',
   RESET_PASSWORD: '/reset-password',
-  
+
   // Dashboard routes
   DASHBOARD: '/dashboard',
-  
+
   // Customer routes
   BOOK_APPOINTMENT: '/book',
   MY_APPOINTMENTS: '/appointments',
@@ -158,7 +158,7 @@ export const ROUTES = {
   PROFILE: '/profile',
   QUEUE_STATUS: '/queue-status',        // New
   APPOINTMENT_HISTORY: '/history',      // New
-  
+
   // Barber routes
   SCHEDULE: '/schedule',
   QUEUE: '/queue',
@@ -166,16 +166,17 @@ export const ROUTES = {
   BARBER_PROFILE: '/barber-profile',    // New
   DAY_OFF_MANAGER: '/day-off-manager',  // New
   BARBER_REVENUE: '/barber/revenue',
-  
+
   // Manager routes
   MANAGE_BARBERS: '/manage/barbers',
   MANAGE_SERVICES: '/manage/services',
   MANAGE_PRODUCTS: '/manage/products',
   MANAGE_APPOINTMENTS: '/manage/appointments',
+  MANAGE_USERS: '/manage/users',
   MANAGE_QUEUE: '/manage/queue',        // New
   REPORTS: '/reports',
   ANALYTICS: '/analytics',              // New
-  
+
   // Common routes
   SETTINGS: '/settings',
   DEBUG: '/debug',
@@ -365,7 +366,7 @@ export const SYSTEM_ACTIONS = {
   USER_LOGIN: 'user_login',
   USER_LOGOUT: 'user_logout',
   USER_REGISTER: 'user_register',
-  
+
   // Appointments
   APPOINTMENT_REQUESTED: 'appointment_requested',
   APPOINTMENT_CONFIRMED: 'appointment_confirmed',
@@ -374,18 +375,18 @@ export const SYSTEM_ACTIONS = {
   APPOINTMENT_CANCELLED: 'appointment_cancelled',
   APPOINTMENT_COMPLETED: 'appointment_completed',
   APPOINTMENT_NO_SHOW: 'appointment_no_show',
-  
+
   // Queue management
   QUEUE_JOINED: 'queue_joined',
   QUEUE_LEFT: 'queue_left',
   QUEUE_ADVANCED: 'queue_advanced',
   URGENT_BOOKING: 'urgent_booking',
-  
+
   // Barber actions
   BARBER_AVAILABLE: 'barber_available',
   BARBER_BREAK: 'barber_break',
   BARBER_OFFLINE: 'barber_offline',
-  
+
   // System
   SYSTEM_BACKUP: 'system_backup',
   SYSTEM_MAINTENANCE: 'system_maintenance'

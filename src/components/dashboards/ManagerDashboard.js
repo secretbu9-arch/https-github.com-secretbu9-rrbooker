@@ -27,7 +27,7 @@ const ManagerDashboard = () => {
     readyOrders: 0,
     orderRevenue: 0
   });
-  
+
   const [recentAppointments, setRecentAppointments] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
   const [barberQueues, setBarberQueues] = useState([]);
@@ -42,7 +42,7 @@ const ManagerDashboard = () => {
   const [error, setError] = useState('');
   const [animateCards, setAnimateCards] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(null);
-  
+
   // Notification modal state
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationData, setNotificationData] = useState({
@@ -61,12 +61,12 @@ const ManagerDashboard = () => {
     fetchQueueAnalytics();
     fetchCapacityOverview();
     fetchBarberRatings();
-    
+
     // Trigger card animations after component mounts
     setTimeout(() => {
       setAnimateCards(true);
     }, 300);
-    
+
     // Set up real-time subscription for appointments and orders
     const subscription = supabase
       .channel('manager-dashboard')
@@ -85,7 +85,7 @@ const ManagerDashboard = () => {
     const interval = setInterval(() => {
       debouncedRefresh();
     }, 60000); // Refresh every minute
-    
+
     setRefreshInterval(interval);
 
     return () => {
@@ -100,27 +100,27 @@ const ManagerDashboard = () => {
     if (debounceTimeout) {
       clearTimeout(debounceTimeout);
     }
-    
+
     const timeout = setTimeout(() => {
       fetchDashboardData();
       fetchQueueAnalytics();
       fetchCapacityOverview();
     }, 1000); // 1 second debounce
-    
+
     setDebounceTimeout(timeout);
   };
 
   const fetchDashboardData = async () => {
     if (isFetchingData) return; // Prevent multiple simultaneous calls
-    
+
     try {
       setIsFetchingData(true);
       setError('');
-      
+
       // Get today's date
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
-      
+
       // Fetch all statistics in parallel
       const [
         { count: totalAppointments },
@@ -145,38 +145,38 @@ const ManagerDashboard = () => {
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true }),
-        
+
         // Today's appointments
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
           .eq('appointment_date', todayString),
-        
+
         // Pending requests (all barbers)
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'pending'),
-        
+
         // Urgent bookings today
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
           .eq('appointment_date', todayString)
           .eq('is_urgent', true),
-        
+
         // Total customers
         supabase
           .from('users')
           .select('*', { count: 'exact', head: true })
           .eq('role', 'customer'),
-        
+
         // Total barbers
         supabase
           .from('users')
           .select('*', { count: 'exact', head: true })
           .eq('role', 'barber'),
-        
+
         // Calculate revenue (completed appointments)
         supabase
           .from('appointments')
@@ -186,7 +186,7 @@ const ManagerDashboard = () => {
             service:service_id(price)
           `)
           .eq('status', 'completed'),
-        
+
         // Recent appointments
         supabase
           .from('appointments')
@@ -198,7 +198,7 @@ const ManagerDashboard = () => {
           `)
           .order('created_at', { ascending: false })
           .limit(10),
-        
+
         // Recent logs
         supabase
           .from('system_logs')
@@ -208,36 +208,36 @@ const ManagerDashboard = () => {
           `)
           .order('created_at', { ascending: false })
           .limit(10),
-        
+
         // Total orders
         supabase
           .from('orders')
           .select('*', { count: 'exact', head: true }),
-        
+
         // Today's orders
         supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
           .gte('created_at', todayString),
-        
+
         // Pending orders
         supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'pending'),
-        
+
         // Ready orders
         supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'ready_for_pickup'),
-        
+
         // Completed orders for revenue calculation
         supabase
           .from('orders')
           .select('total_amount')
           .in('status', ['picked_up', 'completed']),
-        
+
         // Recent orders
         supabase
           .from('orders')
@@ -247,7 +247,7 @@ const ManagerDashboard = () => {
           `)
           .order('created_at', { ascending: false })
           .limit(10),
-        
+
         // Pending orders details
         supabase
           .from('orders')
@@ -277,7 +277,7 @@ const ManagerDashboard = () => {
       const totalRevenue = appointmentRevenue + orderRevenue;
 
       // Calculate completion rate
-      const totalScheduled = appointments?.filter(apt => 
+      const totalScheduled = appointments?.filter(apt =>
         ['scheduled', 'completed', 'cancelled'].includes(apt.status)
       ).length || 0;
       const completed = appointments?.filter(apt => apt.status === 'completed').length || 0;
@@ -292,7 +292,7 @@ const ManagerDashboard = () => {
           ...queueInfo
         };
       });
-      
+
       const queues = await Promise.all(queuePromises);
       const activeQueues = queues.filter(q => q.queueCount > 0).length;
       const totalWaitTime = queues.reduce((total, q) => total + q.totalWaitTime, 0);
@@ -335,7 +335,7 @@ const ManagerDashboard = () => {
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(5);
-      
+
       setPendingRequests(pendingDetails || []);
 
     } catch (error) {
@@ -351,12 +351,12 @@ const ManagerDashboard = () => {
     try {
       const today = new Date();
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      
+
       const analytics = await apiService.getQueueAnalytics(
         weekAgo.toISOString().split('T')[0],
         today.toISOString().split('T')[0]
       );
-      
+
       setQueueAnalytics(analytics);
     } catch (error) {
       console.error('Error fetching queue analytics:', error);
@@ -406,7 +406,7 @@ const ManagerDashboard = () => {
   const handleAppointmentStatus = async (appointmentId, status) => {
     try {
       await apiService.updateAppointment(appointmentId, { status });
-      
+
       // Log the action
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -459,29 +459,29 @@ const ManagerDashboard = () => {
         appointmentData: appointment
       });
     }
-    
+
     setShowNotificationModal(true);
   };
 
   const handleModalConfirm = async () => {
     const { type, appointmentData } = notificationData;
     const appointmentId = appointmentData.id;
-    
+
     setModalLoading(true);
-    
+
     try {
       if (type === 'approve') {
         const queueNumber = await apiService.getNextQueueNumber(
-          appointmentData.barber_id, 
+          appointmentData.barber_id,
           appointmentData.appointment_date
         );
-        
+
         await apiService.confirmAppointment(appointmentId, queueNumber);
         // Do NOT send notification here. Approval notifications are handled
         // centrally in the barber flow to prevent duplicates.
       } else {
         await apiService.declineAppointment(appointmentId, 'Declined by management');
-        
+
         // Use CentralizedNotificationService to prevent duplicates
         const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         // Keep decline notification (distinct event) or move to centralized flow if needed
@@ -503,16 +503,16 @@ const ManagerDashboard = () => {
         message: `Appointment ${type === 'approve' ? 'approved' : 'rejected'} successfully. The customer has been notified.`,
         appointmentData: null
       });
-      
+
       // Refresh data
       await fetchDashboardData();
-      
+
       // Close modal after a short delay
       setTimeout(() => {
         setShowNotificationModal(false);
         setModalLoading(false);
       }, 2000);
-      
+
     } catch (error) {
       console.error('Error handling pending request:', error);
       setNotificationData({
@@ -557,13 +557,13 @@ const ManagerDashboard = () => {
   // Calculate estimated wait time for queue position
   const calculateWaitTime = (queueCount, averageServiceTime = 35) => {
     const waitTimeMinutes = queueCount * averageServiceTime;
-    
+
     if (waitTimeMinutes >= 60) {
       const hours = Math.floor(waitTimeMinutes / 60);
       const minutes = waitTimeMinutes % 60;
       return `${hours}h ${minutes}m`;
     }
-    
+
     return `${waitTimeMinutes} min`;
   };
 
@@ -609,7 +609,7 @@ const ManagerDashboard = () => {
       {/* Simplified Header */}
       <div className="row mb-3">
         <div className="col">
-          <div className="d-flex justify-content-between align-items-center rounded shadow-sm" style={{ 
+          <div className="d-flex justify-content-between align-items-center rounded shadow-sm" style={{
             background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
             padding: 'clamp(1rem, 3vw, 1.5rem)'
           }}>
@@ -622,7 +622,7 @@ const ManagerDashboard = () => {
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
-            <button 
+            <button
               className="btn btn-outline-secondary btn-sm"
               onClick={fetchDashboardData}
               disabled={isFetchingData}
@@ -652,7 +652,7 @@ const ManagerDashboard = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="col-md-6 col-lg-3">
           <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
             <div className="card-body">
@@ -668,7 +668,7 @@ const ManagerDashboard = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="col-md-6 col-lg-3">
           <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' }}>
             <div className="card-body">
@@ -686,7 +686,7 @@ const ManagerDashboard = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="col-md-6 col-lg-3">
           <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
             <div className="card-body">
@@ -704,6 +704,70 @@ const ManagerDashboard = () => {
         </div>
       </div>
 
+      {/* Secondary Metrics */}
+      <div className="row g-3 mb-4">
+        <div className="col-md-4">
+          <div
+            className="card border-0 shadow-sm h-100 cursor-pointer"
+            onClick={() => navigate('/manage/users')}
+            style={{ background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)', cursor: 'pointer' }}
+          >
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Total Customers</div>
+                  <div className="h4 mb-0 fw-bold">{stats.totalCustomers}</div>
+                  <small className="text-primary">Manage Users <i className="bi bi-arrow-right"></i></small>
+                </div>
+                <div className="text-primary" style={{ fontSize: '2rem', opacity: 0.6 }}>
+                  <i className="bi bi-people-fill"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div
+            className="card border-0 shadow-sm h-100 cursor-pointer"
+            onClick={() => navigate('/manage/barbers')}
+            style={{ background: 'linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%)', cursor: 'pointer' }}
+          >
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Active Barbers</div>
+                  <div className="h4 mb-0 fw-bold">{stats.totalBarbers}</div>
+                  <small className="text-success">Manage Barbers <i className="bi bi-arrow-right"></i></small>
+                </div>
+                <div className="text-success" style={{ fontSize: '2rem', opacity: 0.6 }}>
+                  <i className="bi bi-scissors"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div
+            className="card border-0 shadow-sm h-100 cursor-pointer"
+            onClick={() => navigate('/manage/appointments')}
+            style={{ background: 'linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)', cursor: 'pointer' }}
+          >
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted small mb-1">Wait Time (Avg)</div>
+                  <div className="h4 mb-0 fw-bold">{stats.averageWaitTime} min</div>
+                  <small className="text-info">Queue Analytics <i className="bi bi-arrow-right"></i></small>
+                </div>
+                <div className="text-info" style={{ fontSize: '2rem', opacity: 0.6 }}>
+                  <i className="bi bi-clock-history"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Pending Requests Alert */}
       {pendingRequests.length > 0 && (
         <div className="row mb-3">
@@ -714,7 +778,7 @@ const ManagerDashboard = () => {
                 <div className="flex-grow-1">
                   <strong>Pending Booking Requests:</strong> You have {pendingRequests.length} booking request{pendingRequests.length !== 1 ? 's' : ''} awaiting approval.
                 </div>
-                <button 
+                <button
                   className="btn btn-warning btn-sm"
                   onClick={() => document.getElementById('pending-requests')?.scrollIntoView({ behavior: 'smooth' })}
                 >
@@ -789,12 +853,11 @@ const ManagerDashboard = () => {
                             )}
                           </td>
                           <td>
-                            <span className={`badge bg-${
-                              appointment.status === 'completed' ? 'success' :
-                              appointment.status === 'ongoing' ? 'primary' :
-                              appointment.status === 'scheduled' ? 'info' :
-                              appointment.status === 'cancelled' ? 'danger' : 'secondary'
-                            }`}>
+                            <span className={`badge bg-${appointment.status === 'completed' ? 'success' :
+                                appointment.status === 'ongoing' ? 'primary' :
+                                  appointment.status === 'scheduled' ? 'info' :
+                                    appointment.status === 'cancelled' ? 'danger' : 'secondary'
+                              }`}>
                               {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                             </span>
                           </td>
@@ -933,7 +996,7 @@ const ManagerDashboard = () => {
                   <i className="bi bi-box-seam me-2"></i>
                   Recent Orders
                 </h5>
-                <button 
+                <button
                   className="btn btn-light btn-sm"
                   onClick={() => navigate('/manage/orders')}
                 >
@@ -965,13 +1028,12 @@ const ManagerDashboard = () => {
                             </span>
                           </td>
                           <td>
-                            <span className={`badge bg-${
-                              order.status === 'picked_up' || order.status === 'completed' ? 'success' :
-                              order.status === 'ready_for_pickup' ? 'info' :
-                              order.status === 'preparing' ? 'primary' :
-                              order.status === 'confirmed' ? 'warning' :
-                              order.status === 'pending' ? 'secondary' : 'danger'
-                            }`}>
+                            <span className={`badge bg-${order.status === 'picked_up' || order.status === 'completed' ? 'success' :
+                                order.status === 'ready_for_pickup' ? 'info' :
+                                  order.status === 'preparing' ? 'primary' :
+                                    order.status === 'confirmed' ? 'warning' :
+                                      order.status === 'pending' ? 'secondary' : 'danger'
+                              }`}>
                               {order.status.replace('_', ' ').toUpperCase()}
                             </span>
                           </td>
@@ -1018,10 +1080,9 @@ const ManagerDashboard = () => {
                         <div className="d-flex justify-content-between align-items-start mb-2">
                           <div>
                             <div className="fw-bold small">{barber.full_name}</div>
-                            <span className={`badge bg-${
-                              barber.barber_status === 'available' ? 'success' : 
-                              barber.barber_status === 'busy' ? 'warning' : 'secondary'
-                            } small`}>
+                            <span className={`badge bg-${barber.barber_status === 'available' ? 'success' :
+                                barber.barber_status === 'busy' ? 'warning' : 'secondary'
+                              } small`}>
                               {barber.barber_status}
                             </span>
                           </div>
@@ -1031,9 +1092,8 @@ const ManagerDashboard = () => {
                             {[...Array(5)].map((_, i) => (
                               <i
                                 key={i}
-                                className={`bi bi-star-fill ${
-                                  i < Math.floor(barber.average_rating || 0) ? 'text-warning' : 'text-muted'
-                                }`}
+                                className={`bi bi-star-fill ${i < Math.floor(barber.average_rating || 0) ? 'text-warning' : 'text-muted'
+                                  }`}
                                 style={{ fontSize: '0.8rem' }}
                               ></i>
                             ))}
@@ -1054,7 +1114,7 @@ const ManagerDashboard = () => {
           </div>
         </div>
       )}
-      
+
       {/* Notification Modal */}
       <NotificationModal
         isOpen={showNotificationModal}

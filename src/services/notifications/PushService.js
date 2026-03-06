@@ -4,6 +4,8 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../../supabaseClient';
 import { getFCMToken, onForegroundMessage } from '../../firebase-config';
+import React from 'react';
+import { toast } from 'react-hot-toast';
 
 class PushServiceImpl {
   initialized = false;
@@ -375,18 +377,63 @@ class PushServiceImpl {
   async showBrowserNotification(title, body, data = {}) {
     console.log('🔔 showBrowserNotification called:', { title, body, data });
 
-    if (!('Notification' in window)) {
-      console.warn('🔔 Notifications not supported in this browser');
-      return;
+    // 1. ALWAYS show an elegant in-app toast notification if on web
+    try {
+      toast.custom(
+        (t) => (
+          <div
+            onClick={() => {
+              toast.dismiss(t.id);
+              this.handleNotificationAction({ notification: { data } });
+            }}
+            style={{
+              cursor: 'pointer',
+              padding: '16px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              backgroundColor: '#ffffff',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              opacity: t.visible ? 1 : 0,
+              transition: 'opacity 300ms ease-in-out',
+              maxWidth: '350px',
+              width: '100%',
+              zIndex: 9999
+            }}
+          >
+            <div style={{ fontSize: '24px', flexShrink: 0 }}>
+              {data.priority === 'high' || title.includes('Urgent') ? '🚨' : '🔔'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 'bold', margin: '0 0 4px 0', color: '#1e293b', fontSize: '15px' }}>
+                {title}
+              </p>
+              <p style={{ margin: 0, fontSize: '14px', color: '#64748b', lineHeight: '1.4' }}>
+                {body}
+              </p>
+            </div>
+          </div>
+        ),
+        { duration: 6000, position: 'top-center' }
+      );
+    } catch (toastError) {
+      console.error('Failed to show hot-toast:', toastError);
+      // Last resort fallback
+      if (data.priority === 'high' || title.includes('Urgent')) {
+        alert(`${title}\n\n${body}`);
+      }
     }
 
-    if (Notification.permission !== 'granted') {
-      console.warn('🔔 Notification permission not granted:', Notification.permission);
+    // 2. Try native hardware notification if tab is in background
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      console.log('🔔 System notifications ignored (not supported or permission not granted)');
       return;
     }
 
     try {
-      // 1. Try to use Service Worker registration (most robust for web/PWA)
+      // Try to use Service Worker registration (most robust for web/PWA)
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
         if (registration && 'showNotification' in registration) {
@@ -405,7 +452,7 @@ class PushServiceImpl {
         }
       }
 
-      // 2. Fallback to basic Notification API
+      // Fallback to basic Notification API
       console.log('🔔 Showing notification via basic Notification API');
       const notification = new Notification(title, {
         body,
@@ -425,12 +472,7 @@ class PushServiceImpl {
       setTimeout(() => notification.close(), 10000);
 
     } catch (error) {
-      console.error('❌ Error showing browser notification:', error);
-
-      // 3. Last resort: internal alert if it's high priority
-      if (data.priority === 'high' || title.includes('Urgent')) {
-        alert(`${title}\n\n${body}`);
-      }
+      console.error('❌ Error showing system browser notification:', error);
     }
   }
 

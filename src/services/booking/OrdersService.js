@@ -538,7 +538,7 @@ class OrdersService {
   async sendNotification(userId, notificationData) {
     try {
       // Create order notification using centralized service
-      const { default: centralizedNotificationService } = await import('./CentralizedNotificationService');
+      const { default: centralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
 
       // Determine category based on notification type
       let category = 'status_update';

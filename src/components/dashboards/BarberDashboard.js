@@ -7,7 +7,6 @@ import { ROUTES, QUEUE_SETTINGS } from '../utils/constants';
 import RescheduleModal from '../barber/RescheduleModal';
 import addOnsService from '../../services/booking/AddOnsService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
-import NotificationPermission from '../common/NotificationPermission';
 
 const BarberDashboard = () => {
   const [todaySchedule, setTodaySchedule] = useState([]);
@@ -1066,15 +1065,8 @@ const BarberDashboard = () => {
         </div>
       </div>
 
-      {/* Notification Permission Banner */}
-      <div className="row mb-0 mt-3">
-        <div className="col">
-          <NotificationPermission />
-        </div>
-      </div>
-
       {/* Quick Actions */}
-      <div className="quick-actions-container mb-0" style={{ paddingTop: '0.5rem', paddingBottom: '0.5rem' }}>
+      <div className="quick-actions-container mb-2" style={{ paddingTop: '0.5rem', paddingBottom: '0.5rem' }}>
         <div className="quick-actions-grid">
           <Link
             to="/queue"

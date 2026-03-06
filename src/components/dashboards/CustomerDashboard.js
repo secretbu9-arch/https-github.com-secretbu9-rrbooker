@@ -680,7 +680,7 @@ const CustomerDashboard = () => {
   return (
     <div className="container-fluid py-4 dashboard-container">
       {/* Notification Permission Banner */}
-      <div className="row mb-0">
+      <div className="row mb-0 mt-3">
         <div className="col">
           <NotificationPermission />
         </div>

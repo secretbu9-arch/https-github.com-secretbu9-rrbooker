@@ -33,6 +33,7 @@ export const BOOKING_STATUS = {
 export const PRIORITY_LEVELS = {
   NORMAL: 'normal',
   URGENT: 'urgent',
+  EMERGENCY: '1', // High-priority override
   VIP: 'vip'
 };
 
@@ -45,50 +46,50 @@ export const APPOINTMENT_FIELDS = {
   ID: 'id',
   CUSTOMER_ID: 'customer_id',
   BARBER_ID: 'barber_id',
-  
+
   // Service information
   SERVICE_ID: 'service_id',           // Primary service
   SERVICES_DATA: 'services_data',     // Array of all selected services
   ADD_ONS_DATA: 'add_ons_data',      // Array of selected add-ons
-  
+
   // Scheduling
   APPOINTMENT_DATE: 'appointment_date',
   APPOINTMENT_TIME: 'appointment_time',  // null for queue appointments
   APPOINTMENT_TYPE: 'appointment_type',  // 'queue' or 'scheduled'
-  
+
   // Queue management (STANDARDIZED)
   QUEUE_POSITION: 'queue_position',   // Position in queue (null for scheduled)
   PRIORITY_LEVEL: 'priority_level',   // 'normal', 'urgent', or 'vip'
   IS_URGENT: 'is_urgent',            // Boolean flag for urgent bookings
-  
+
   // Status and pricing
   STATUS: 'status',
   TOTAL_PRICE: 'total_price',
   TOTAL_DURATION: 'total_duration',
-  
+
   // Additional information
   NOTES: 'notes',
   SPECIAL_REQUESTS: 'special_requests',
-  
+
   // Double booking (booking for friend)
   IS_DOUBLE_BOOKING: 'is_double_booking',
   DOUBLE_BOOKING_DATA: 'double_booking_data',
   PRIMARY_CUSTOMER_ID: 'primary_customer_id',
-  
+
   // Friend booking (stored in double_booking_data JSON)
   BOOK_FOR_FRIEND: 'book_for_friend',  // Used in UI, stored in double_booking_data
   FRIEND_NAME: 'friend_name',          // Used in UI, stored in double_booking_data
   FRIEND_PHONE: 'friend_phone',        // Used in UI, stored in double_booking_data
-  
+
   // Queue insertion tracking
   QUEUE_INSERTION_REASON: 'queue_insertion_reason',
   QUEUE_INSERTION_TIME: 'queue_insertion_time',
-  
+
   // Timestamps
   CREATED_AT: 'created_at',
   UPDATED_AT: 'updated_at',
   EMAIL_SENT_AT: 'email_sent_at',
-  
+
   // Confirmation
   CONFIRMATION_CODE: 'confirmation_code',
   CONFIRMED_AT: 'confirmed_at'
@@ -242,11 +243,8 @@ export const BOOKING_ERRORS = {
 // ============================================================================
 
 export const BOOKING_SUCCESS = {
-  CREATED: 'Your appointment request has been sent to the barber',
-  CONFIRMED: 'Your appointment has been confirmed',
-  RESCHEDULED: 'Appointment rescheduled successfully',
-  CANCELLED: 'Appointment cancelled successfully',
   URGENT_REQUESTED: 'Urgent booking request sent. You will be prioritized in the queue.',
+  URGENT_PRIORITY_CONFIRMED: 'Urgent Priority has been granted! Your schedule has been updated.',
   ADDED_TO_QUEUE: 'Successfully added to queue'
 };
 

@@ -1,7 +1,7 @@
-// services/EnhancedQueueTimeCalculator.js
+// services/QueueTimeCalculator.js
 import { supabase } from '../../supabaseClient';
 
-class EnhancedQueueTimeCalculator {
+class QueueTimeCalculator {
   constructor() {
     this.BUSINESS_HOURS = { start: '07:30', end: '17:00' };
     this.LUNCH_BREAK = { start: '12:00', end: '13:00' };
@@ -30,26 +30,37 @@ class EnhancedQueueTimeCalculator {
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
         .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing'])
-        .order('appointment_time', { ascending: true, nullsLast: true })
-        .order('queue_position', { ascending: true, nullsLast: true });
+        // Rule 3: Manual sort in JS is better for complex hierarchy
+        .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      // manual sort to match Rule 3
+      const sortedAppointments = (appointments || []).sort((a, b) => {
+        if (a.status === 'ongoing') return -1;
+        if (b.status === 'ongoing') return 1;
 
-      // Separate scheduled and queue appointments
-      const scheduledAppointments = appointments?.filter(apt => 
+        const getPrio = (p) => (p === '1' ? 100 : p === 'urgent' ? 50 : 0);
+        const pA = getPrio(a.priority_level);
+        const pB = getPrio(b.priority_level);
+        if (pA !== pB) return pB - pA;
+
+        return (a.estimated_start_time || a.created_at).localeCompare(b.estimated_start_time || b.created_at);
+      });
+
+      // Separate scheduled and queue appointments (after sorting)
+      const scheduledAppointments = sortedAppointments.filter(apt =>
         apt.appointment_type === 'scheduled' && apt.appointment_time
-      ) || [];
-      
-      const queueAppointments = appointments?.filter(apt => 
-        apt.appointment_type === 'queue' && apt.queue_position
-      ) || [];
+      );
 
-      console.log('📅 Existing appointments:', {
+      const queueAppointments = sortedAppointments.filter(apt =>
+        apt.appointment_type === 'queue'
+      );
+
+      console.log('📅 Existing appointments (sorted):', {
         scheduled: scheduledAppointments.length,
         queue: queueAppointments.length
       });
 
-      // Calculate timeline and find the best position for the new appointment
+      // Calculate timeline
       const timeline = this.buildTimeline(scheduledAppointments, queueAppointments, date);
       const newAppointmentInfo = this.findBestPosition(timeline, serviceDuration, isUrgent, date);
 
@@ -60,6 +71,7 @@ class EnhancedQueueTimeCalculator {
         estimatedEndTime: newAppointmentInfo.estimatedEndTime,
         estimatedWaitTime: newAppointmentInfo.estimatedWaitTime,
         totalInQueue: newAppointmentInfo.totalInQueue,
+        isOverflowingWorkHours: newAppointmentInfo.isOverflowingWorkHours,
         timeline: timeline,
         recommendations: this.generateRecommendations(timeline, serviceDuration, newAppointmentInfo)
       };
@@ -75,25 +87,25 @@ class EnhancedQueueTimeCalculator {
    */
   buildTimeline(scheduledAppointments, queueAppointments, targetDate = null) {
     const timeline = [];
-    
+
     // Get current time for real-time calculations
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const isToday = targetDate === today;
-    
+
     let currentTime = this.timeToMinutes(this.BUSINESS_HOURS.start);
-    
+
     const workEnd = this.timeToMinutes(this.BUSINESS_HOURS.end);
     const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
     const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
-    
+
     // If this is today, start from current time or work start, whichever is later
     if (isToday) {
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
       const currentMinutes = currentHour * 60 + currentMinute;
       currentTime = Math.max(currentTime, currentMinutes);
-      
+
       // If current time is during lunch break, start after lunch
       if (currentTime >= lunchStart && currentTime < lunchEnd) {
         console.log('🍽️ Current time is during lunch break, scheduling queue appointments after lunch at 1:00 PM');
@@ -102,7 +114,7 @@ class EnhancedQueueTimeCalculator {
     }
 
     // Sort scheduled appointments by time
-    const sortedScheduled = [...scheduledAppointments].sort((a, b) => 
+    const sortedScheduled = [...scheduledAppointments].sort((a, b) =>
       this.timeToMinutes(a.appointment_time) - this.timeToMinutes(b.appointment_time)
     );
 
@@ -114,7 +126,41 @@ class EnhancedQueueTimeCalculator {
 
     // Process appointments in chronological order
     while (currentTime < workEnd && (scheduledIndex < sortedScheduled.length || queueIndex < sortedQueue.length)) {
-      // Check for lunch break
+      // Get next scheduled appointment
+      const nextScheduled = scheduledIndex < sortedScheduled.length ? sortedScheduled[scheduledIndex] : null;
+      const nextScheduledTime = nextScheduled ? this.timeToMinutes(nextScheduled.appointment_time) : Infinity;
+
+      // Get next queue appointment
+      const nextQueue = queueIndex < sortedQueue.length ? sortedQueue[queueIndex] : null;
+
+      // Special handling for ONGOING appointment - it must be processed first at its actual start time
+      if (nextQueue && nextQueue.status === 'ongoing') {
+        const duration = nextQueue.total_duration || 30;
+        // Ongoing appointments started in the past or now
+        const startTimeStr = nextQueue.appointment_time?.slice(0, 5) || this.minutesToTime(currentTime);
+        const startTime = this.timeToMinutes(startTimeStr);
+        const endTime = startTime + duration;
+
+        timeline.push({
+          ...nextQueue,
+          type: 'queue',
+          startTime: startTimeStr,
+          endTime: this.minutesToTime(endTime),
+          startMinutes: startTime,
+          endMinutes: endTime,
+          duration,
+          isQueue: true,
+          queuePosition: nextQueue.queue_position,
+          isOngoing: true
+        });
+
+        // Next person starts after this one or now, whichever is later
+        currentTime = Math.max(currentTime, endTime) + this.BUFFER_TIME;
+        queueIndex++;
+        continue;
+      }
+
+      // Regular check for lunch break for non-ongoing appointments
       if (currentTime >= lunchStart && currentTime < lunchEnd) {
         timeline.push({
           type: 'lunch_break',
@@ -128,13 +174,6 @@ class EnhancedQueueTimeCalculator {
         currentTime = lunchEnd;
         continue;
       }
-
-      // Get next scheduled appointment
-      const nextScheduled = scheduledIndex < sortedScheduled.length ? sortedScheduled[scheduledIndex] : null;
-      const nextScheduledTime = nextScheduled ? this.timeToMinutes(nextScheduled.appointment_time) : Infinity;
-
-      // Get next queue appointment
-      const nextQueue = queueIndex < sortedQueue.length ? sortedQueue[queueIndex] : null;
 
       // Determine which appointment comes next
       if (nextScheduled && nextScheduledTime <= currentTime) {
@@ -158,6 +197,14 @@ class EnhancedQueueTimeCalculator {
       } else if (nextQueue) {
         // Process queue appointment
         const duration = nextQueue.total_duration || 30;
+
+        // If queue appointment crosses lunch break, move current time to lunch start
+        // so the loop will process the lunch break
+        if (currentTime < lunchStart && (currentTime + duration) > lunchStart) {
+          currentTime = lunchStart;
+          continue;
+        }
+
         const endTime = currentTime + duration;
 
         if (endTime <= workEnd) {
@@ -192,24 +239,25 @@ class EnhancedQueueTimeCalculator {
    * Find the best position for a new appointment
    */
   findBestPosition(timeline, serviceDuration, isUrgent, targetDate = null) {
-    const queueAppointments = timeline.filter(item => item.isQueue);
-    const totalInQueue = queueAppointments.length;
+    const allAppointments = timeline.filter(item => item.isQueue || item.isScheduled);
+    const totalInQueue = allAppointments.length;
 
     let queuePosition;
     let estimatedStartTime;
     let estimatedArrivalTime;
     let estimatedEndTime;
     let estimatedWaitTime;
+    let isOverflowingWorkHours = false;
 
     // Get current time for real-time calculations
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const isToday = targetDate === today;
-    
+
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     const currentMinutes = currentHour * 60 + currentMinute;
-    
+
     const workStart = this.timeToMinutes(this.BUSINESS_HOURS.start);
     const workEnd = this.timeToMinutes(this.BUSINESS_HOURS.end);
     const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
@@ -223,39 +271,40 @@ class EnhancedQueueTimeCalculator {
     if (isUrgent) {
       // Urgent appointments go to position 1
       queuePosition = 1;
-      
+
       // Start from work start or current time (if today), whichever is later
       let startTime = baseStartTime;
-      
+
       // If we're in lunch break, start after lunch
       if (startTime >= lunchStart && startTime < lunchEnd) {
         startTime = lunchEnd;
+      } else if (startTime < lunchStart && (startTime + serviceDuration) > lunchStart) {
+        console.log('🍽️ Urgent appointment crosses lunch break, moving to 1:00 PM');
+        startTime = lunchEnd;
       }
-      
-      // Ensure we don't exceed working hours
-      if (startTime + serviceDuration > workEnd) {
-        startTime = workEnd - serviceDuration;
-      }
-      
+
+      const remainingWorkingMinutes = Math.max(0, workEnd - startTime);
+      isOverflowingWorkHours = (startTime + serviceDuration) > workEnd;
       estimatedStartTime = this.minutesToTime(startTime);
       estimatedEndTime = this.minutesToTime(startTime + serviceDuration);
       estimatedWaitTime = isToday ? Math.max(0, startTime - currentMinutes) : 0;
-      
+
       // Calculate arrival time (15 minutes before service start)
       // For today, ensure arrival time is not in the past
-      const arrivalTime = isToday 
+      const arrivalTime = isToday
         ? Math.max(currentMinutes, startTime - this.ARRIVAL_BUFFER)
         : Math.max(0, startTime - this.ARRIVAL_BUFFER);
       estimatedArrivalTime = this.minutesToTime(arrivalTime);
     } else {
-      // Regular appointments go to the end
-      queuePosition = totalInQueue + 1;
-      
+      // Regular appointments Default queuePosition
+      let calculatedQueuePosition = totalInQueue + 1;
+
       // For position 1, service starts at 8:00 AM (for future dates) or max(current time, 8:00 AM) for today
       // For position 2+, calculate based on previous customer's service duration
       let startTime;
-      
-      if (queuePosition === 1) {
+
+      if (totalInQueue === 0) {
+        queuePosition = 1;
         // First customer: service starts at 8:00 AM for future dates
         // For today, use max(current time, 8:00 AM)
         if (isToday) {
@@ -264,41 +313,77 @@ class EnhancedQueueTimeCalculator {
           startTime = firstQueueStart;
         }
       } else {
-        // Calculate start time based on existing timeline
+        // Calculate start time based on existing timeline, looking for gaps!
         startTime = baseStartTime;
-        
-        // Find the end of the last appointment
-        if (timeline.length > 0) {
-          const lastAppointment = timeline[timeline.length - 1];
+        let gapFound = false;
+
+        // Ensure timeline is sorted
+        const sortedTimeline = [...timeline].sort((a, b) => a.startMinutes - b.startMinutes);
+
+        for (const appointment of sortedTimeline) {
+          const gapSize = appointment.startMinutes - startTime;
+
+          if (gapSize >= (serviceDuration + this.BUFFER_TIME)) {
+            // Check if this gap crosses lunch
+            if (startTime < lunchStart && (startTime + serviceDuration) > lunchStart) {
+              // Too close to lunch, shift past lunch
+              startTime = lunchEnd;
+            } else {
+              // Great! We found a gap big enough.
+              gapFound = true;
+              break;
+            }
+          }
+          // Move startTime to end of this appointment. If this appointment crosses or ends after lunch, make sure we adjust.
+          startTime = Math.max(startTime, appointment.endMinutes + this.BUFFER_TIME);
+        }
+
+        // If no gap was found inside the timeline, we append at the end of the last appointment
+        if (!gapFound && sortedTimeline.length > 0) {
+          const lastAppointment = sortedTimeline[sortedTimeline.length - 1];
           startTime = Math.max(startTime, lastAppointment.endMinutes + this.BUFFER_TIME);
         }
       }
-      
+
+      // After determining the startTime, we calculate their queuePosition correctly.
+      // E.g. If their startTime is before someone else in the queue, their position should be 2, and the other person becomes 3.
+      // For now, in order to show them as 2nd instead of 3rd etc., we calculate how many people start BEFORE them.
+      let numPeopleStartingBeforeMe = 0;
+      for (const item of timeline) {
+        if (item.isQueue && item.startMinutes < startTime) {
+          numPeopleStartingBeforeMe++;
+        }
+      }
+      // If Urgent they are 1. We handled urgent earlier. But if they fill a gap, they should be the Nth person in the line.
+      queuePosition = numPeopleStartingBeforeMe + 1;
+
       // Check for lunch break - if start time falls during lunch, move to after lunch
       if (startTime >= lunchStart && startTime < lunchEnd) {
-        console.log('🍽️ Queue appointment start time falls during lunch break, moving to 1:00 PM');
+        startTime = lunchEnd;
+      } else if (startTime < lunchStart && (startTime + serviceDuration) > lunchStart) {
+        // If it overlaps lunch, we need to know how many minutes were left BEFORE lunch
+        // but for a strict queue, we push it to 1:00 PM
         startTime = lunchEnd;
       }
-      
-      // Ensure we don't exceed working hours
-      if (startTime + serviceDuration > workEnd) {
-        startTime = workEnd - serviceDuration;
-      }
-      
+
+      // Check for overflow without forcing it into the slot
+      const nextHurdle = (startTime < lunchStart) ? lunchStart : workEnd;
+      const remainingMinutesInSlot = Math.max(0, nextHurdle - startTime);
+      isOverflowingWorkHours = (startTime + serviceDuration) > workEnd;
+
       estimatedStartTime = this.minutesToTime(startTime);
       estimatedEndTime = this.minutesToTime(startTime + serviceDuration);
-      
-      // Calculate wait time based on all appointments before this one
+
+      // Calculate wait time based on when they will actually start
       // For future dates, wait time is 0 (no wait since it's a new day)
-      const waitTimeBase = isToday ? currentMinutes : workStart;
-      const waitTime = this.calculateWaitTime(timeline, serviceDuration, waitTimeBase);
+      const waitTime = isToday ? Math.max(0, startTime - currentMinutes) : 0;
       estimatedWaitTime = waitTime;
-      
+
       // Calculate arrival time (15 minutes before service start)
       // For position 1 on future dates, arrival is 7:45 AM (15 min before 8:00 AM)
       // For others, arrival is 15 minutes before their service start
       // For today, ensure arrival time is not in the past
-      const arrivalTime = isToday 
+      const arrivalTime = isToday
         ? Math.max(currentMinutes, startTime - this.ARRIVAL_BUFFER)
         : Math.max(0, startTime - this.ARRIVAL_BUFFER);
       estimatedArrivalTime = this.minutesToTime(arrivalTime);
@@ -310,70 +395,62 @@ class EnhancedQueueTimeCalculator {
       estimatedArrivalTime,
       estimatedEndTime,
       estimatedWaitTime,
-      totalInQueue: totalInQueue + 1
+      totalInQueue: totalInQueue + 1,
+      isOverflowingWorkHours,
+      remainingWorkingMinutes: Math.max(0, workEnd - this.timeToMinutes(estimatedStartTime)),
+      remainingMinutesInSlot: (this.timeToMinutes(estimatedStartTime) < lunchStart)
+        ? Math.max(0, lunchStart - this.timeToMinutes(estimatedStartTime))
+        : Math.max(0, workEnd - this.timeToMinutes(estimatedStartTime))
     };
   }
 
-  /**
-   * Calculate wait time based on existing appointments
-   */
-  calculateWaitTime(timeline, serviceDuration, currentMinutes = 0) {
-    let totalWaitTime = 0;
-    
-    // Filter appointments that are after current time
-    const relevantAppointments = timeline.filter(appointment => {
-      if (appointment.isScheduled || appointment.isQueue) {
-        return appointment.startMinutes >= currentMinutes;
-      }
-      return false;
-    });
-    
-    // Add time for all existing appointments that are after current time
-    // Add buffer only between appointments, not after the last one
-    relevantAppointments.forEach((appointment, index) => {
-      totalWaitTime += appointment.duration;
-      
-      // Add buffer time between appointments (5 minutes) - only between appointments, not after the last one
-      if (index < relevantAppointments.length - 1) {
-        totalWaitTime += this.BUFFER_TIME;
-      }
-    });
-    
-    return totalWaitTime;
-  }
 
-  /**
-   * Generate recommendations for better timing
-   */
+
   generateRecommendations(timeline, serviceDuration, appointmentInfo) {
     const recommendations = [];
-    
+
     // Check if appointment would cross lunch break
     const startMinutes = this.timeToMinutes(appointmentInfo.estimatedStartTime);
     const endMinutes = startMinutes + serviceDuration;
     const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
     const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
-    
+
     if (startMinutes < lunchEnd && endMinutes > lunchStart) {
+      const availBeforeLunch = Math.max(0, lunchStart - startMinutes);
       recommendations.push({
         type: 'lunch_conflict',
-        message: 'Your appointment would cross the lunch break (12:00 PM - 1:00 PM)',
-        suggestion: 'Consider booking after 1:00 PM for better availability',
+        message: 'Crosses lunch (12PM-1PM)',
+        suggestion: availBeforeLunch > 0
+          ? `Barber has ${availBeforeLunch} mins before lunch. Try shorter service or book after 1PM.`
+          : 'Consider booking after 1:00 PM',
+        remainingMinutes: availBeforeLunch,
         alternativeTime: '1:00 PM'
       });
     }
-    
+
+    // Check for closing time conflict
+    if (appointmentInfo.isOverflowingWorkHours) {
+      const avail = appointmentInfo.remainingWorkingMinutes;
+      recommendations.push({
+        type: 'closing_conflict',
+        message: 'Exceeds closing time (5:00 PM)',
+        suggestion: `Barber has ${avail} mins left today. Try a shorter service or another barber.`,
+        remainingMinutes: avail,
+        action: 'find_alternatives'
+      });
+    }
+
     // Check for early morning availability
     const earlyMorningSlots = this.findEarlyMorningSlots(timeline, serviceDuration);
     if (earlyMorningSlots.length > 0) {
       recommendations.push({
         type: 'early_availability',
-        message: 'Earlier time slots are available',
-        suggestion: 'Book earlier for shorter wait time',
+        message: 'Earlier slots available',
+        suggestion: 'Book earlier for less wait',
         alternativeTimes: earlyMorningSlots
       });
     }
-    
+
     return recommendations;
   }
 
@@ -384,23 +461,23 @@ class EnhancedQueueTimeCalculator {
     const slots = [];
     const workStart = this.timeToMinutes(this.BUSINESS_HOURS.start);
     const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
-    
+
     // Check slots from 7:30 AM to 11:30 AM
     for (let time = workStart; time < lunchStart - serviceDuration; time += 30) {
       const slotTime = this.minutesToTime(time);
       const slotEnd = time + serviceDuration;
-      
+
       // Check if this slot is available
       const hasConflict = timeline.some(appointment => {
         if (appointment.isBreak) return false;
         return (time < appointment.endMinutes && slotEnd > appointment.startMinutes);
       });
-      
+
       if (!hasConflict) {
         slots.push(slotTime);
       }
     }
-    
+
     return slots.slice(0, 3); // Return first 3 available slots
   }
 
@@ -420,7 +497,7 @@ class EnhancedQueueTimeCalculator {
 
       if (error) throw error;
 
-      const scheduledAppointments = appointments?.filter(apt => 
+      const scheduledAppointments = appointments?.filter(apt =>
         apt.appointment_type === 'scheduled' && apt.appointment_time
       ) || [];
 
@@ -445,11 +522,22 @@ class EnhancedQueueTimeCalculator {
       // Check for lunch break conflict
       const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
       const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
-      
+
       if (startTime < lunchEnd && endTime > lunchStart) {
         return {
           hasConflict: true,
           conflictMessage: 'Time slot crosses lunch break (12:00 PM - 1:00 PM)',
+          recommendedSlots: this.findAlternativeSlots(scheduledAppointments, serviceDuration)
+        };
+      }
+
+      // Check for closing time overflow
+      const workEnd = this.timeToMinutes(this.BUSINESS_HOURS.end);
+      if (endTime > workEnd) {
+        return {
+          hasConflict: true,
+          isOverflowingWorkHours: true,
+          conflictMessage: `Exceeds closing time (Ends at ${this.minutesToTime(endTime)})`,
           recommendedSlots: this.findAlternativeSlots(scheduledAppointments, serviceDuration)
         };
       }
@@ -481,13 +569,13 @@ class EnhancedQueueTimeCalculator {
     for (let time = workStart; time < lunchStart - serviceDuration; time += 30) {
       const slotTime = this.minutesToTime(time);
       const slotEnd = time + serviceDuration;
-      
+
       const hasConflict = existingAppointments.some(apt => {
         const aptStart = this.timeToMinutes(apt.appointment_time);
         const aptEnd = aptStart + (apt.total_duration || 30);
         return (time < aptEnd && slotEnd > aptStart);
       });
-      
+
       if (!hasConflict) {
         slots.push({
           time: slotTime,
@@ -501,13 +589,13 @@ class EnhancedQueueTimeCalculator {
     for (let time = lunchEnd; time < workEnd - serviceDuration; time += 30) {
       const slotTime = this.minutesToTime(time);
       const slotEnd = time + serviceDuration;
-      
+
       const hasConflict = existingAppointments.some(apt => {
         const aptStart = this.timeToMinutes(apt.appointment_time);
         const aptEnd = aptStart + (apt.total_duration || 30);
         return (time < aptEnd && slotEnd > aptStart);
       });
-      
+
       if (!hasConflict) {
         slots.push({
           time: slotTime,
@@ -548,4 +636,4 @@ class EnhancedQueueTimeCalculator {
   }
 }
 
-export default new EnhancedQueueTimeCalculator();
+export default new QueueTimeCalculator();

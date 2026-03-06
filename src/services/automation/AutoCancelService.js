@@ -57,7 +57,8 @@ class AutoCancelService {
    */
   async getUnconfirmedItemsStats() {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
 
       // Get unconfirmed orders count
       const { count: unconfirmedOrdersCount, error: ordersError } = await supabase
@@ -98,8 +99,8 @@ class AutoCancelService {
    */
   async triggerAutoCancelViaEdgeFunction() {
     try {
-      const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 
-                         (await supabase).supabaseUrl;
+      const supabaseUrl = process.env.REACT_APP_SUPABASE_URL ||
+        (await supabase).supabaseUrl;
       const functionUrl = `${supabaseUrl}/functions/v1/auto-cancel-unconfirmed`;
 
       const response = await fetch(functionUrl, {

@@ -12,7 +12,7 @@ const OrderCheckout = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   // Form data
   const [formData, setFormData] = useState({
     pickupDate: '',
@@ -44,7 +44,7 @@ const OrderCheckout = () => {
   const getCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
-    
+
     if (user) {
       setFormData(prev => ({
         ...prev,
@@ -60,10 +60,33 @@ const OrderCheckout = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+
+    if (name === 'customerPhone') {
+      let digits = value.replace(/\D/g, '');
+      if (value.startsWith('+63')) {
+        digits = value.substring(3).replace(/\D/g, '');
+      } else if (digits.startsWith('63')) {
+        digits = digits.substring(2);
+      } else if (digits.startsWith('0')) {
+        digits = digits.substring(1);
+      }
+
+      if (digits.length > 0 && digits[0] !== '9') {
+        digits = '';
+      }
+
+      if (digits.length > 10) {
+        digits = digits.substring(0, 10);
+      }
+
+      const formatted = digits.length > 0 ? `+63${digits}` : '';
+      setFormData(prev => ({ ...prev, [name]: formatted }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const validateForm = () => {
@@ -223,7 +246,7 @@ const OrderCheckout = () => {
                 <i className="bi bi-cart-x display-1 text-muted mb-3"></i>
                 <h4>Your cart is empty</h4>
                 <p className="text-muted">Add some products to your cart before checkout.</p>
-                <button 
+                <button
                   className="btn btn-primary"
                   onClick={() => navigate('/products')}
                 >
@@ -294,7 +317,7 @@ const OrderCheckout = () => {
                   </div>
                   <div className="card-body">
                     <p className="mb-3">
-                      For security purposes, please verify your phone number. 
+                      For security purposes, please verify your phone number.
                       A verification code has been sent to your phone.
                     </p>
                     <div className="row">
@@ -484,7 +507,7 @@ const OrderCheckout = () => {
                 <span>Total</span>
                 <span>₱{calculateTotal().toFixed(2)}</span>
               </div>
-              
+
               <div className="mt-4">
                 <h6 className="text-muted">Pickup Information</h6>
                 <p className="small mb-1">

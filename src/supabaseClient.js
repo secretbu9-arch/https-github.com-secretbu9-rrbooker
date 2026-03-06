@@ -10,7 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Please check your .env file and ensure the following variables are set:');
   console.error('- REACT_APP_SUPABASE_URL');
   console.error('- REACT_APP_SUPABASE_ANON_KEY');
-  
+
   if (!supabaseUrl) {
     console.error('⚠️ REACT_APP_SUPABASE_URL is missing');
   }
@@ -25,7 +25,9 @@ export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
     persistSession: true,
     detectSessionInUrl: true,
     // Handle auth errors gracefully
-    flowType: 'pkce'
+    flowType: 'pkce',
+    // Bypass Web Locks to fix "AbortError: signal is aborted without reason" in React Strict Mode
+    lock: (name, acquireTimeout, fn) => fn()
   }
 });
 
@@ -45,7 +47,7 @@ export const checkSupabaseConnection = async () => {
 
     // Test connection by making a simple request
     const { error } = await supabase.from('users').select('id').limit(1);
-    
+
     if (error) {
       // Check for network errors
       if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_NAME_NOT_RESOLVED')) {
@@ -90,7 +92,7 @@ export const getUserProfile = async (userId) => {
     .select('*')
     .eq('id', userId)
     .single();
-  
+
   return { data, error };
 };
 
@@ -101,7 +103,7 @@ export const updateUserProfile = async (userId, updates) => {
     .eq('id', userId)
     .select()
     .single();
-  
+
   return { data, error };
 };
 
@@ -112,7 +114,7 @@ export const createAppointment = async (appointmentData) => {
     .insert([appointmentData])
     .select()
     .single();
-  
+
   return { data, error };
 };
 
@@ -123,7 +125,7 @@ export const updateAppointmentStatus = async (appointmentId, status) => {
     .eq('id', appointmentId)
     .select()
     .single();
-  
+
   return { data, error };
 };
 
@@ -136,14 +138,14 @@ export const getAppointments = async (filters = {}) => {
       barber:barber_id (id, full_name, email),
       service:service_id (id, name, price, duration)
     `);
-  
+
   // Apply filters
   Object.entries(filters).forEach(([key, value]) => {
     query = query.eq(key, value);
   });
-  
+
   const { data, error } = await query.order('appointment_date', { ascending: true });
-  
+
   return { data, error };
 };
 
@@ -152,8 +154,8 @@ export const getServices = async () => {
   const { data, error } = await supabase
     .from('services')
     .select('*')
-    .order('name');
-  
+    .order('price', { ascending: true });
+
   return { data, error };
 };
 
@@ -163,7 +165,7 @@ export const getProducts = async () => {
     .from('products')
     .select('*')
     .order('name');
-  
+
   return { data, error };
 };
 
@@ -174,7 +176,7 @@ export const updateProductStock = async (productId, quantity) => {
     .eq('id', productId)
     .select()
     .single();
-  
+
   return { data, error };
 };
 
@@ -190,7 +192,7 @@ export const getQueue = async (barberId, date) => {
     .eq('appointment_date', date)
     .eq('status', 'scheduled')
     .order('appointment_time');
-  
+
   return { data, error };
 };
 
@@ -204,6 +206,6 @@ export const logAction = async (userId, action, details = {}) => {
       details,
       created_at: new Date().toISOString()
     }]);
-  
+
   return { data, error };
 };

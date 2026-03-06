@@ -326,13 +326,13 @@ class ApiService {
       `)
       .eq('barber_id', barberId)
       .eq('appointment_date', date)
-      .in('status', ['scheduled', 'ongoing'])
+      .in('status', ['confirmed', 'ongoing'])
       .order('queue_position', { ascending: true, nullsLast: true });
 
     if (error) throw error;
 
     const current = data?.find(apt => apt.status === 'ongoing') || null;
-    const queue = data?.filter(apt => apt.status === 'scheduled') || [];
+    const queue = data?.filter(apt => apt.status === 'confirmed') || [];
 
     return { current, queue, total: data?.length || 0 };
   }
@@ -365,7 +365,7 @@ class ApiService {
       .select('queue_position')
       .eq('barber_id', barberId)
       .eq('appointment_date', date)
-      .eq('status', 'scheduled')
+      .eq('status', 'confirmed')
       .order('queue_position', { ascending: false })
       .limit(1);
 
@@ -382,7 +382,7 @@ class ApiService {
       .select('id')
       .eq('barber_id', barberId)
       .eq('appointment_date', date)
-      .eq('status', 'scheduled')
+      .eq('status', 'confirmed')
       .order('queue_position', { ascending: true })
       .limit(1)
       .single();
@@ -409,7 +409,7 @@ class ApiService {
       query = query.eq('is_active', true);
     }
 
-    query = query.order('name');
+    query = query.order('price', { ascending: true });
 
     const { data, error } = await query;
 
@@ -449,35 +449,35 @@ class ApiService {
 
   async deleteService(serviceId) {
     try {
-      // First, check if the service is being used by any appointments
+      // Check if the service is being used by any appointments (active or historical)
       const { data: appointments, error: checkError } = await supabase
         .from('appointments')
         .select('id, status, appointment_date')
-        .eq('service_id', serviceId)
-        .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
+        .eq('service_id', serviceId);
 
       if (checkError) {
         console.error('Error checking service usage:', checkError);
         throw new Error('Failed to check if service is in use');
       }
 
-      // If service is being used by active appointments, prevent deletion
+      // If service is being used by any appointments, prevent deletion due to DB foreign keys
       if (appointments && appointments.length > 0) {
         const activeAppointments = appointments.filter(apt =>
-          ['pending', 'scheduled', 'confirmed', 'ongoing'].includes(apt.status)
+          ['pending', 'confirmed', 'ongoing'].includes(apt.status)
         );
 
         if (activeAppointments.length > 0) {
           throw new Error(`Cannot delete service. It is currently being used by ${activeAppointments.length} active appointment(s). Please deactivate the service instead or wait until all appointments are completed.`);
         }
+
+        throw new Error('Cannot delete service because it is referenced in past appointments. To preserve business records, please deactivate the service instead.');
       }
 
-      // Check if service is referenced in services_data JSON field
+      // Check if service is referenced in services_data JSON field (all time)
       const { data: jsonReferences, error: jsonError } = await supabase
         .from('appointments')
-        .select('id, services_data')
-        .not('services_data', 'is', null)
-        .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
+        .select('id, services_data, status')
+        .not('services_data', 'is', null);
 
       if (jsonError) {
         console.error('Error checking JSON service references:', jsonError);
@@ -499,11 +499,15 @@ class ApiService {
         });
 
         if (activeJsonReferences.length > 0) {
-          throw new Error(`Cannot delete service. It is referenced in ${activeJsonReferences.length} active appointment(s) as part of multiple services. Please deactivate the service instead.`);
+          const activeRefs = activeJsonReferences.filter(apt => ['pending', 'confirmed', 'ongoing'].includes(apt.status));
+          if (activeRefs.length > 0) {
+            throw new Error(`Cannot delete service. It is referenced in ${activeRefs.length} active appointment(s) as part of multiple services. Please deactivate the service instead.`);
+          }
+          throw new Error('Cannot delete service because it is referenced in past appointments (as part of multiple services). To preserve business records, please deactivate it instead.');
         }
       }
 
-      // If no active references, proceed with deletion
+      // If no references, proceed with deletion
       const { error } = await supabase
         .from('services')
         .delete()
@@ -571,12 +575,11 @@ class ApiService {
 
   async deleteAddOn(addOnId) {
     try {
-      // First, check if the add-on is being used by any appointments
+      // First, check if the add-on is being used by any appointments (active or historical)
       const { data: appointments, error: checkError } = await supabase
         .from('appointments')
         .select('id, add_ons_data, status')
-        .not('add_ons_data', 'is', null)
-        .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
+        .not('add_ons_data', 'is', null);
 
       if (checkError) {
         console.error('Error checking add-on usage:', checkError);
@@ -598,11 +601,15 @@ class ApiService {
         });
 
         if (activeReferences.length > 0) {
-          throw new Error(`Cannot delete add-on. It is currently being used by ${activeReferences.length} active appointment(s). Please deactivate the add-on instead.`);
+          const activeRefs = activeReferences.filter(apt => ['pending', 'confirmed', 'ongoing'].includes(apt.status));
+          if (activeRefs.length > 0) {
+            throw new Error(`Cannot delete add-on. It is currently being used by ${activeRefs.length} active appointment(s). Please deactivate the add-on instead.`);
+          }
+          throw new Error('Cannot delete add-on because it is referenced in past appointments. To preserve business records, please deactivate it instead.');
         }
       }
 
-      // If no active references, proceed with deletion
+      // If no references, proceed with deletion
       const { error } = await supabase
         .from('add_ons')
         .delete()
@@ -646,7 +653,7 @@ class ApiService {
       .select('*', { count: 'exact', head: true })
       .eq('barber_id', barberId)
       .eq('appointment_date', date)
-      .in('status', ['scheduled', 'ongoing', 'pending']);
+      .in('status', ['confirmed', 'ongoing', 'pending']);
 
     if (error) throw error;
 

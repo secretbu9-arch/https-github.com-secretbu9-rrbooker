@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { PushService } from '../../services/notifications/PushService';
+import { QUEUE_SETTINGS } from '../../constants/booking.constants';
 
 const QueuePriorityManager = () => {
   const [appointments, setAppointments] = useState([]);
@@ -13,7 +14,7 @@ const QueuePriorityManager = () => {
   const [barbers, setBarbers] = useState([]);
   const [queueStatus, setQueueStatus] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  
+
   // Priority update modal state
   const [priorityModal, setPriorityModal] = useState({
     isOpen: false,
@@ -21,7 +22,7 @@ const QueuePriorityManager = () => {
     newPriority: null,
     isLoading: false
   });
-  
+
   // Track updating appointments
   const [updatingAppointments, setUpdatingAppointments] = useState(new Set());
 
@@ -50,11 +51,11 @@ const QueuePriorityManager = () => {
     setLoading(true);
     try {
       console.log('🔍 Fetching appointments for:', { selectedDate, selectedBarber });
-      
+
       // Try query with priority request fields first, fallback to base fields if columns don't exist
       let query;
       let data, error;
-      
+
       try {
         // Try with priority request fields
         query = supabase
@@ -86,30 +87,30 @@ const QueuePriorityManager = () => {
             barber:barber_id(full_name),
             service:service_id(name, duration)
           `);
-        
+
         if (selectedBarber) {
           query = query.eq('barber_id', selectedBarber);
         }
-        
+
         if (selectedPriority !== 'all') {
           query = query.eq('priority_level', selectedPriority);
         }
-        
+
         query = query
           .eq('appointment_date', selectedDate)
-          .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+          .in('status', ['confirmed', 'pending', 'ongoing', 'completed', 'scheduled'])
           .not('queue_position', 'is', null)
           .order('queue_position', { ascending: true })
           .order('estimated_wait_time', { ascending: true });
-        
+
         const result = await query;
         data = result.data;
         error = result.error;
-        
+
         // If error is about missing columns, retry without priority request fields
         if (error && error.message && error.message.includes('column') && error.message.includes('does not exist')) {
           console.warn('Priority request columns not found. Using base query. Run migration: scripts/add-priority-request-feature.sql');
-          
+
           query = supabase
             .from('appointments')
             .select(`
@@ -136,22 +137,22 @@ const QueuePriorityManager = () => {
               barber:barber_id(full_name),
               service:service_id(name, duration)
             `);
-          
+
           if (selectedBarber) {
             query = query.eq('barber_id', selectedBarber);
           }
-          
+
           if (selectedPriority !== 'all') {
             query = query.eq('priority_level', selectedPriority);
           }
-          
+
           query = query
             .eq('appointment_date', selectedDate)
-            .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+            .in('status', ['confirmed', 'pending', 'confirmed', 'ongoing'])
             .not('queue_position', 'is', null)
             .order('queue_position', { ascending: true })
             .order('estimated_wait_time', { ascending: true });
-          
+
           const retryResult = await query;
           data = retryResult.data;
           error = retryResult.error;
@@ -162,9 +163,9 @@ const QueuePriorityManager = () => {
 
       // Check if we got an error
       if (error) throw error;
-      
+
       console.log('📊 Appointments found:', data?.length || 0, data);
-      
+
       // Sort appointments by queue_position first, then by estimated_wait_time
       // This ensures urgent appointments (which are at the top of queue) show first
       const sortedData = (data || []).sort((a, b) => {
@@ -175,7 +176,7 @@ const QueuePriorityManager = () => {
         // Then by estimated_wait_time
         return (a.estimated_wait_time || 999) - (b.estimated_wait_time || 999);
       });
-      
+
       // Debug: Check for friend booking data
       if (sortedData && sortedData.length > 0) {
         console.log('🔍 Checking for friend booking data...');
@@ -192,9 +193,9 @@ const QueuePriorityManager = () => {
           });
         });
       }
-      
+
       setAppointments(sortedData);
-      
+
       // Test the functions with actual data
       if (data && data.length > 0) {
         console.log('🧪 Testing booking type and friend info functions...');
@@ -215,27 +216,27 @@ const QueuePriorityManager = () => {
         .from('appointments')
         .select('id, appointment_date, status, queue_position, barber_id, appointment_time')
         .eq('appointment_date', selectedDate);
-      
+
       if (!allError) {
         console.log('📋 All appointments for date:', allAppointments?.length || 0, allAppointments);
-        
+
         // Check which appointments have queue_position
         const withQueuePosition = allAppointments?.filter(apt => apt.queue_position !== null) || [];
         console.log('🎯 Appointments with queue_position:', withQueuePosition.length, withQueuePosition);
-        
+
         // Check which appointments have correct status
-        const correctStatus = allAppointments?.filter(apt => 
-          ['scheduled', 'pending', 'ongoing'].includes(apt.status)
+        const correctStatus = allAppointments?.filter(apt =>
+          ['confirmed', 'pending', 'ongoing'].includes(apt.status)
         ) || [];
         console.log('✅ Appointments with correct status:', correctStatus.length, correctStatus);
-        
+
         // Check which appointments meet ALL criteria
-        const meetsAllCriteria = allAppointments?.filter(apt => 
-          apt.queue_position !== null && 
-          ['scheduled', 'pending', 'ongoing'].includes(apt.status)
+        const meetsAllCriteria = allAppointments?.filter(apt =>
+          apt.queue_position !== null &&
+          ['confirmed', 'pending', 'ongoing'].includes(apt.status)
         ) || [];
         console.log('🎯 Appointments meeting ALL criteria:', meetsAllCriteria.length, meetsAllCriteria);
-        
+
         // Check if we have the required related data
         console.log('🔍 Checking related data...');
         const { data: customers } = await supabase.from('users').select('id').eq('role', 'customer').limit(1);
@@ -310,7 +311,7 @@ const QueuePriorityManager = () => {
 
       const { error } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           priority_level: newPriority,
           manager_adjusted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -322,7 +323,7 @@ const QueuePriorityManager = () => {
       // Reorder queue based on new priority
       // If updating to urgent, pass the appointment ID so it can be placed at the top
       await reorderQueueByPriority(
-        appointment.barber_id, 
+        appointment.barber_id,
         appointment.appointment_date,
         newPriority === 'urgent' ? appointmentId : null // Pass appointment ID if updating to urgent
       );
@@ -377,7 +378,7 @@ const QueuePriorityManager = () => {
   // Confirm priority update
   const confirmPriorityUpdate = async () => {
     if (!priorityModal.appointment || !priorityModal.newPriority) return;
-    
+
     setPriorityModal(prev => ({ ...prev, isLoading: true }));
     await updateQueuePriority(priorityModal.appointment.id, priorityModal.newPriority);
   };
@@ -390,13 +391,13 @@ const QueuePriorityManager = () => {
 
       setUpdatingAppointments(prev => new Set(prev).add(appointmentId));
 
-      const urgentFee = 100; // From QUEUE_SETTINGS.URGENT_FEE
+      const urgentFee = QUEUE_SETTINGS.URGENT_FEE || 100;
       const newTotalPrice = (appointment.total_price || 0) + urgentFee;
 
       // Update appointment: approve request, apply fee, activate priority
       const { error } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           priority_request_status: 'approved',
           priority_level: 'urgent',
           is_urgent: true,
@@ -410,7 +411,7 @@ const QueuePriorityManager = () => {
 
       // Reorder queue with this appointment as newly urgent
       await reorderQueueByPriority(
-        appointment.barber_id, 
+        appointment.barber_id,
         appointment.appointment_date,
         appointmentId
       );
@@ -465,7 +466,7 @@ const QueuePriorityManager = () => {
       // Update appointment: reject request
       const { error } = await supabase
         .from('appointments')
-        .update({ 
+        .update({
           priority_request_status: 'rejected',
           priority_request_notes: notes || null,
           manager_adjusted_at: new Date().toISOString(),
@@ -522,7 +523,7 @@ const QueuePriorityManager = () => {
         .select('id, queue_position, priority_level, status, total_duration, appointment_time')
         .eq('barber_id', barberId)
         .eq('appointment_date', appointmentDate)
-        .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+        .in('status', ['confirmed', 'pending', 'confirmed', 'ongoing'])
         .not('queue_position', 'is', null)
         .order('queue_position', { ascending: true });
 
@@ -530,7 +531,7 @@ const QueuePriorityManager = () => {
 
       // Find ongoing appointment
       const ongoingAppointment = queueAppointments.find(apt => apt.status === 'ongoing');
-      
+
       // Calculate wait times for each appointment
       const waitTimeUpdates = [];
       let cumulativeDuration = 0;
@@ -545,10 +546,10 @@ const QueuePriorityManager = () => {
           // Check if this is the next appointment after ongoing (should be 0 wait time if urgent and confirmed)
           const nextPositionAfterOngoing = ongoingAppointment ? (ongoingAppointment.queue_position || 0) + 1 : 1;
           const isNextInLine = appointment.queue_position === nextPositionAfterOngoing;
-          
+
           // If urgent confirmed and next in line, wait time is 0
-          const isUrgentConfirmedNext = 
-            appointment.priority_level === 'urgent' && 
+          const isUrgentConfirmedNext =
+            appointment.priority_level === 'urgent' &&
             appointment.status === 'confirmed' &&
             isNextInLine;
 
@@ -558,7 +559,7 @@ const QueuePriorityManager = () => {
           } else {
             // Calculate wait time based on appointments ahead
             // Find all appointments before this one (excluding ongoing)
-            const appointmentsAhead = queueAppointments.filter(apt => 
+            const appointmentsAhead = queueAppointments.filter(apt =>
               apt.queue_position < appointment.queue_position &&
               apt.status !== 'ongoing' // Don't count ongoing as wait time
             );
@@ -595,7 +596,7 @@ const QueuePriorityManager = () => {
       for (const update of waitTimeUpdates) {
         const { error: updateError } = await supabase
           .from('appointments')
-          .update({ 
+          .update({
             estimated_wait_time: update.estimated_wait_time,
             updated_at: new Date().toISOString()
           })
@@ -623,7 +624,7 @@ const QueuePriorityManager = () => {
         .select('id, queue_position, priority_level, appointment_time, created_at, status, total_duration')
         .eq('barber_id', barberId)
         .eq('appointment_date', appointmentDate)
-        .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+        .in('status', ['confirmed', 'pending', 'confirmed', 'ongoing'])
         .not('queue_position', 'is', null)
         .order('queue_position', { ascending: true });
 
@@ -633,10 +634,10 @@ const QueuePriorityManager = () => {
       const ongoingAppointment = queueAppointments.find(apt => apt.status === 'ongoing');
 
       // Separate appointments by priority
-      const urgentAppointments = queueAppointments.filter(apt => 
+      const urgentAppointments = queueAppointments.filter(apt =>
         apt.priority_level === 'urgent' && apt.status !== 'ongoing'
       );
-      const normalAppointments = queueAppointments.filter(apt => 
+      const normalAppointments = queueAppointments.filter(apt =>
         (apt.priority_level !== 'urgent' || !apt.priority_level) && apt.status !== 'ongoing'
       );
 
@@ -686,7 +687,7 @@ const QueuePriorityManager = () => {
       for (const update of updates) {
         const { error: updateError } = await supabase
           .from('appointments')
-          .update({ 
+          .update({
             queue_position: update.queue_position,
             updated_at: new Date().toISOString()
           })
@@ -719,7 +720,7 @@ const QueuePriorityManager = () => {
         .select('id, queue_position')
         .eq('barber_id', appointment.barber_id)
         .eq('appointment_date', appointment.appointment_date)
-        .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
+        .in('status', ['confirmed', 'pending', 'confirmed', 'ongoing'])
         .not('queue_position', 'is', null)
         .order('queue_position', { ascending: true });
 
@@ -760,7 +761,7 @@ const QueuePriorityManager = () => {
       for (const update of updates) {
         const { error: updateError } = await supabase
           .from('appointments')
-          .update({ 
+          .update({
             queue_position: update.queue_position,
             updated_at: new Date().toISOString()
           })
@@ -817,7 +818,7 @@ const QueuePriorityManager = () => {
         .rpc('process_scheduled_appointments_for_queue');
 
       if (error) throw error;
-      
+
       setSuccess(`Processed ${data} scheduled appointments for queue insertion`);
       fetchAppointments();
     } catch (error) {
@@ -868,31 +869,63 @@ const QueuePriorityManager = () => {
   // Calculate actual estimated time based on queue position and service duration
   const calculateEstimatedTime = (appointment, allAppointments) => {
     if (!appointment.queue_position) return 'N/A';
-    
+
+    // Get current time safely
+    const now = new Date();
+    const isToday = selectedDate === now.toISOString().split('T')[0];
+
     // Start time is 8:00 AM (480 minutes from midnight)
-    const startTime = 8 * 60; // 8:00 AM in minutes
-    let currentTime = startTime;
-    
+    const openingTime = 8 * 60;
+
+    // For today, the 'baseline' is the current time or opening time, whichever is later
+    let baselineTime = openingTime;
+    if (isToday) {
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      baselineTime = Math.max(openingTime, currentMinutes);
+    }
+
+    // If we have an actual estimated_wait_time from the database, use it relative to our real-time baseline
+    if (appointment.estimated_wait_time !== null && appointment.estimated_wait_time !== undefined) {
+      // If ongoing, the wait time is 0, so it will show 'baselineTime' or we should use its actual start time if available
+      if (appointment.status === 'ongoing' && appointment.appointment_time) {
+        return formatTime(appointment.appointment_time);
+      }
+
+      const totalMinutes = baselineTime + appointment.estimated_wait_time;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      return `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+    }
+
+    let currentTime = baselineTime;
+    const buffer = 5; // 5 minute buffer between appointments
+
     // Calculate time for all appointments before this one
-    for (let i = 1; i < appointment.queue_position; i++) {
-      const prevAppointment = allAppointments.find(apt => apt.queue_position === i);
-      if (prevAppointment) {
-        const duration = prevAppointment.total_duration || 30; // Default 30 minutes
-        currentTime += duration;
-        
+    const sortedAppointments = [...allAppointments].sort((a, b) =>
+      (a.queue_position || 999) - (b.queue_position || 999)
+    );
+
+    for (const apt of sortedAppointments) {
+      if (apt.queue_position < appointment.queue_position) {
+        // If there's an ongoing appointment, we don't know exactly when it ends, 
+        // but we can estimate based on duration
+        const duration = apt.total_duration || 30;
+        currentTime += (duration + buffer);
+
         // Skip lunch break (12:00 PM - 1:00 PM)
         if (currentTime >= 12 * 60 && currentTime < 13 * 60) {
-          currentTime = 13 * 60; // Move to 1:00 PM
+          currentTime = 13 * 60;
         }
       }
     }
-    
-    // Convert minutes back to time format
+
     const hours = Math.floor(currentTime / 60);
     const minutes = currentTime % 60;
     const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
     const ampm = hours >= 12 ? 'PM' : 'AM';
-    
+
     return `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
 
@@ -902,7 +935,7 @@ const QueuePriorityManager = () => {
       is_double_booking: appointment.is_double_booking,
       double_booking_data: appointment.double_booking_data
     });
-    
+
     if (appointment.is_double_booking) {
       console.log('✅ Found is_double_booking flag');
       return 'Book for Friend';
@@ -921,7 +954,7 @@ const QueuePriorityManager = () => {
       } else {
         console.log('📋 double_booking_data is already an object:', data);
       }
-      
+
       if (data && (data.book_for_friend || data.friend_name)) {
         console.log('✅ Found friend booking in data');
         return 'Book for Friend';
@@ -934,7 +967,7 @@ const QueuePriorityManager = () => {
   // Get friend contact information
   const getFriendInfo = (appointment) => {
     console.log('🔍 Checking friend info for appointment:', appointment.id, appointment.double_booking_data);
-    
+
     if (appointment.double_booking_data) {
       // Check if it's already an object or needs parsing
       let data = appointment.double_booking_data;
@@ -949,7 +982,7 @@ const QueuePriorityManager = () => {
       } else {
         console.log('📋 double_booking_data is already an object:', data);
       }
-      
+
       if (data && data.friend_name) {
         const friendInfo = {
           name: data.friend_name,
@@ -960,7 +993,7 @@ const QueuePriorityManager = () => {
         return friendInfo;
       }
     }
-    
+
     console.log('❌ No friend info found');
     return null;
   };
@@ -1217,231 +1250,274 @@ const QueuePriorityManager = () => {
 
           {/* Queue List */}
           <div className="card">
-                <div className="card-header">
-                  <h5 className="mb-0">Queue Appointments ({appointments.length})</h5>
+            <div className="card-header">
+              <h5 className="mb-0">Queue Appointments ({appointments.length})</h5>
+            </div>
+            <div className="card-body p-0">
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
                 </div>
-                <div className="card-body p-0">
-                  {loading ? (
-                    <div className="text-center py-4">
-                      <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                      </div>
-                    </div>
-                  ) : appointments.length === 0 ? (
-                    <div className="text-center py-5">
-                      <i className="bi bi-queue-list display-1 text-muted mb-3"></i>
-                      <h5>No appointments in queue</h5>
-                      <p className="text-muted">Select a date to view the queue for that day.</p>
-                    </div>
-                  ) : (
-                    <div className="table-responsive">
-                      <table className="table table-hover mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th className="text-center" style={{width: '80px'}}>Queue #</th>
-                            <th>Customer</th>
-                            <th>Barber</th>
-                            <th>Service</th>
-                            <th>Estimated Time</th>
-                            <th>Status</th>
-                            <th className="text-center">Priority Status</th>
-                            <th className="text-center">Priority</th>
-                            <th className="text-center">Wait Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {appointments.map((appointment, index) => (
-                            <tr key={appointment.id}>
-                              <td className="text-center">
-                                <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold mx-auto" 
-                                     style={{width: '40px', height: '40px', fontSize: '16px'}}>
-                                  {appointment.queue_position}
-                                </div>
-                              </td>
-                              <td>
-                                <div>
-                                  <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
-                                  <small className="text-muted d-block">{appointment.customer?.email}</small>
-                                  {appointment.customer?.phone && (
-                                    <small className="text-muted d-block">
-                                      <i className="bi bi-telephone me-1"></i>
-                                      {appointment.customer.phone}
-                                    </small>
-                                  )}
-                                  
-                                  {/* Priority Request Status */}
-                                  {appointment.priority_request_status === 'pending' && !appointment.is_urgent && (
-                                    <div className="mt-2 p-2 bg-warning bg-opacity-10 rounded border border-warning">
-                                      <small className="text-warning fw-bold d-block">
-                                        <i className="bi bi-clock-history me-1"></i>
-                                        Priority Request Pending
-                                      </small>
-                                      <small className="text-muted d-block">
-                                        Requested: {appointment.priority_requested_at ? new Date(appointment.priority_requested_at).toLocaleString() : 'N/A'}
-                                      </small>
-                                      <div className="mt-2 d-flex gap-1">
-                                        <button
-                                          className="btn btn-sm btn-success"
-                                          onClick={() => approvePriorityRequest(appointment.id)}
-                                          disabled={updatingAppointments.has(appointment.id)}
-                                          title="Approve (₱100 fee)"
-                                        >
-                                          {updatingAppointments.has(appointment.id) ? (
-                                            <span className="spinner-border spinner-border-sm" role="status"></span>
-                                          ) : (
-                                            <>
-                                              <i className="bi bi-check-circle me-1"></i>
-                                              Approve
-                                            </>
-                                          )}
-                                        </button>
-                                        <button
-                                          className="btn btn-sm btn-danger"
-                                          onClick={() => {
-                                            const notes = window.prompt('Rejection reason (optional):');
-                                            rejectPriorityRequest(appointment.id, notes);
-                                          }}
-                                          disabled={updatingAppointments.has(appointment.id)}
-                                          title="Reject"
-                                        >
-                                          <i className="bi bi-x-circle me-1"></i>
-                                          Reject
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {appointment.priority_request_status === 'approved' && appointment.is_urgent && (
-                                    <div className="mt-2 p-2 bg-success bg-opacity-10 rounded border border-success">
-                                      <small className="text-success fw-bold d-block">
-                                        <i className="bi bi-check-circle me-1"></i>
-                                        Priority Approved - ₱100 urgent fee applied
-                                      </small>
-                                      {appointment.total_price && (
-                                        <small className="text-muted d-block mt-1">
-                                          Total: ₱{Number(appointment.total_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </small>
-                                      )}
-                                    </div>
-                                  )}
-                                  {appointment.priority_request_status === 'rejected' && (
-                                    <div className="mt-2">
-                                      <small className="text-danger fw-bold d-block">
-                                        <i className="bi bi-x-circle me-1"></i>
-                                        Priority Rejected
-                                      </small>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Show friend contact info if it's a "Book for Friend" appointment */}
-                                  {(() => {
-                                    const bookingType = getBookingType(appointment);
-                                    const friendInfo = getFriendInfo(appointment);
-                                    
-                                    if (bookingType === 'Book for Friend' && friendInfo) {
-                                      return (
-                                        <div className="mt-2 p-2 bg-info bg-opacity-10 rounded border border-info">
-                                          <small className="text-info fw-bold d-block">
-                                            <i className="bi bi-person-heart me-1"></i>
-                                            Friend: {friendInfo.name}
-                                          </small>
-                                          <small className="text-muted d-block">
-                                            <i className="bi bi-telephone me-1"></i>
-                                            {friendInfo.phone}
-                                          </small>
-                                        </div>
-                                      );
-                                    }
-                                    return null;
-                                  })()}
-                                </div>
-                              </td>
-                              <td>
-                                <div className="fw-medium">{appointment.barber?.full_name || 'Unknown'}</div>
-                              </td>
-                              <td>
-                                <div className="fw-medium">{appointment.service?.name || 'Unknown'}</div>
-                                {appointment.service?.duration && (
+              ) : appointments.length === 0 ? (
+                <div className="text-center py-5">
+                  <i className="bi bi-queue-list display-1 text-muted mb-3"></i>
+                  <h5>No appointments in queue</h5>
+                  <p className="text-muted">Select a date to view the queue for that day.</p>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-hover mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th className="text-center" style={{ width: '80px' }}>Queue #</th>
+                        <th>Customer</th>
+                        <th>Barber</th>
+                        <th>Service</th>
+                        <th>Estimated Time</th>
+                        <th>Status</th>
+                        <th className="text-center">Priority Status</th>
+                        <th className="text-center">Priority</th>
+                        <th className="text-center">Wait Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appointments.filter(a => a.status !== 'completed').map((appointment, index) => (
+                        <tr key={appointment.id} className={appointment.status === 'ongoing' ? 'table-primary shadow-sm' : ''}>
+                          <td className="text-center">
+                            <div className={`rounded-circle ${appointment.status === 'ongoing' ? 'bg-success' : 'bg-primary'} text-white d-flex align-items-center justify-content-center fw-bold mx-auto`}
+                              style={{ width: '40px', height: '40px', fontSize: '16px' }}>
+                              {appointment.queue_position}
+                            </div>
+                          </td>
+                          <td>
+                            <div>
+                              <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
+                              <small className="text-muted d-block">{appointment.customer?.email}</small>
+                              {appointment.customer?.phone && (
+                                <small className="text-muted d-block">
+                                  <i className="bi bi-telephone me-1"></i>
+                                  {appointment.customer.phone}
+                                </small>
+                              )}
+
+                              {/* Priority Request Status */}
+                              {appointment.priority_request_status === 'pending' && !appointment.is_urgent && (
+                                <div className="mt-2 p-2 bg-warning bg-opacity-10 rounded border border-warning">
+                                  <small className="text-warning fw-bold d-block">
+                                    <i className="bi bi-clock-history me-1"></i>
+                                    Priority Request Pending
+                                  </small>
                                   <small className="text-muted d-block">
-                                    {appointment.service.duration} min
+                                    Requested: {appointment.priority_requested_at ? new Date(appointment.priority_requested_at).toLocaleString() : 'N/A'}
                                   </small>
-                                )}
-                              </td>
-                              <td>
-                                <div className="fw-medium">{calculateEstimatedTime(appointment, appointments)}</div>
-                                {appointment.auto_inserted_at && (
-                                  <small className="text-success d-block">
-                                    <i className="bi bi-arrow-right-circle me-1"></i>
-                                    Auto-inserted
-                                  </small>
-                                )}
-                              </td>
-                              <td>
-                                <span className={`badge bg-${
-                                  appointment.status === 'scheduled' ? 'success' :
-                                  appointment.status === 'pending' ? 'warning' :
-                                  appointment.status === 'ongoing' ? 'primary' :
-                                  'secondary'
-                                }`}>
-                                  {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                </span>
-                              </td>
-                              <td className="text-center">
-                                <span className={`badge ${appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-primary'} fs-6 px-3 py-2`}>
-                                  <i className={`bi bi-${appointment.priority_level === 'urgent' ? 'exclamation-triangle-fill' : 'circle-fill'} me-1`}></i>
-                                  {appointment.priority_level ? appointment.priority_level.charAt(0).toUpperCase() + appointment.priority_level.slice(1) : 'Normal'}
-                                </span>
-                              </td>
-                              <td>
-                                <div className="d-flex flex-column gap-2">
-                                  <div className="d-flex gap-1">
+                                  <div className="mt-2 d-flex gap-1">
                                     <button
-                                      className={`btn btn-sm ${appointment.priority_level === 'normal' ? 'btn-primary' : 'btn-outline-primary'} ${updatingAppointments.has(appointment.id) ? 'disabled' : ''}`}
-                                      onClick={() => handlePriorityChange(appointment, 'normal')}
-                                      disabled={updatingAppointments.has(appointment.id) || appointment.priority_level === 'normal'}
-                                      title="Set to Normal Priority"
-                                      style={{minWidth: '70px'}}
+                                      className="btn btn-sm btn-success"
+                                      onClick={() => approvePriorityRequest(appointment.id)}
+                                      disabled={updatingAppointments.has(appointment.id)}
+                                      title="Approve (₱100 fee)"
                                     >
-                                      {updatingAppointments.has(appointment.id) && appointment.priority_level === 'normal' ? (
+                                      {updatingAppointments.has(appointment.id) ? (
                                         <span className="spinner-border spinner-border-sm" role="status"></span>
                                       ) : (
                                         <>
-                                          <i className="bi bi-circle-fill me-1"></i>
-                                          Normal
+                                          <i className="bi bi-check-circle me-1"></i>
+                                          Approve
                                         </>
                                       )}
                                     </button>
                                     <button
-                                      className={`btn btn-sm ${appointment.priority_level === 'urgent' ? 'btn-danger' : 'btn-outline-danger'} ${updatingAppointments.has(appointment.id) ? 'disabled' : ''}`}
-                                      onClick={() => handlePriorityChange(appointment, 'urgent')}
-                                      disabled={updatingAppointments.has(appointment.id) || appointment.priority_level === 'urgent'}
-                                      title="Set to Urgent Priority"
-                                      style={{minWidth: '70px'}}
+                                      className="btn btn-sm btn-danger"
+                                      onClick={() => {
+                                        const notes = window.prompt('Rejection reason (optional):');
+                                        rejectPriorityRequest(appointment.id, notes);
+                                      }}
+                                      disabled={updatingAppointments.has(appointment.id)}
+                                      title="Reject"
                                     >
-                                      {updatingAppointments.has(appointment.id) && appointment.priority_level === 'urgent' ? (
-                                        <span className="spinner-border spinner-border-sm" role="status"></span>
-                                      ) : (
-                                        <>
-                                          <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                                          Urgent
-                                        </>
-                                      )}
+                                      <i className="bi bi-x-circle me-1"></i>
+                                      Reject
                                     </button>
                                   </div>
                                 </div>
-                              </td>
-                              <td>
-                                <span className="text-muted">
-                                  {formatWaitTime(appointment.estimated_wait_time)}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                              )}
+                              {appointment.priority_request_status === 'approved' && appointment.is_urgent && (
+                                <div className="mt-2 p-2 bg-success bg-opacity-10 rounded border border-success">
+                                  <small className="text-success fw-bold d-block">
+                                    <i className="bi bi-check-circle me-1"></i>
+                                    Priority Approved - ₱100 urgent fee applied
+                                  </small>
+                                  {appointment.total_price && (
+                                    <small className="text-muted d-block mt-1">
+                                      Total: ₱{Number(appointment.total_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </small>
+                                  )}
+                                </div>
+                              )}
+                              {appointment.priority_request_status === 'rejected' && (
+                                <div className="mt-2">
+                                  <small className="text-danger fw-bold d-block">
+                                    <i className="bi bi-x-circle me-1"></i>
+                                    Priority Rejected
+                                  </small>
+                                </div>
+                              )}
+
+                              {/* Show friend contact info if it's a "Book for Friend" appointment */}
+                              {(() => {
+                                const bookingType = getBookingType(appointment);
+                                const friendInfo = getFriendInfo(appointment);
+
+                                if (bookingType === 'Book for Friend' && friendInfo) {
+                                  return (
+                                    <div className="mt-2 p-2 bg-info bg-opacity-10 rounded border border-info">
+                                      <small className="text-info fw-bold d-block">
+                                        <i className="bi bi-person-heart me-1"></i>
+                                        Friend: {friendInfo.name}
+                                      </small>
+                                      <small className="text-muted d-block">
+                                        <i className="bi bi-telephone me-1"></i>
+                                        {friendInfo.phone}
+                                      </small>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="fw-medium">{appointment.barber?.full_name || 'Unknown'}</div>
+                          </td>
+                          <td>
+                            <div className="fw-medium">{appointment.service?.name || 'Unknown'}</div>
+                            {appointment.service?.duration && (
+                              <small className="text-muted d-block">
+                                {appointment.service.duration} min
+                              </small>
+                            )}
+                          </td>
+                          <td>
+                            <div className="fw-medium">{calculateEstimatedTime(appointment, appointments)}</div>
+                            {appointment.auto_inserted_at && (
+                              <small className="text-success d-block">
+                                <i className="bi bi-arrow-right-circle me-1"></i>
+                                Auto-inserted
+                              </small>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`badge bg-${appointment.status === 'scheduled' || appointment.status === 'confirmed' ? 'success' :
+                              appointment.status === 'pending' ? 'warning' :
+                                appointment.status === 'ongoing' ? 'primary' :
+                                  appointment.status === 'cancelled' || appointment.status === 'cancel' ? 'danger' :
+                                    'secondary'
+                              }`}>
+                              {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <span className={`badge ${appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-primary'} fs-6 px-3 py-2`}>
+                              <i className={`bi bi-${appointment.priority_level === 'urgent' ? 'exclamation-triangle-fill' : 'circle-fill'} me-1`}></i>
+                              {appointment.priority_level ? appointment.priority_level.charAt(0).toUpperCase() + appointment.priority_level.slice(1) : 'Normal'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column gap-2">
+                              <div className="d-flex gap-1">
+                                <button
+                                  className={`btn btn-sm ${appointment.priority_level === 'normal' ? 'btn-primary' : 'btn-outline-primary'} ${updatingAppointments.has(appointment.id) ? 'disabled' : ''}`}
+                                  onClick={() => handlePriorityChange(appointment, 'normal')}
+                                  disabled={updatingAppointments.has(appointment.id) || appointment.priority_level === 'normal'}
+                                  title="Set to Normal Priority"
+                                  style={{ minWidth: '70px' }}
+                                >
+                                  {updatingAppointments.has(appointment.id) && appointment.priority_level === 'normal' ? (
+                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                  ) : (
+                                    <>
+                                      <i className="bi bi-circle-fill me-1"></i>
+                                      Normal
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  className={`btn btn-sm ${appointment.priority_level === 'urgent' ? 'btn-danger' : 'btn-outline-danger'} ${updatingAppointments.has(appointment.id) ? 'disabled' : ''}`}
+                                  onClick={() => handlePriorityChange(appointment, 'urgent')}
+                                  disabled={updatingAppointments.has(appointment.id) || appointment.priority_level === 'urgent'}
+                                  title="Set to Urgent Priority"
+                                  style={{ minWidth: '70px' }}
+                                >
+                                  {updatingAppointments.has(appointment.id) && appointment.priority_level === 'urgent' ? (
+                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                  ) : (
+                                    <>
+                                      <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                      Urgent
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="text-center fw-bold">
+                            {formatWaitTime(appointment.estimated_wait_time)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tbody>
+                      {appointments.filter(a => a.status === 'completed').map((appointment, index) => (
+                        <tr key={appointment.id} className="table-secondary text-muted">
+                          <td className="text-center">
+                            <div className="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold mx-auto"
+                              style={{ width: '40px', height: '40px', fontSize: '16px' }}>
+                              <i className="bi bi-check-circle"></i>
+                            </div>
+                          </td>
+                          <td>
+                            <div>
+                              <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
+                              <small className="d-block">{appointment.customer?.email}</small>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="fw-medium">{appointment.barber?.full_name || 'Unknown'}</div>
+                          </td>
+                          <td>
+                            <div className="fw-medium">{appointment.service?.name || 'Unknown'}</div>
+                          </td>
+                          <td>
+                            <div className="fw-medium">{calculateEstimatedTime(appointment, appointments)}</div>
+                          </td>
+                          <td>
+                            <span className="badge bg-success">Completed</span>
+                          </td>
+                          <td className="text-center">
+                            <span className={`badge ${appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-primary'} fs-6 px-3 py-2`}>
+                              <i className={`bi bi-${appointment.priority_level === 'urgent' ? 'exclamation-triangle-fill' : 'circle-fill'} me-1`}></i>
+                              {appointment.priority_level ? appointment.priority_level.charAt(0).toUpperCase() + appointment.priority_level.slice(1) : 'Normal'}
+                            </span>
+                          </td>
+                          <td>
+                            <button className="btn btn-sm btn-outline-secondary" disabled>
+                              <i className="bi bi-check-circle me-1"></i>
+                              Completed
+                            </button>
+                          </td>
+                          <td className="text-center">
+                            N/A
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1467,7 +1543,7 @@ const QueuePriorityManager = () => {
                   <i className="bi bi-info-circle me-2"></i>
                   Changing priority will automatically reorder the queue.
                 </div>
-                
+
                 <div className="card mb-3">
                   <div className="card-body">
                     <h6 className="card-title">Appointment Details</h6>

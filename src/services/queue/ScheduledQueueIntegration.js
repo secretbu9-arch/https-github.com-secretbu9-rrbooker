@@ -1,7 +1,7 @@
-// services/EnhancedScheduledQueueIntegration.js
+// services/ScheduledQueueIntegration.js
 import { supabase } from '../../supabaseClient';
 
-class EnhancedScheduledQueueIntegration {
+class ScheduledQueueIntegration {
   constructor() {
     this.BUSINESS_HOURS = { start: '08:00', end: '17:00' };
     this.LUNCH_BREAK = { start: '12:00', end: '13:00' };
@@ -36,16 +36,16 @@ class EnhancedScheduledQueueIntegration {
       if (error) throw error;
 
       // Separate scheduled and queue appointments
-      const scheduled = appointments?.filter(apt => 
+      const scheduled = appointments?.filter(apt =>
         apt.appointment_type === 'scheduled' && apt.appointment_time && apt.status === 'scheduled'
       ) || [];
-      
-      const queue = appointments?.filter(apt => 
+
+      const queue = appointments?.filter(apt =>
         apt.appointment_type === 'queue' && apt.status === 'scheduled' && apt.queue_position
       ) || [];
-      
+
       // Get pending appointments (both scheduled and queue that need barber acceptance)
-      const pending = appointments?.filter(apt => 
+      const pending = appointments?.filter(apt =>
         apt.status === 'pending'
       ) || [];
 
@@ -54,7 +54,7 @@ class EnhancedScheduledQueueIntegration {
 
       // Build integrated timeline
       const timeline = this.buildIntegratedTimeline(scheduled, queue);
-      
+
       // Calculate statistics
       const stats = this.calculateTimelineStats(timeline, scheduled, queue, pending);
 
@@ -89,7 +89,7 @@ class EnhancedScheduledQueueIntegration {
     const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
 
     // Sort scheduled appointments by time
-    const sortedScheduled = [...scheduled].sort((a, b) => 
+    const sortedScheduled = [...scheduled].sort((a, b) =>
       this.timeToMinutes(a.appointment_time) - this.timeToMinutes(b.appointment_time)
     );
 
@@ -239,8 +239,8 @@ class EnhancedScheduledQueueIntegration {
     }
 
     // Add time for scheduled appointments that might delay this queue appointment
-    const scheduledBefore = timeline.filter(item => 
-      item.is_scheduled && 
+    const scheduledBefore = timeline.filter(item =>
+      item.is_scheduled &&
       this.timeToMinutes(item.start_time) > currentTime
     );
 
@@ -257,7 +257,7 @@ class EnhancedScheduledQueueIntegration {
   async canAddAppointment(barberId, date, appointmentType, timeSlot = null, duration = 30) {
     try {
       const timeline = await this.getIntegratedTimeline(barberId, date);
-      
+
       if (appointmentType === 'scheduled') {
         return this.canAddScheduledAppointment(timeline, timeSlot, duration);
       } else {
@@ -285,16 +285,16 @@ class EnhancedScheduledQueueIntegration {
     const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
 
     if (startTime < lunchEnd && endTime > lunchStart) {
-      return { 
-        canAdd: false, 
-        reason: 'Appointment would cross lunch break period (12:00 PM - 1:00 PM)' 
+      return {
+        canAdd: false,
+        reason: 'Appointment would cross lunch break period (12:00 PM - 1:00 PM)'
       };
     }
 
     // Check for conflicts with existing appointments
     const conflicts = timeline.filter(item => {
       if (item.is_break) return false;
-      
+
       const itemStart = item.start_minutes;
       const itemEnd = item.end_minutes;
 
@@ -302,9 +302,9 @@ class EnhancedScheduledQueueIntegration {
     });
 
     if (conflicts.length > 0) {
-      return { 
-        canAdd: false, 
-        reason: `Conflicts with existing appointment at ${conflicts[0].start_time}` 
+      return {
+        canAdd: false,
+        reason: `Conflicts with existing appointment at ${conflicts[0].start_time}`
       };
     }
 
@@ -316,11 +316,11 @@ class EnhancedScheduledQueueIntegration {
    */
   canAddQueueAppointment(timeline) {
     const queueCount = timeline.filter(item => item.is_queue).length;
-    
+
     if (queueCount >= this.MAX_QUEUE_CAPACITY) {
-      return { 
-        canAdd: false, 
-        reason: `Queue is at maximum capacity (${this.MAX_QUEUE_CAPACITY})` 
+      return {
+        canAdd: false,
+        reason: `Queue is at maximum capacity (${this.MAX_QUEUE_CAPACITY})`
       };
     }
 
@@ -345,4 +345,4 @@ class EnhancedScheduledQueueIntegration {
   }
 }
 
-export default new EnhancedScheduledQueueIntegration();
+export default new ScheduledQueueIntegration();

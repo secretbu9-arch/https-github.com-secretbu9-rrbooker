@@ -28,23 +28,23 @@ const Profile = () => {
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
-      
+
       // Get current authenticated user
       const { data: authUser, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
-      
+
       if (authUser?.user) {
         setUser(authUser.user);
-        
+
         // Fetch user profile from users table
         const { data: profileData, error: profileError } = await supabase
           .from('users')
           .select('*')
           .eq('email', authUser.user.email)
           .single();
-          
+
         if (profileError) throw profileError;
-        
+
         setProfile(profileData);
         setFormData({
           full_name: profileData.full_name || '',
@@ -52,7 +52,7 @@ const Profile = () => {
           email: profileData.email || '',
           barber_status: profileData.barber_status || 'available'
         });
-        
+
         // Set profile picture URL if exists
         if (profileData.profile_picture_url) {
           setProfilePictureUrl(profileData.profile_picture_url);
@@ -68,12 +68,12 @@ const Profile = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Handle phone number with +63 prefix
     if (name === 'phone') {
       // Remove all non-digit characters
       let digits = value.replace(/\D/g, '');
-      
+
       // If user is typing, extract only digits after +63
       if (value.startsWith('+63')) {
         // Get digits after +63
@@ -81,16 +81,24 @@ const Profile = () => {
       } else if (digits.startsWith('63')) {
         // If user typed 63 first, remove it and get remaining digits
         digits = digits.substring(2);
+      } else if (digits.startsWith('0')) {
+        // Strip leading 0
+        digits = digits.substring(1);
       }
-      
+
+      // Enforce starting with 9
+      if (digits.length > 0 && digits[0] !== '9') {
+        digits = '';
+      }
+
       // Limit to 10 digits
       if (digits.length > 10) {
         digits = digits.substring(0, 10);
       }
-      
+
       // Add +63 prefix if we have digits
       const formatted = digits.length > 0 ? `+63${digits}` : '';
-      
+
       setFormData(prev => ({
         ...prev,
         [name]: formatted
@@ -141,7 +149,7 @@ const Profile = () => {
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        
+
         // Provide specific error messages
         if (uploadError.message.includes('not found') || uploadError.message.includes('bucket')) {
           throw new Error('Storage bucket "profile-pictures" not found. Please create the bucket in Supabase Storage.');
@@ -181,15 +189,15 @@ const Profile = () => {
       // Update local state
       setProfilePictureUrl(imageUrl);
       setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
-      
+
       // Clear message after 3 seconds
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
 
     } catch (error) {
       console.error('Error uploading image:', error);
-      setMessage({ 
-        type: 'error', 
-        text: error.message || 'Failed to upload profile picture. Please try again.' 
+      setMessage({
+        type: 'error',
+        text: error.message || 'Failed to upload profile picture. Please try again.'
       });
     } finally {
       setUploadingImage(false);
@@ -215,7 +223,7 @@ const Profile = () => {
       // Update local state
       setProfilePictureUrl('');
       setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
-      
+
       // Clear message after 3 seconds
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
 
@@ -256,10 +264,10 @@ const Profile = () => {
       await fetchUserProfile();
       setIsEditing(false);
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
-      
+
       // Clear message after 3 seconds
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      
+
     } catch (error) {
       console.error('Error updating profile:', error);
       setMessage({ type: 'error', text: error.message || 'Failed to update profile' });
@@ -378,9 +386,9 @@ const Profile = () => {
           <div className="card shadow-sm mb-4">
             <div className="card-header bg-dark text-white">
               <div className="d-flex align-items-center">
-                <img 
-                  src={logoImage} 
-                  alt="RAF & ROK" 
+                <img
+                  src={logoImage}
+                  alt="RAF & ROK"
                   height="40"
                   className="me-3"
                   style={{
@@ -407,9 +415,9 @@ const Profile = () => {
             <div className={`alert alert-${message.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show`} role="alert">
               <i className={`bi ${message.type === 'error' ? 'bi-exclamation-triangle' : 'bi-check-circle'} me-2`}></i>
               {message.text}
-              <button 
-                type="button" 
-                className="btn-close" 
+              <button
+                type="button"
+                className="btn-close"
                 onClick={() => setMessage({ type: '', text: '' })}
               ></button>
             </div>
@@ -433,7 +441,7 @@ const Profile = () => {
                     style={{ width: '150px', height: '150px', objectFit: 'cover' }}
                   />
                 ) : (
-                  <div 
+                  <div
                     className="rounded-circle border border-3 border-secondary d-flex align-items-center justify-content-center mx-auto"
                     style={{ width: '150px', height: '150px', backgroundColor: '#f8f9fa' }}
                   >
@@ -441,7 +449,7 @@ const Profile = () => {
                   </div>
                 )}
               </div>
-              
+
               <div className="d-flex justify-content-center gap-2">
                 <label className="btn btn-primary btn-sm" htmlFor="profilePictureInput">
                   <i className="bi bi-camera me-1"></i>
@@ -455,7 +463,7 @@ const Profile = () => {
                   style={{ display: 'none' }}
                   disabled={uploadingImage}
                 />
-                
+
                 {profilePictureUrl && (
                   <button
                     className="btn btn-outline-danger btn-sm"
@@ -467,7 +475,7 @@ const Profile = () => {
                   </button>
                 )}
               </div>
-              
+
               {uploadingImage && (
                 <div className="mt-3">
                   <div className="spinner-border spinner-border-sm text-primary me-2" role="status">
@@ -476,7 +484,7 @@ const Profile = () => {
                   <small className="text-muted">Uploading image...</small>
                 </div>
               )}
-              
+
               <div className="mt-2">
                 <small className="text-muted">
                   <i className="bi bi-info-circle me-1"></i>
@@ -494,7 +502,7 @@ const Profile = () => {
                 <h5 className="mb-0">Profile Information</h5>
               </div>
               {!isEditing && (
-                <button 
+                <button
                   className="btn btn-outline-primary btn-sm"
                   onClick={() => setIsEditing(true)}
                 >
@@ -503,7 +511,7 @@ const Profile = () => {
                 </button>
               )}
             </div>
-            
+
             <div className="card-body">
               {isEditing ? (
                 /* Edit Form */
@@ -525,20 +533,20 @@ const Profile = () => {
                         placeholder="Enter your full name"
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="phone" className="form-label">
                         <i className="bi bi-telephone me-1"></i>
                         Phone Number
                       </label>
                       <div style={{ position: 'relative' }}>
-                        <img 
+                        <img
                           src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png"
                           alt="Philippines"
-                          style={{ 
-                            position: 'absolute', 
-                            left: '12px', 
-                            top: '50%', 
+                          style={{
+                            position: 'absolute',
+                            left: '12px',
+                            top: '50%',
                             transform: 'translateY(-50%)',
                             width: '20px',
                             height: '15px',
@@ -562,7 +570,7 @@ const Profile = () => {
                       <small className="form-text text-muted">Format: +63 followed by 10 digits</small>
                     </div>
                   </div>
-                  
+
                   <div className="row">
                     <div className="col-md-6 mb-3">
                       <label htmlFor="email" className="form-label">
@@ -580,7 +588,7 @@ const Profile = () => {
                       />
                       <div className="form-text">Email address cannot be modified</div>
                     </div>
-                    
+
                     {profile.role === 'barber' && (
                       <>
                         <div className="col-md-6 mb-3">
@@ -619,10 +627,10 @@ const Profile = () => {
                       </>
                     )}
                   </div>
-                  
+
                   <div className="d-flex gap-2 mt-4">
-                    <button 
-                      type="submit" 
+                    <button
+                      type="submit"
                       className="btn btn-primary"
                       disabled={saving}
                     >
@@ -638,8 +646,8 @@ const Profile = () => {
                         </>
                       )}
                     </button>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="btn btn-outline-secondary"
                       onClick={handleCancel}
                       disabled={saving}
@@ -660,7 +668,7 @@ const Profile = () => {
                       </div>
                       <p className="text-muted mb-0">{profile.full_name || 'Not provided'}</p>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <div className="d-flex align-items-center mb-2">
                         <i className="bi bi-envelope text-primary me-2"></i>
@@ -669,7 +677,7 @@ const Profile = () => {
                       <p className="text-muted mb-0">{profile.email}</p>
                     </div>
                   </div>
-                  
+
                   <div className="row">
                     <div className="col-md-6 mb-3">
                       <div className="d-flex align-items-center mb-2">
@@ -678,7 +686,7 @@ const Profile = () => {
                       </div>
                       <p className="text-muted mb-0">{profile.phone || 'Not provided'}</p>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <div className="d-flex align-items-center mb-2">
                         <i className="bi bi-shield text-primary me-2"></i>
@@ -690,7 +698,7 @@ const Profile = () => {
                       </span>
                     </div>
                   </div>
-                  
+
                   {profile.role === 'barber' && (
                     <div className="row">
                       <div className="col-md-6 mb-3">
@@ -720,7 +728,7 @@ const Profile = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="row mt-4">
                     <div className="col-md-6 mb-3">
                       <div className="d-flex align-items-center mb-2">
@@ -729,7 +737,7 @@ const Profile = () => {
                       </div>
                       <p className="text-muted mb-0">{formatDate(profile.created_at)}</p>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <div className="d-flex align-items-center mb-2">
                         <i className="bi bi-arrow-clockwise text-primary me-2"></i>
@@ -762,7 +770,7 @@ const Profile = () => {
                     {profile.id}
                   </p>
                 </div>
-                
+
                 <div className="col-md-6 mb-3">
                   <div className="d-flex align-items-center mb-2">
                     <i className="bi bi-shield-check text-success me-2"></i>

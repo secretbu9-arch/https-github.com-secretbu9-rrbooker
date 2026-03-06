@@ -9,16 +9,16 @@ import { useAuth } from '../hooks/useAuth';
 import ordersService from '../../services/booking/OrdersService';
 
 const IntegratedShop = () => {
-  const { 
-    addToCart, 
-    cart, 
-    updateCartItem, 
-    removeFromCart, 
-    clearCart, 
+  const {
+    addToCart,
+    cart,
+    updateCartItem,
+    removeFromCart,
+    clearCart,
     calculateCartTotal,
     loading: cartLoading
   } = useProducts();
-  
+
   const { user } = useAuth();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
@@ -37,7 +37,7 @@ const IntegratedShop = () => {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState('info'); // 'success', 'error', 'warning', 'info'
-  
+
   // Pickup details form
   const [pickupDetails, setPickupDetails] = useState({
     pickupDate: new Date().toISOString().split('T')[0], // Auto-fill with today's date
@@ -102,7 +102,7 @@ const IntegratedShop = () => {
       // Check current cart quantity for this product
       const currentCartItem = cart.find(item => item.id === product.id);
       const currentQuantity = currentCartItem ? currentCartItem.quantity : 0;
-      
+
       // Check if adding 1 more would exceed stock
       if (currentQuantity >= product.stock_quantity) {
         showNotification(`Only ${product.stock_quantity} units available in stock.`, 'warning');
@@ -119,14 +119,14 @@ const IntegratedShop = () => {
 
   const handleQuantityChange = (productId, newQuantity) => {
     if (newQuantity < 1) return;
-    
+
     // Find the product to check stock
     const product = products.find(p => p.id === productId);
     if (product && newQuantity > product.stock_quantity) {
       showNotification(`Only ${product.stock_quantity} units available in stock.`, 'warning');
       return;
     }
-    
+
     updateCartItem(productId, newQuantity);
   };
 
@@ -136,10 +136,33 @@ const IntegratedShop = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setPickupDetails(prev => ({
-      ...prev,
-      [name]: value
-    }));
+
+    if (name === 'customerPhone') {
+      let digits = value.replace(/\D/g, '');
+      if (value.startsWith('+63')) {
+        digits = value.substring(3).replace(/\D/g, '');
+      } else if (digits.startsWith('63')) {
+        digits = digits.substring(2);
+      } else if (digits.startsWith('0')) {
+        digits = digits.substring(1);
+      }
+
+      if (digits.length > 0 && digits[0] !== '9') {
+        digits = '';
+      }
+
+      if (digits.length > 10) {
+        digits = digits.substring(0, 10);
+      }
+
+      const formatted = digits.length > 0 ? `+63${digits}` : '';
+      setPickupDetails(prev => ({ ...prev, [name]: formatted }));
+    } else {
+      setPickupDetails(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleCheckout = () => {
@@ -153,7 +176,7 @@ const IntegratedShop = () => {
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
-    
+
     if (!pickupDetails.pickupDate || !pickupDetails.pickupTime) {
       setOrderError('Please select pickup date and time.');
       return;
@@ -170,7 +193,7 @@ const IntegratedShop = () => {
 
       // Get current user
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
+
       if (!currentUser) {
         throw new Error('User not authenticated');
       }
@@ -208,7 +231,7 @@ const IntegratedShop = () => {
         setOrderSuccess(true);
         setShowPickupModal(false);
         showNotification('Order placed successfully! You will receive a confirmation notification.', 'success');
-        
+
         // Redirect to orders page after 2 seconds
         setTimeout(() => {
           navigate('/orders');
@@ -233,9 +256,9 @@ const IntegratedShop = () => {
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      product.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    
+
     // Price range filter
     let matchesPrice = true;
     if (priceRange !== 'all') {
@@ -257,7 +280,7 @@ const IntegratedShop = () => {
           matchesPrice = true;
       }
     }
-    
+
     // Stock status filter
     let matchesStock = true;
     if (stockStatus !== 'all') {
@@ -275,7 +298,7 @@ const IntegratedShop = () => {
           matchesStock = true;
       }
     }
-    
+
     return matchesSearch && matchesCategory && matchesPrice && matchesStock;
   });
 
@@ -462,9 +485,9 @@ const IntegratedShop = () => {
                               {priceRange !== 'all' && (
                                 <span className="badge bg-success">
                                   {priceRange === 'under-500' ? 'Under ₱500' :
-                                   priceRange === '500-1000' ? '₱500-₱1,000' :
-                                   priceRange === '1000-2000' ? '₱1,000-₱2,000' :
-                                   'Over ₱2,000'}
+                                    priceRange === '500-1000' ? '₱500-₱1,000' :
+                                      priceRange === '1000-2000' ? '₱1,000-₱2,000' :
+                                        'Over ₱2,000'}
                                   <button
                                     type="button"
                                     className="btn-close btn-close-white ms-1"
@@ -477,8 +500,8 @@ const IntegratedShop = () => {
                               {stockStatus !== 'all' && (
                                 <span className="badge bg-warning text-dark">
                                   {stockStatus === 'in-stock' ? 'In Stock' :
-                                   stockStatus === 'low-stock' ? 'Low Stock' :
-                                   'Out of Stock'}
+                                    stockStatus === 'low-stock' ? 'Low Stock' :
+                                      'Out of Stock'}
                                   <button
                                     type="button"
                                     className="btn-close ms-1"
@@ -538,7 +561,7 @@ const IntegratedShop = () => {
                   <i className="bi bi-box display-1 text-muted"></i>
                   <h4 className="mt-3">No Products Found</h4>
                   <p className="text-muted">
-                    {searchTerm || selectedCategory !== 'all' 
+                    {searchTerm || selectedCategory !== 'all'
                       ? 'Try adjusting your search or filter criteria.'
                       : 'No products are available at the moment.'
                     }
@@ -561,7 +584,7 @@ const IntegratedShop = () => {
                               }}
                             />
                           ) : (
-                            <div 
+                            <div
                               className="card-img-top d-flex align-items-center justify-content-center bg-light"
                               style={{ height: '200px' }}
                             >
@@ -659,7 +682,7 @@ const IntegratedShop = () => {
                               }}
                             />
                           ) : (
-                            <div 
+                            <div
                               className="rounded d-flex align-items-center justify-content-center bg-light"
                               style={{ width: '50px', height: '50px' }}
                             >
@@ -785,7 +808,7 @@ const IntegratedShop = () => {
                                   }}
                                 />
                               ) : (
-                                <div 
+                                <div
                                   className="rounded d-flex align-items-center justify-content-center bg-light"
                                   style={{ width: '40px', height: '40px' }}
                                 >
@@ -815,7 +838,7 @@ const IntegratedShop = () => {
                     <i className="bi bi-geo-alt me-2"></i>
                     Pickup Details
                   </h6>
-                  
+
                   <div className="row">
                     <div className="col-md-6">
                       <div className="mb-3">

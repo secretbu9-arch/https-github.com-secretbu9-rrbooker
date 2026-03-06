@@ -21,8 +21,9 @@ class AutoCancelNoShowService {
     try {
       const gracePeriod = gracePeriodMinutes || this.GRACE_PERIOD_MINUTES;
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+      // Use local date instead of UTC to avoid skipping appointments due to timezone offsets
+      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      const currentTime = now.toTimeString().slice(0, 5); // HH:MM format (local time)
 
       console.log('🔍 Checking for no-show appointments...', { today, currentTime, gracePeriod });
 
@@ -137,7 +138,7 @@ class AutoCancelNoShowService {
               await CentralizedNotificationService.createNotification({
                 userId: appointment.customer_id,
                 title: 'Appointment Cancelled',
-                message: `Your appointment scheduled for ${appointment.appointment_time} on ${appointment.appointment_date} has been automatically cancelled because you did not attend.`,
+                message: `Your appointment scheduled ${appointment.appointment_time ? `for ${appointment.appointment_time}` : (appointment.appointment_type === 'queue' ? 'in the queue' : 'for today')} on ${appointment.appointment_date} has been automatically cancelled because you did not attend.`,
                 type: 'appointment_cancelled',
                 appointmentId: appointment.id,
                 data: {
@@ -158,7 +159,7 @@ class AutoCancelNoShowService {
               await CentralizedNotificationService.createNotification({
                 userId: appointment.barber_id,
                 title: 'Appointment Auto-Cancelled',
-                message: `Appointment with ${appointment.customer?.full_name || 'customer'} scheduled for ${appointment.appointment_time} was automatically cancelled due to no-show.`,
+                message: `Appointment with ${appointment.customer?.full_name || 'customer'} ${appointment.appointment_time ? `scheduled for ${appointment.appointment_time}` : (appointment.appointment_type === 'queue' ? 'in the queue' : 'scheduled for today')} was automatically cancelled due to no-show.`,
                 type: 'appointment_cancelled',
                 appointmentId: appointment.id,
                 data: {
@@ -178,7 +179,8 @@ class AutoCancelNoShowService {
               action: 'appointment_auto_cancelled_no_show',
               details: {
                 appointment_id: appointment.id,
-                scheduled_time: appointment.appointment_time,
+                scheduled_time: appointment.appointment_time || 'N/A',
+                appointment_type: appointment.appointment_type,
                 grace_period: gracePeriod
               }
             });
@@ -337,7 +339,7 @@ class AutoCancelNoShowService {
   async cancelNoShowQueueAppointments() {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
       const currentTime = now.toTimeString().slice(0, 5);
 
       console.log('🔍 Checking for no-show queue appointments...', { today, currentTime });
@@ -485,8 +487,6 @@ const service = new AutoCancelNoShowService();
 // Expose to window for manual testing/debugging
 if (typeof window !== 'undefined') {
   window.AutoCancelNoShowService = service;
-  console.log('🔧 AutoCancelNoShowService available at window.AutoCancelNoShowService');
-  console.log('💡 To manually trigger: await window.AutoCancelNoShowService.manualCheck()');
 }
 
 export default service;

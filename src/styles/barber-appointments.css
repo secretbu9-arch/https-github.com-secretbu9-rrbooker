@@ -6,53 +6,56 @@
     padding-left: 10px;
     padding-right: 10px;
   }
-  
+
   .day-card {
     margin-bottom: 15px;
     border-radius: 12px;
   }
-  
+
   .day-header {
     padding: 15px;
   }
-  
+
   .day-header h4 {
     font-size: 1.1rem;
   }
-  
+
   .day-header p {
     font-size: 0.85rem;
   }
-  
+
   /* Mobile-specific optimizations */
   .card-header {
     padding: 15px;
   }
-  
+
   .card-header h4 {
     font-size: 1.1rem;
   }
-  
+
   .card-header p {
     font-size: 0.85rem;
   }
-  
+
   /* Ensure proper touch targets */
-  .btn, .btn-mobile-action, .btn-mobile-call {
+  .btn,
+  .btn-mobile-action,
+  .btn-mobile-call {
     min-height: 44px;
     min-width: 44px;
   }
-  
+
   /* Improve text readability */
   body {
-    font-size: 16px; /* Prevent zoom on iOS */
+    font-size: 16px;
+    /* Prevent zoom on iOS */
   }
-  
+
   /* Better spacing for mobile */
   .mb-4 {
     margin-bottom: 1.5rem !important;
   }
-  
+
   .p-3 {
     padding: 1rem !important;
   }
@@ -208,7 +211,8 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
   border: none;
-  min-height: 44px; /* iOS touch target minimum */
+  min-height: 44px;
+  /* iOS touch target minimum */
 }
 
 .btn-mobile-action:hover {
@@ -405,9 +409,17 @@
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* Customer Info */
@@ -607,35 +619,35 @@
   .appointment-header {
     padding: 1rem;
   }
-  
+
   .appointment-details {
     padding: 1rem;
   }
-  
+
   .appointment-actions {
     padding: 1rem;
   }
-  
+
   .queue-badge {
     width: 40px;
     height: 40px;
     font-size: 0.9rem;
     margin-right: 0.75rem;
   }
-  
+
   .customer-info h5 {
     font-size: 1.1rem;
   }
-  
+
   .action-btn {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
   }
-  
+
   .contact-info {
     flex-direction: column;
   }
-  
+
   .contact-btn {
     justify-content: center;
   }
@@ -645,35 +657,35 @@
   .appointment-card {
     margin-bottom: 1rem;
   }
-  
+
   .appointment-header {
     padding: 0.75rem;
   }
-  
+
   .appointment-details {
     padding: 0.75rem;
   }
-  
+
   .appointment-actions {
     padding: 0.75rem;
   }
-  
+
   .queue-badge {
     width: 35px;
     height: 35px;
     font-size: 0.8rem;
     margin-right: 0.5rem;
   }
-  
+
   .customer-info h5 {
     font-size: 1rem;
   }
-  
+
   .status-badge {
     padding: 0.4rem 0.8rem;
     font-size: 0.8rem;
   }
-  
+
   .action-btn {
     padding: 0.5rem 1rem;
     font-size: 0.85rem;
@@ -692,9 +704,17 @@
 }
 
 @keyframes statusChange {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* Empty State Improvements */
@@ -990,19 +1010,19 @@
     flex-wrap: wrap;
     gap: 1rem;
   }
-  
+
   .queue-position-section {
     min-width: 180px;
   }
-  
+
   .service-details-section {
     min-width: 180px;
   }
-  
+
   .queue-info-section {
     min-width: 120px;
   }
-  
+
   .action-section {
     min-width: 120px;
   }
@@ -1014,37 +1034,37 @@
     align-items: stretch;
     gap: 1rem;
   }
-  
+
   .queue-position-section {
     min-width: auto;
     justify-content: center;
   }
-  
+
   .service-details-section {
     min-width: auto;
     text-align: center;
   }
-  
+
   .queue-info-section {
     min-width: auto;
     text-align: center;
   }
-  
+
   .action-section {
     min-width: auto;
     text-align: center;
   }
-  
+
   .queue-number {
     width: 40px;
     height: 40px;
     font-size: 1rem;
   }
-  
+
   .customer-name {
     font-size: 1rem;
   }
-  
+
   .service-name {
     font-size: 0.9rem;
   }
@@ -1054,13 +1074,13 @@
   .queue-item-content {
     padding: 1rem;
   }
-  
+
   .queue-number {
     width: 35px;
     height: 35px;
     font-size: 0.9rem;
   }
-  
+
   .action-btn {
     padding: 0.5rem 1rem;
     font-size: 0.85rem;
@@ -1113,3 +1133,140 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(25, 135, 84, 0.4);
 }
+
+/* Appointment Highlight Animation */
+@keyframes highlightPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4);
+    border-color: #0d6efd;
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(13, 110, 253, 0);
+    border-color: #0d6efd;
+    transform: scale(1.02);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+    transform: scale(1);
+  }
+}
+
+.highlight-appointment {
+  animation: highlightPulse 2.5s ease-in-out infinite;
+  border: 2px solid #0d6efd !important;
+  scroll-margin-top: 100px;
+}
+/* Appointment Action Buttons */
+.appointment-action-buttons .btn {
+  font-size: 0.85rem;
+  padding: 0.4rem 1rem !important;
+}
+
+
+/* Reset unwanted borders */
+.appointment-card-simple .card-body.bg-light { background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; }
+
+
+/* Make the status badge visually lighter and consistent */
+.appointment-card-simple .text-end .badge {
+  font-weight: 500 !important;
+}
+.badge.bg-success { background-color: #198754 !important; color: white !important; }
+.badge.bg-primary { background-color: #0d6efd !important; color: white !important; }
+.badge.bg-warning { background-color: #ffc107 !important; color: #000 !important; }
+.badge.bg-danger { background-color: #dc3545 !important; color: white !important; }
+
+
+/* Force badge styles to not use gradients to match the modern look */
+.appointment-card-simple .badge[class*='bg-'] {
+  background-image: none !important;
+}
+
+
+/* Card container fix to avoid inner borders being double rendered */
+.card.shadow-sm.border-0.bg-transparent .bg-white.border-start.border-end {
+    border: none !important;
+}
+.card.shadow-sm.border-0.bg-transparent .card-body.border-start.border-end.border-bottom {
+    border: none !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+
+/* Additional spacing adjustments for BarberSchedule */
+.appointment-card-simple .p-3 {
+  padding: 1.25rem !important;
+}
+.appointment-action-buttons .btn {
+  border-radius: 4px !important;
+}
+
+
+/* Additional adjustments to match exact style */
+.appointment-card-simple .p-3 {
+  padding: 1.25rem !important;
+}
+.appointment-action-buttons .btn {
+  border-radius: 4px !important;
+}
+
+
+.text-capitalize {
+    text-transform: capitalize !important;
+}
+
+
+/* Prevent Queue Number from squishing on small screens */
+.appointment-card-simple .d-flex.align-items-center.justify-content-center.fw-bold {
+  flex-shrink: 0 !important;
+}
+
+
+/* Prevent Queue Number from squishing on small screens in addition to JS inline adjustments */
+.appointment-card-simple .flex-shrink-0 {
+  flex-shrink: 0 !important;
+}
+
+
+/* Prevent Queue Number from squishing on small screens in addition to JS inline adjustments */
+.appointment-card-simple .gap-3 {
+    gap: 0.75rem !important; /* Smaller gap on mobile */
+}
+@media (min-width: 576px) {
+  .appointment-card-simple .gap-sm-3 {
+      gap: 1rem !important;
+  }
+}
+
+
+/* Prevent text from overflowing its container */
+.appointment-card-simple h5 {
+  word-break: break-word;
+}
+
+
+/* Prevent Queue Number from squishing on small screens in addition to JS inline adjustments */
+.appointment-card-simple .d-flex.align-items-center.justify-content-center.fw-bold {
+  flex-shrink: 0 !important;
+}
+
+
+/* Prevent Queue Number from squishing on small screens in addition to JS inline adjustments */
+.appointment-card-simple .gap-3 {
+  gap: 0.75rem !important;
+}
+@media (min-width: 576px) {
+    .appointment-card-simple .gap-sm-3 {
+        gap: 1rem !important;
+    }
+}
+
+
+/* Prevent text from overflowing its container */
+.appointment-card-simple h5 {
+  word-break: break-word;
+}
+

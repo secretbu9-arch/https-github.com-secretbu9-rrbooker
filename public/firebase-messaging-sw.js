@@ -22,23 +22,23 @@ const messaging = firebase.messaging();
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
   console.log('Received background message:', payload);
-
-  // Extract info from notification OR data payload
-  const notificationTitle = payload.notification?.title || payload.data?.title || 'R&R Booker';
-  const bodyText = payload.notification?.body || payload.data?.body || payload.data?.message || 'You have a new notification';
-
-  const uniqueTag = `${payload.data?.type || 'general'}-${payload.data?.appointment_id || 'no-id'}-${Date.now()}`;
-
+  
+  const notificationTitle = payload.notification?.title || 'R&R Booker';
+  const uniqueTag = `${payload.data?.type || 'general'}-${payload.data?.timestamp || Date.now()}`;
   const notificationOptions = {
-    body: bodyText,
-    icon: '/rrbooker-logo-3.png',
+    body: payload.notification?.body || 'You have a new notification',
+    icon: '/favicon.ico',
     badge: '/favicon.ico',
     data: payload.data || {},
-    vibrate: [200, 100, 200],
     actions: [
       {
         action: 'view',
-        title: 'View Details',
+        title: 'View',
+        icon: '/favicon.ico'
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss',
         icon: '/favicon.ico'
       }
     ],
@@ -53,16 +53,16 @@ messaging.onBackgroundMessage((payload) => {
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
   console.log('Notification clicked:', event);
-
+  
   event.notification.close();
-
+  
   const data = event.notification.data || {};
   const action = event.action;
-
+  
   if (action === 'dismiss') {
     return;
   }
-
+  
   // Store notification data for the app to handle
   if (data.type) {
     const notificationData = {
@@ -70,13 +70,13 @@ self.addEventListener('notificationclick', (event) => {
       data: data,
       timestamp: Date.now()
     };
-
+    
     // Store in IndexedDB for the app to retrieve
     event.waitUntil(
       storeNotificationData(notificationData)
     );
   }
-
+  
   // Open the app or focus existing window
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -86,7 +86,7 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus();
         }
       }
-
+      
       // Otherwise, open a new window
       if (clients.openWindow) {
         const url = getNotificationUrl(data.type);
@@ -112,10 +112,10 @@ async function storeNotificationData(data) {
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('RafRokBooker', 1);
-
+    
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-
+    
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains('notifications')) {
@@ -128,7 +128,7 @@ function openDB() {
 // Get URL based on notification type
 function getNotificationUrl(type) {
   const baseUrl = self.location.origin;
-
+  
   switch (type) {
     case 'appointment':
       return `${baseUrl}/appointments`;

@@ -19,7 +19,7 @@ class OverbookingPreventionService {
             message: timeConflict.message,
             severity: 'high'
           });
-          
+
           // Suggest alternative time slots
           const alternatives = await this.findAlternativeTimeSlots(barberId, date, serviceDuration);
           if (alternatives.length > 0) {
@@ -144,7 +144,7 @@ class OverbookingPreventionService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing']);
+        .in('status', ['pending', 'confirmed', 'ongoing']);
 
       if (error) throw error;
 
@@ -184,7 +184,7 @@ class OverbookingPreventionService {
         .select('total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing']);
+        .in('status', ['pending', 'confirmed', 'ongoing']);
 
       if (error) throw error;
 
@@ -217,7 +217,7 @@ class OverbookingPreventionService {
   static checkLunchBreakConflict(timeSlot, serviceDuration) {
     const slotStart = this.timeToMinutes(timeSlot);
     const slotEnd = slotStart + serviceDuration;
-    
+
     const lunchStart = this.timeToMinutes('12:00');
     const lunchEnd = this.timeToMinutes('13:00');
 
@@ -284,7 +284,7 @@ class OverbookingPreventionService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing'])
+        .in('status', ['pending', 'confirmed', 'ongoing'])
         .gte('appointment_time', timeSlot)
         .order('appointment_time', { ascending: true });
 
@@ -305,7 +305,7 @@ class OverbookingPreventionService {
       // Check for conflicts with subsequent appointments
       for (const appointment of appointments) {
         const aptStart = this.timeToMinutes(appointment.appointment_time);
-        
+
         if (slotEnd > aptStart) {
           return {
             hasConflict: true,
@@ -333,7 +333,7 @@ class OverbookingPreventionService {
         .select('appointment_time, total_duration, status')
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
-        .in('status', ['scheduled', 'confirmed', 'ongoing'])
+        .in('status', ['pending', 'confirmed', 'ongoing'])
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
@@ -370,14 +370,14 @@ class OverbookingPreventionService {
   static async findNextAvailableDate(barberId, serviceDuration) {
     try {
       const today = new Date();
-      
+
       for (let i = 1; i <= 7; i++) { // Check next 7 days
         const checkDate = new Date(today);
         checkDate.setDate(today.getDate() + i);
         const dateString = checkDate.toISOString().split('T')[0];
 
         const capacityCheck = await this.checkBarberCapacity(barberId, dateString, serviceDuration);
-        
+
         if (capacityCheck.hasCapacity) {
           return dateString;
         }

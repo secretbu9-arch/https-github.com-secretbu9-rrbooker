@@ -1,50 +1,24 @@
 // components/customer/BookAppointment.js - Step-by-Step Booking Flow
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 
 import UnifiedSlotBookingService from '../../services/booking/UnifiedSlotBookingService';
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
-import EnhancedQueueTimeCalculator from '../../services/queue/EnhancedQueueTimeCalculator';
+import QueueTimeCalculator from '../../services/queue/QueueTimeCalculator';
 import BarberAvailabilityService from '../../services/booking/BarberAvailabilityService';
 import { friendBookingOTPService } from '../../services/auth/FriendBookingOTPService';
 import {
   BOOKING_STATUS,
   APPOINTMENT_FIELDS,
-  PRIORITY_LEVELS
+  PRIORITY_LEVELS,
+  QUEUE_SETTINGS
 } from '../../constants/booking.constants';
 import { formatPrice } from '../utils/helpers';
 import logoImage from '../../assets/images/raf-rok-logo.png';
 
 // Helper constants for friend email validation and initial verification state
 const FRIEND_EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-
-// Legacy mappings for add-on durations and prices
-const LEGACY_DURATION_MAPPING = {
-  'addon1': 15, // Beard Trim
-  'addon2': 10, // Hot Towel Treatment
-  'addon3': 20, // Scalp Massage
-  'addon4': 15, // Hair Wash
-  'addon5': 10, // Styling
-  'addon6': 15, // Hair Wax Application
-  'addon7': 10, // Eyebrow Trim
-  'addon8': 10, // Mustache Trim
-  'addon9': 15, // Face Mask
-  'addon10': 20  // Hair Treatment
-};
-
-const LEGACY_PRICE_MAPPING = {
-  'addon1': 50.00,
-  'addon2': 30.00,
-  'addon3': 80.00,
-  'addon4': 40.00,
-  'addon5': 25.00,
-  'addon6': 35.00,
-  'addon7': 20.00,
-  'addon8': 20.00,
-  'addon9': 45.00,
-  'addon10': 60.00
-};
 
 
 const createInitialFriendVerificationState = () => ({
@@ -514,7 +488,7 @@ const BookAppointment = () => {
       // Fetch barbers (only active barbers - not archived)
       const { data: barbersData, error: barbersError } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, barber_status, average_rating, total_ratings, skills')
+        .select('id, full_name, email, phone, barber_status, average_rating, total_ratings, skills, profile_picture_url')
         .eq('role', 'barber')
         .neq('archived', true)
         .order('full_name');
@@ -527,7 +501,7 @@ const BookAppointment = () => {
         .from('services')
         .select('*')
         .eq('is_active', true)
-        .order('name');
+        .order('price', { ascending: true });
 
       if (servicesError) throw servicesError;
       setServices(Array.isArray(servicesData) ? servicesData : []);
@@ -537,7 +511,7 @@ const BookAppointment = () => {
         .from('add_ons')
         .select('*')
         .eq('is_active', true)
-        .order('name');
+        .order('price', { ascending: true });
 
       if (addOnsError) throw addOnsError;
       setAddOns(Array.isArray(addOnsData) ? addOnsData : []);
@@ -612,8 +586,8 @@ const BookAppointment = () => {
           ['confirmed', 'ongoing', 'pending', 'scheduled'].includes(apt.status)
         );
 
-        // Count queue appointments (excluding ongoing - that's the current customer being served)
-        const queueCount = activeQueueAppointments.filter(apt => apt.status !== 'ongoing').length;
+        // Total appointments ahead (including ongoing - for consistent position counting)
+        const queueCount = activeQueueAppointments.length;
         const pendingCount = barberAppointments.filter(apt => apt.status === 'pending').length;
         const currentAppointment = barberAppointments.find(apt => apt.status === 'ongoing');
 
@@ -626,8 +600,13 @@ const BookAppointment = () => {
           currentAppointment: currentAppointment?.id || 'none'
         });
 
-        // Calculate estimated wait time based on actual service durations
-        const estimatedWait = await calculateEstimatedWaitTime(activeQueueAppointments, currentAppointment);
+        // Use the unified QueueTimeCalculator for accurate, lunch-aware estimates
+        const currentServiceDuration = (bookingData.selectedServices?.length > 0)
+          ? calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)
+          : 30;
+
+        const queueAnalysis = await QueueTimeCalculator.calculateQueueInfo(barber.id, dateToFetch, currentServiceDuration);
+        const estimatedWait = queueAnalysis.estimatedWaitTime;
 
         // Calculate total time used based on service durations (in 30-minute slots)
         // Calculate capacity based on working hours (8am-5pm = 9 hours = 540 minutes)
@@ -674,8 +653,8 @@ const BookAppointment = () => {
         const maxQueueSize = 15; // Standardized queue capacity // Maximum queue size
         const isFullyScheduled = remainingTime < minServiceDuration || queueAppointments.length >= maxQueueSize;
 
-        // Check if barber is at full capacity (queue full OR fully scheduled)
-        const isFullCapacity = isFullyScheduled || (remainingTime < minServiceDuration && queueAppointments.length > 0);
+        // Check if barber is at full capacity (queue full OR fully scheduled OR service overflows closing time)
+        const isFullCapacity = isFullyScheduled || (remainingTime < minServiceDuration && queueAppointments.length > 0) || queueAnalysis.isOverflowingWorkHours;
 
         const queueInfo = {
           queueCount,
@@ -772,8 +751,6 @@ const BookAppointment = () => {
 
         if (addon) {
           totalDuration += addon.duration || 15;
-        } else if (LEGACY_DURATION_MAPPING[id]) {
-          totalDuration += LEGACY_DURATION_MAPPING[id];
         } else {
           totalDuration += 15; // Default fallback
         }
@@ -1015,6 +992,9 @@ const BookAppointment = () => {
 
       // Filter to only include available barbers for recommendations
       const availableBarbers = barbers.filter(barber => {
+        const isUnavailable = barber.barber_status === 'day_off' || barber.barber_status === 'offline' || barber.archived;
+        if (isUnavailable) return false;
+
         const queue = barberQueues[barber.id];
         const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
         const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
@@ -1455,15 +1435,12 @@ const BookAppointment = () => {
       const finalQueueCapacity = Math.max(0, maxQueueCapacity);
       const timeBasedAvailableSlots = Math.max(0, finalQueueCapacity - queueAppointments.length);
 
-      // Check if adding another appointment would exceed working hours
-      const totalQueueTime = queueAppointments.reduce((total, apt) => {
-        return total + (apt.total_duration || 30);
-      }, 0);
-
-      // Add the customer's service duration to check if it would exceed working hours
+      // Use SmartTimelineService to check if adding this appointment would exceed working hours
+      const smartCheck = await import('../../services/queue/SmartTimelineService').then(m => m.default);
       const customerServiceDuration = serviceDuration || 40; // Use provided service duration or default
-      const estimatedEndTime = workingStartMinutes + totalQueueTime + customerServiceDuration;
-      const wouldExceedWorkingHours = estimatedEndTime > workingEndMinutes;
+      const queueAcceptance = await smartCheck.canAcceptQueueBooking(barberId, date, customerServiceDuration);
+
+      const wouldExceedWorkingHours = !queueAcceptance.canAccept;
 
       // Calculate next available time
       let nextAvailableTime = null;
@@ -1953,6 +1930,10 @@ const BookAppointment = () => {
       const { default: UnifiedSlotBookingService } = await import('../../services/booking/UnifiedSlotBookingService');
 
       for (const barber of barbers) {
+        if (barber.barber_status === 'day_off' || barber.barber_status === 'offline' || barber.archived) {
+          continue;
+        }
+
         try {
           // Get unified slots (scheduled + queue) for this barber
           const unifiedSlots = await UnifiedSlotBookingService.getUnifiedSlots(
@@ -2491,6 +2472,20 @@ const BookAppointment = () => {
 
       console.log('🎯 Final appointment type:', appointmentType, 'Time slot:', bookingData.selectedTimeSlot);
 
+      // Final Price Calculation for Database Submission
+      const servicesDbTotal = bookingData.selectedServices.reduce((total, serviceId) => {
+        const service = services.find(s => s.id === serviceId);
+        return total + (service?.price || 0);
+      }, 0);
+
+      const addOnsDbTotal = bookingData.selectedAddOns.reduce((total, addonId) => {
+        const addon = addOns.find(a => a.id === addonId);
+        return total + (addon?.price || 0);
+      }, 0);
+
+      const urgentDbFee = bookingData.isUrgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0;
+      const finalDbTotalPrice = servicesDbTotal + addOnsDbTotal + urgentDbFee;
+
       // Prepare appointment data using standardized field names
       const appointmentData = {
         [APPOINTMENT_FIELDS.CUSTOMER_ID]: user.id,
@@ -2542,7 +2537,7 @@ const BookAppointment = () => {
         [APPOINTMENT_FIELDS.APPOINTMENT_TYPE]: appointmentType,
         [APPOINTMENT_FIELDS.PRIORITY_LEVEL]: bookingData.isUrgent ? PRIORITY_LEVELS.URGENT : PRIORITY_LEVELS.NORMAL,
         [APPOINTMENT_FIELDS.STATUS]: BOOKING_STATUS.PENDING, // ALL appointments start as pending and require manager/barber confirmation
-        [APPOINTMENT_FIELDS.TOTAL_PRICE]: bookingData.totalPrice,
+        [APPOINTMENT_FIELDS.TOTAL_PRICE]: finalDbTotalPrice,
         [APPOINTMENT_FIELDS.TOTAL_DURATION]: calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns),
         [APPOINTMENT_FIELDS.NOTES]: bookingData.specialRequests,
         [APPOINTMENT_FIELDS.IS_URGENT]: bookingData.isUrgent || false,
@@ -2883,6 +2878,7 @@ const BookAppointment = () => {
         onSendFriendVerification={sendFriendVerificationCode}
         onVerifyFriendVerification={verifyFriendVerificationCode}
         onResetFriendVerification={resetFriendVerification}
+        onLoadAlternatives={loadAlternativeBarbers}
       />}
 
 
@@ -2944,6 +2940,7 @@ const Step1DateTypeAndBarber = ({
   const [friendEmailError, setFriendEmailError] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [expandedProfileBarber, setExpandedProfileBarber] = useState(null);
 
   const normalizedFriendEmail = friendEmail.trim().toLowerCase();
   const isFriendEmailValid = FRIEND_EMAIL_REGEX.test(normalizedFriendEmail);
@@ -3002,30 +2999,30 @@ const Step1DateTypeAndBarber = ({
 
   const handleFriendPhoneChange = (value) => {
     // Ensure the value starts with +63 and only contains digits after that
-    let cleaned = value;
-    if (!cleaned.startsWith('+63')) {
-      const digits = cleaned.replace(/\D/g, '');
+    let digits = '';
+
+    if (value.startsWith('+63')) {
+      digits = value.substring(3).replace(/\D/g, '');
+    } else {
+      digits = value.replace(/\D/g, '');
       // If starts with 0 (traditional PH format), strip it and add +63
       if (digits.startsWith('0')) {
-        cleaned = '+63' + digits.substring(1);
+        digits = digits.substring(1);
       } else if (digits.startsWith('63')) {
-        cleaned = '+' + digits;
-      } else {
-        cleaned = '+63' + digits;
+        digits = digits.substring(2);
       }
-    } else {
-      // Keep +63 and only allow digits
-      const digits = cleaned.substring(3).replace(/\D/g, '');
-      cleaned = '+63' + digits;
     }
 
-    // Limit to +63 + 10 digits
-    if (cleaned.length > 13) {
-      cleaned = cleaned.substring(0, 13);
+    // Enforce that it must start with 9
+    if (digits.length > 0 && digits[0] !== '9') {
+      digits = '';
     }
 
-    setFriendPhone(cleaned);
-    updateBookingData({ friendPhone: cleaned });
+    // Limit to 10 digits
+    digits = digits.substring(0, 10);
+
+    setFriendPhone(digits.length > 0 ? '+63' + digits : '');
+    updateBookingData({ friendPhone: digits.length > 0 ? '+63' + digits : '' });
   };
 
   const handleFriendEmailChange = (value) => {
@@ -3803,18 +3800,32 @@ const Step1DateTypeAndBarber = ({
                                 onClick={() => handleBarberSelect(rec.barber.id)}>
                                 <div className="card-body p-3">
                                   <div className="d-flex justify-content-between align-items-start mb-3">
-                                    <div className="text-truncate me-2">
-                                      <h6 className="fw-bold mb-0 text-truncate d-flex align-items-center">
-                                        <span className="text-truncate flex-shrink-1">{rec.barber.full_name}</span>
-                                        <span className="mx-2 text-muted fw-normal opacity-50">|</span>
-                                        <span className="extra-small text-muted fw-normal d-inline-flex align-items-center flex-shrink-0">
+                                    <div className="d-flex align-items-center me-2" style={{ minWidth: 0 }}>
+                                      <div
+                                        className="d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+                                        style={{ cursor: 'pointer', zIndex: 2 }}
+                                        onClick={(e) => { e.stopPropagation(); setExpandedProfileBarber(rec.barber); }}
+                                      >
+                                        {rec.barber.profile_picture_url ? (
+                                          <img src={rec.barber.profile_picture_url} alt={rec.barber.full_name} style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                                        ) : (
+                                          <div className="bg-primary text-white d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: '0 2px 4px rgba(13,110,253,0.2)' }}>
+                                            {rec.barber.full_name ? rec.barber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-truncate">
+                                        <h6 className="fw-bold mb-0 text-truncate">
+                                          {rec.barber.full_name}
+                                        </h6>
+                                        <div className="extra-small text-muted fw-normal d-flex align-items-center mt-1">
                                           <i className="bi bi-star-fill text-warning me-1" style={{ fontSize: '0.8em' }}></i>
                                           {rec.barber.average_rating || '0'}
-                                          <span className="opacity-50 ms-1" style={{ fontSize: '0.9em' }}>({rec.barber.total_ratings || 0})</span>
-                                        </span>
-                                      </h6>
+                                          <span className="opacity-50 ms-1">({rec.barber.total_ratings || 0})</span>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <span className="badge bg-warning text-dark rounded-pill">#{index + 1}</span>
+                                    <span className="badge bg-warning text-dark rounded-pill shadow-sm">#{index + 1}</span>
                                   </div>
                                   <div className="mb-2 d-flex flex-wrap gap-1">
                                     {rec.barber.skills?.split(',').slice(0, 2).map((skill, i) => (
@@ -3836,122 +3847,145 @@ const Step1DateTypeAndBarber = ({
                 )}
               </div>
 
-              {/* All Barbers Section */}
               <div className="flex-grow-1">
-                <div className="d-flex align-items-center justify-content-between mb-3 px-1">
-                  <h5 className="mb-0 fw-bold">Choose Your Barber</h5>
-                  <span className="badge bg-light text-dark border">{barbers?.length || 0} Available</span>
-                </div>
+                {(() => {
+                  const activeBarbers = barbers?.filter(b => b.barber_status !== 'offline' && b.barber_status !== 'day_off' && !b.archived) || [];
+                  return (
+                    <>
+                      <div className="d-flex align-items-center justify-content-between mb-3 px-1">
+                        <h5 className="mb-0 fw-bold">Choose Your Barber</h5>
+                        <span className="badge bg-light text-dark border">{activeBarbers.length} Available</span>
+                      </div>
 
-                <div className="row g-3 barber-selection-row">
-                  {barbers && barbers.length > 0 ? (
-                    barbers.map((barber) => {
-                      const queue = barberQueues[barber.id];
-                      const isSelected = selectedBarber === barber.id;
-                      const availability = barberAvailabilityStatus[barber.id];
-                      const isUnavailable = availability && !availability.isAvailable;
+                      <div className="row g-3 barber-selection-row">
+                        {activeBarbers.length > 0 ? (
+                          activeBarbers.map((barber) => {
+                            const queue = barberQueues[barber.id];
+                            const isSelected = selectedBarber === barber.id;
+                            const availability = barberAvailabilityStatus[barber.id];
+                            const isUnavailable = availability && !availability.isAvailable;
 
-                      const serviceDuration = bookingData.selectedServices.length > 0
-                        ? calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)
-                        : 30;
-                      const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
-                      const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
-                      const isDisabled = isFullSlot || isUnavailable;
+                            const serviceDuration = bookingData.selectedServices.length > 0
+                              ? calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)
+                              : 30;
+                            const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
+                            const isFullSlot = queue && (!canAccommodate || queue.isFullCapacity);
+                            const isDisabled = isFullSlot || isUnavailable;
 
-                      return (
-                        <div key={barber.id} className="col-md-4">
-                          <div
-                            className={`card barber-card h-100 shadow-sm ${isSelected ? 'border-primary ring-2 ring-primary ring-opacity-20' : 'border-0'} ${isDisabled ? 'opacity-50 grayscale' : ''}`}
-                            onClick={() => !isDisabled && handleBarberSelect(barber.id)}
-                          >
-                            <div className="card-body p-3">
-                              <div className="d-flex justify-content-between align-items-start mb-3">
-                                <div className="text-truncate me-2">
-                                  <h6 className="fw-bold mb-0 text-truncate d-flex align-items-center">
-                                    <span className="text-truncate flex-shrink-1">{barber.full_name}</span>
-                                    <span className="mx-2 text-muted fw-normal opacity-50">|</span>
-                                    <span className="extra-small text-muted fw-normal d-inline-flex align-items-center flex-shrink-0">
-                                      <i className="bi bi-star-fill text-warning me-1" style={{ fontSize: '0.8em' }}></i>
-                                      {barber.average_rating || '0'}
-                                      <span className="opacity-50 ms-1" style={{ fontSize: '0.9em' }}>({barber.total_ratings || 0})</span>
-                                    </span>
-                                  </h6>
-                                </div>
-                                {isUnavailable ? (
-                                  <span className="badge bg-danger rounded-pill px-2">Offline</span>
-                                ) : isFullSlot ? (
-                                  <span className="badge bg-secondary rounded-pill px-2">Full</span>
-                                ) : (
-                                  <span className="badge bg-success rounded-pill px-2">Available</span>
-                                )}
-                              </div>
-
-                              <div className="mt-auto pt-2 border-top">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                  <span className="small text-muted"><i className="bi bi-people me-1"></i>Queue:</span>
-                                  <span className="small fw-bold">{queue?.queueCount || 0} people</span>
-                                </div>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <span className="small text-muted"><i className="bi bi-clock me-1"></i>Wait:</span>
-                                  <span className="small fw-bold text-primary">{queue?.estimatedWait ? `${queue.estimatedWait}m` : '0m'}</span>
-                                </div>
-                              </div>
-
-                              <div className="d-flex gap-2 mt-3 mb-3">
-                                <button
-                                  className={`btn btn-sm flex-grow-1 ${isSelected ? 'btn-primary' : isDisabled ? 'btn-light disabled' : 'btn-outline-primary'}`}
-                                  disabled={isDisabled}
+                            return (
+                              <div key={barber.id} className="col-md-4">
+                                <div
+                                  className={`card barber-card h-100 shadow-sm ${isSelected ? 'border-primary ring-2 ring-primary ring-opacity-20' : 'border-0'} ${isDisabled ? 'opacity-50 grayscale' : ''}`}
+                                  onClick={() => !isDisabled && handleBarberSelect(barber.id)}
                                 >
-                                  {isSelected ? 'Selected' : isDisabled ? 'Unavailable' : 'Select'}
-                                </button>
-                              </div>
-
-                              {queue && (
-                                <div className="mt-2 p-2 bg-light rounded-3 small border border-light-subtle">
-                                  <div className="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
-                                    <span className="fw-bold extra-small text-uppercase text-muted letter-spacing-1">Current Queue</span>
-                                    {queue.appointments?.length > 0 && (
-                                      <span className="badge bg-white text-primary border extra-small">{queue.appointments.length}</span>
-                                    )}
-                                  </div>
-                                  {queue.appointments?.length > 0 ? (
-                                    <div className="d-flex flex-column gap-2 mt-2">
-                                      {queue.appointments.slice(0, 3).map((apt, i) => (
-                                        <div key={i} className="d-flex justify-content-between extra-small align-items-center p-1 px-2 rounded-2 bg-white shadow-sm border border-light">
-                                          <span className="text-truncate fw-medium">
-                                            <i className={`bi bi-circle-fill me-2 ${apt.status === 'ongoing' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '0.5em' }}></i>
-                                            {apt.status === 'ongoing' ? 'Currently Serving' : `Position #${i + 1}`}
-                                          </span>
-                                          <span className="badge bg-light text-muted fw-normal">{apt.total_duration || 30}m</span>
+                                  <div className="card-body p-3">
+                                    <div className="d-flex justify-content-between align-items-start mb-3">
+                                      <div className="d-flex align-items-center me-2" style={{ minWidth: 0 }}>
+                                        <div
+                                          className="d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+                                          style={{ cursor: isDisabled ? 'default' : 'pointer', zIndex: 2 }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (!isDisabled) setExpandedProfileBarber(barber);
+                                          }}
+                                        >
+                                          {barber.profile_picture_url ? (
+                                            <img src={barber.profile_picture_url} alt={barber.full_name} className={`${isDisabled ? 'opacity-50 grayscale' : ''}`} style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: isDisabled ? 'none' : '0 2px 4px rgba(0,0,0,0.1)' }} />
+                                          ) : (
+                                            <div className={`text-white d-flex align-items-center justify-content-center ${isDisabled ? 'bg-secondary' : 'bg-primary'}`} style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: isDisabled ? '#6c757d' : 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: isDisabled ? 'none' : '0 2px 4px rgba(13,110,253,0.2)' }}>
+                                              {barber.full_name ? barber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
+                                            </div>
+                                          )}
                                         </div>
-                                      ))}
-                                      {queue.appointments.length > 3 && (
-                                        <div className="text-center extra-small text-muted py-1 border-top mt-1">
-                                          <i className="bi bi-three-dots me-1"></i>
-                                          {queue.appointments.length - 3} more waiting in line
+                                        <div className="text-truncate">
+                                          <h6 className="fw-bold mb-0 text-truncate">
+                                            {barber.full_name}
+                                          </h6>
+                                          <div className="extra-small text-muted fw-normal d-flex align-items-center mt-1">
+                                            <i className="bi bi-star-fill text-warning me-1" style={{ fontSize: '0.8em' }}></i>
+                                            {barber.average_rating || '0'}
+                                            <span className="opacity-50 ms-1">({barber.total_ratings || 0})</span>
+                                          </div>
                                         </div>
+                                      </div>
+                                      {isUnavailable ? (
+                                        <span className="badge bg-danger rounded-pill px-2">Offline</span>
+                                      ) : isFullSlot ? (
+                                        <span className="badge bg-secondary rounded-pill px-2">Full</span>
+                                      ) : (
+                                        <span className="badge bg-success rounded-pill px-2">Available</span>
                                       )}
                                     </div>
-                                  ) : (
-                                    <div className="text-center py-2 text-muted extra-small">
-                                      <i className="bi bi-calendar-event me-1"></i>
-                                      No active appointments
+
+                                    <div className="mt-auto pt-2 border-top">
+                                      <div className="d-flex justify-content-between align-items-center mb-2">
+                                        <span className="small text-muted"><i className="bi bi-people me-1"></i>Ahead:</span>
+                                        <span className="small fw-bold">{queue?.queueCount || 0} person(s)</span>
+                                      </div>
+                                      <div className="d-flex justify-content-between align-items-center">
+                                        <span className="small text-muted"><i className="bi bi-clock me-1"></i>Wait:</span>
+                                        <span className="small fw-bold text-primary">{queue?.estimatedWait ? `${queue.estimatedWait}m` : '0m'}</span>
+                                      </div>
                                     </div>
-                                  )}
+
+                                    <div className="d-flex gap-2 mt-3 mb-3">
+                                      <button
+                                        className={`btn btn-sm flex-grow-1 ${isSelected ? 'btn-primary' : isDisabled ? 'btn-light disabled' : 'btn-outline-primary'}`}
+                                        disabled={isDisabled}
+                                      >
+                                        {isSelected ? 'Selected' : isDisabled ? 'Unavailable' : 'Select'}
+                                      </button>
+                                    </div>
+
+                                    {queue && (
+                                      <div className="mt-2 p-2 bg-light rounded-3 small border border-light-subtle">
+                                        <div className="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
+                                          <span className="fw-bold extra-small text-uppercase text-muted letter-spacing-1">Current Queue</span>
+                                          {queue.appointments?.length > 0 && (
+                                            <span className="badge bg-white text-primary border extra-small">{queue.appointments.length}</span>
+                                          )}
+                                        </div>
+                                        {queue.appointments?.length > 0 ? (
+                                          <div className="d-flex flex-column gap-2 mt-2">
+                                            {queue.appointments.slice(0, 3).map((apt, i) => (
+                                              <div key={i} className="d-flex justify-content-between extra-small align-items-center p-1 px-2 rounded-2 bg-white shadow-sm border border-light">
+                                                <span className="text-truncate fw-medium">
+                                                  <i className={`bi bi-circle-fill me-2 ${apt.status === 'ongoing' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '0.5em' }}></i>
+                                                  {apt.status === 'ongoing' ? 'Currently Serving' : `Position #${i + 1}`}
+                                                </span>
+                                                <span className="badge bg-light text-muted fw-normal">{apt.total_duration || 30}m</span>
+                                              </div>
+                                            ))}
+                                            {queue.appointments.length > 3 && (
+                                              <div className="text-center extra-small text-muted py-1 border-top mt-1">
+                                                <i className="bi bi-three-dots me-1"></i>
+                                                {queue.appointments.length - 3} more waiting in line
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="text-center py-2 text-muted extra-small">
+                                            <i className="bi bi-calendar-event me-1"></i>
+                                            No active appointments
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="col-12 py-5 text-center bg-light rounded-4">
+                            <i className="bi bi-person-x fs-1 text-muted mb-3 d-block"></i>
+                            <p className="text-muted">No barbers available for this date.</p>
                           </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="col-12 py-5 text-center bg-light rounded-4">
-                      <i className="bi bi-person-x fs-1 text-muted mb-3 d-block"></i>
-                      <p className="text-muted">No barbers available for this date.</p>
-                    </div>
-                  )}
-                </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ) : (
@@ -3979,6 +4013,48 @@ const Step1DateTypeAndBarber = ({
           </button>
         </div>
       </div>
+
+      {/* Expanded Profile Modal */}
+      {expandedProfileBarber && (
+        <div className="modal-backdrop fade show" style={{ zIndex: 1050 }} onClick={() => setExpandedProfileBarber(null)}></div>
+      )}
+      {expandedProfileBarber && (
+        <div className="modal fade show d-block" tabIndex="-1" style={{ zIndex: 1051 }} onClick={() => setExpandedProfileBarber(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 overflow-hidden shadow-lg" style={{ borderRadius: '24px' }}>
+              <div className="modal-header border-0 bg-transparent p-3 position-absolute top-0 w-100 z-3" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%)' }}>
+                <button type="button" className="btn-close btn-close-white ms-auto bg-dark bg-opacity-50 rounded-circle shadow-sm p-2" onClick={() => setExpandedProfileBarber(null)}></button>
+              </div>
+              <div className="modal-body p-0 text-center position-relative">
+                {expandedProfileBarber.profile_picture_url ? (
+                  <img
+                    src={expandedProfileBarber.profile_picture_url}
+                    alt={expandedProfileBarber.full_name}
+                    className="img-fluid w-100"
+                    style={{ minHeight: '300px', maxHeight: '450px', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div className="bg-primary text-white d-flex flex-column align-items-center justify-content-center w-100" style={{ height: '350px', fontSize: '6rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)' }}>
+                    {expandedProfileBarber.full_name ? expandedProfileBarber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
+                  </div>
+                )}
+                <div className="bg-white p-4 text-start position-relative z-2" style={{ marginTop: '-20px', borderRadius: '24px 24px 0 0', boxShadow: '0 -10px 20px rgba(0,0,0,0.05)' }}>
+                  <h4 className="fw-bold mb-1">{expandedProfileBarber.full_name}</h4>
+                  <div className="d-flex flex-wrap gap-2 mt-2">
+                    <span className="badge bg-light text-dark shadow-sm py-2 px-3 fw-bold">
+                      <i className="bi bi-star-fill text-warning me-1"></i>
+                      {expandedProfileBarber.average_rating || '0'} <span className="text-muted fw-normal ms-1">({expandedProfileBarber.total_ratings || 0} reviews)</span>
+                    </span>
+                    {expandedProfileBarber.skills && expandedProfileBarber.skills.split(',').map((skill, i) => (
+                      <span key={i} className="badge bg-primary bg-opacity-10 text-primary shadow-sm py-2 px-3">{skill.trim()}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -4008,26 +4084,13 @@ const Step2ServicesAndAddons = ({
   }, [specialRequests, setSpecialRequests, updateBookingData]);
 
   const handleServiceToggle = (serviceId) => {
-    const service = services.find(s => s.id === serviceId);
     const isNowSelected = !selectedServices.includes(serviceId);
 
+    // Reset services selection (single selection only)
     setSelectedServices(isNowSelected ? [serviceId] : []);
 
-    // If selecting a service that conflicts with current add-ons, clear them
-    if (isNowSelected && service) {
-      const serviceName = service.name?.toLowerCase() || '';
-      if (serviceName.includes('emperor')) {
-        setSelectedAddOns(prev => prev.filter(id => {
-          const addon = addOns.find(a => a.id === id);
-          return !addon?.name?.toLowerCase().includes('Hair Spa');
-        }));
-      } else if (serviceName.includes('superior')) {
-        setSelectedAddOns(prev => prev.filter(id => {
-          const addon = addOns.find(a => a.id === id);
-          return !addon?.name?.toLowerCase().includes('Hair Color');
-        }));
-      }
-    }
+    // RESET all add-ons when service is changed or toggled to ensure compatibility
+    setSelectedAddOns([]);
   };
 
   const handleAddOnToggle = (addonId) => {
@@ -4050,7 +4113,7 @@ const Step2ServicesAndAddons = ({
         return total + (addon.price || 0);
       }
 
-      return total + (LEGACY_PRICE_MAPPING[addonId] || 0);
+      return total;
     }, 0);
 
     return servicesTotal + addOnsTotal;
@@ -4267,7 +4330,8 @@ const Step3QueueSummary = ({
   friendVerification,
   onSendFriendVerification,
   onVerifyFriendVerification,
-  onResetFriendVerification
+  onResetFriendVerification,
+  onLoadAlternatives
 }) => {
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
@@ -4305,7 +4369,7 @@ const Step3QueueSummary = ({
 
           // Use enhanced queue calculator for accurate estimates
           if (bookingData.appointmentType === 'queue') {
-            const queueInfo = await EnhancedQueueTimeCalculator.calculateQueueInfo(
+            const queueInfo = await QueueTimeCalculator.calculateQueueInfo(
               bookingData.selectedBarber,
               bookingData.selectedDate,
               serviceDuration,
@@ -4325,8 +4389,9 @@ const Step3QueueSummary = ({
               queueStatus: {
                 nextQueuePosition: queueInfo.queuePosition,
                 totalInQueue: queueInfo.totalInQueue,
-                queueLength: queueInfo.totalInQueue - 1,
-                estimatedWaitTime: queueInfo.estimatedWaitTime
+                queueLength: (queueInfo.totalInQueue || 1) - 1,
+                estimatedWaitTime: queueInfo.estimatedWaitTime,
+                isOverflowingWorkHours: queueInfo.isOverflowingWorkHours
               },
               availability: {
                 nextAvailableTime: formattedStartTime
@@ -4334,9 +4399,15 @@ const Step3QueueSummary = ({
               lastUpdated: new Date().toLocaleTimeString(),
               recommendations: queueInfo.recommendations
             });
+
+            // If there's a closing conflict, trigger alternative barber search
+            if (queueInfo.isOverflowingWorkHours && onLoadAlternatives) {
+              console.log('🔄 Overflow detected, loading alternatives...');
+              onLoadAlternatives(bookingData.selectedDate, serviceDuration, bookingData.selectedBarber);
+            }
           } else if (bookingData.appointmentType === 'scheduled') {
             // For scheduled appointments, check for conflicts and calculate times
-            const scheduledInfo = await EnhancedQueueTimeCalculator.calculateScheduledAppointmentTimes(
+            const scheduledInfo = await QueueTimeCalculator.calculateScheduledAppointmentTimes(
               bookingData.selectedBarber,
               bookingData.selectedDate,
               bookingData.selectedTimeSlot,
@@ -4356,6 +4427,7 @@ const Step3QueueSummary = ({
               availability: {
                 nextAvailableTime: bookingData.selectedTimeSlot,
                 hasConflict: scheduledInfo.hasConflict,
+                isOverflowingWorkHours: scheduledInfo.isOverflowingWorkHours,
                 conflictMessage: scheduledInfo.conflictMessage,
                 recommendedSlots: scheduledInfo.recommendedSlots || []
               },
@@ -4388,11 +4460,37 @@ const Step3QueueSummary = ({
         return total + (addon.price || 0);
       }
 
-      return total + (LEGACY_PRICE_MAPPING[addonId] || 0);
+      return total;
     }, 0);
 
-    return servicesTotal + addOnsTotal;
+    // Add 100 pesos urgent fee if it's an urgent booking
+    const urgentFee = (bookingData.isUrgent || bookingData.priority_level === 'urgent' || bookingData.priorityLevel === PRIORITY_LEVELS.URGENT)
+      ? (QUEUE_SETTINGS.URGENT_FEE || 100)
+      : 0;
+
+    return servicesTotal + addOnsTotal + urgentFee;
   };
+
+  // Find services and add-ons that fit in the remaining time if there's a conflict
+  const fittingServices = React.useMemo(() => {
+    const conflict = realTimeStatus.recommendations?.find(r => r.type === 'closing_conflict' || r.type === 'lunch_conflict');
+    if (!conflict || conflict.remainingMinutes === undefined || conflict.remainingMinutes <= 0) return [];
+
+    return services.filter(service =>
+      service.duration <= conflict.remainingMinutes &&
+      !bookingData.selectedServices.includes(service.id)
+    );
+  }, [realTimeStatus.recommendations, services, bookingData.selectedServices]);
+
+  const fittingAddOns = React.useMemo(() => {
+    const conflict = realTimeStatus.recommendations?.find(r => r.type === 'closing_conflict' || r.type === 'lunch_conflict');
+    if (!conflict || conflict.remainingMinutes === undefined || conflict.remainingMinutes <= 0) return [];
+
+    return addOns.filter(addon =>
+      addon.duration <= conflict.remainingMinutes &&
+      !bookingData.selectedAddOns.includes(addon.id)
+    );
+  }, [realTimeStatus.recommendations, addOns, bookingData.selectedAddOns]);
 
   return (
     <div className="container-fluid px-2 px-md-4 py-4 py-md-5 animate-fade-in">
@@ -4621,10 +4719,134 @@ const Step3QueueSummary = ({
                       <div className="bg-success bg-opacity-10 text-success rounded-pill px-3 px-sm-4 py-2 fw-bold small">
                         <i className="bi bi-clock-fill me-2"></i>Estimated Arrival: <span className="text-dark">{estimatedStartTime}</span>
                       </div>
+
+                      {/* Urgent Priority Toggle */}
+                      <div className={`mt-3 p-3 rounded-4 border ${bookingData.isUrgent ? 'border-primary bg-primary bg-opacity-5' : 'border-dashed'}`} style={{ transition: 'all 0.3s ease' }}>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div className="d-flex align-items-center">
+                            <div className={`bg-${bookingData.isUrgent ? 'primary' : 'warning'} bg-opacity-10 p-2 rounded-circle me-3`}>
+                              <i className={`bi bi-lightning-fill text-${bookingData.isUrgent ? 'primary' : 'warning'}`}></i>
+                            </div>
+                            <div>
+                              <h6 className="mb-0 fw-bold small">Urgent Priority (Queue Jump)</h6>
+                              <p className="extra-small text-muted mb-0">Skip the line for a ₱{QUEUE_SETTINGS.URGENT_FEE || 100} fee</p>
+                            </div>
+                          </div>
+                          <div className="form-check form-switch">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              role="switch"
+                              id="urgentToggle"
+                              checked={bookingData.isUrgent || false}
+                              onChange={(e) => updateBookingData({ isUrgent: e.target.checked })}
+                              style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Recommendations / Warnings */}
+                      {realTimeStatus.recommendations?.map((rec, i) => (
+                        <div key={i} className={`alert ${rec.type === 'lunch_conflict' ? 'alert-warning' : 'alert-info'} border-0 py-2 px-3 small mt-2 mb-0 d-flex align-items-center gap-2 rounded-3`}>
+                          <i className={`bi ${rec.type === 'lunch_conflict' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill'}`}></i>
+                          <div>
+                            <strong>{rec.message}</strong>
+                            {rec.suggestion && <div className="extra-small opacity-75">{rec.suggestion}</div>}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Actionable Recommendations for Conflicts */}
+              {!statusLoading && (
+                realTimeStatus.queueStatus?.isOverflowingWorkHours ||
+                realTimeStatus.availability?.isOverflowingWorkHours ||
+                realTimeStatus.recommendations?.some(r => r.type === 'lunch_conflict' && r.remainingMinutes > 0)
+              ) && (
+                  <div className="mb-4 animate-fade-in">
+                    <div className={`alert ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'alert-danger shadow-sm border-start border-4 border-danger' : 'alert-warning shadow-sm border-start border-4 border-warning'} border-0 p-3 rounded-4`}>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className={`bi ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'bi-exclamation-octagon-fill text-danger' : 'bi-clock-fill text-warning'} fs-5`}></i>
+                        <div className={`fw-bold small ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'text-danger' : 'text-warning-emphasis'}`}>
+                          {(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'Action Required: Booking Conflict' : 'Alert: Crosses Lunch Break'}
+                        </div>
+                      </div>
+
+                      <p className="extra-small mb-3 opacity-75 ps-4">
+                        {realTimeStatus.availability?.conflictMessage || (realTimeStatus.queueStatus?.isOverflowingWorkHours ? 'Please select a faster service or different barber to finish by 5:00 PM.' : 'This service would cross the 12:00 PM lunch break.')}
+                      </p>
+
+                      <div className="d-flex flex-column gap-3">
+                        {/* Alternative Barbers */}
+                        {alternativeBarbers && alternativeBarbers.length > 0 && (
+                          <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10">
+                            <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Available Barbers</div>
+                            <div className="d-flex flex-wrap gap-2">
+                              {alternativeBarbers.slice(0, 3).map(alt => (
+                                <button
+                                  key={alt.barber.id}
+                                  className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale"
+                                  onClick={() => updateBookingData({ selectedBarber: alt.barber.id })}
+                                >
+                                  <i className="bi bi-person-fill small"></i>
+                                  <span className="fw-bold extra-small">{alt.barber.full_name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="row g-2">
+                          {/* Fitting Services */}
+                          {fittingServices && fittingServices.length > 0 && (
+                            <div className="col-12 col-sm-6">
+                              <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10 h-100">
+                                <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Shorter Services</div>
+                                <div className="d-flex flex-wrap gap-2">
+                                  {fittingServices.slice(0, 3).map(service => (
+                                    <button
+                                      key={service.id}
+                                      className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale flex-grow-1"
+                                      onClick={() => updateBookingData({ selectedServices: [service.id] })}
+                                    >
+                                      <i className="bi bi-scissors small"></i>
+                                      <span className="fw-bold extra-small">{service.name} ({service.duration}m)</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Fitting Add-ons */}
+                          {fittingAddOns && fittingAddOns.length > 0 && (
+                            <div className="col-12 col-sm-6">
+                              <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10 h-100">
+                                <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Compatible Add-ons</div>
+                                <div className="d-flex flex-wrap gap-2">
+                                  {fittingAddOns.slice(0, 3).map(addon => (
+                                    <button
+                                      key={addon.id}
+                                      className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale flex-grow-1"
+                                      onClick={() => updateBookingData({ selectedAddOns: [addon.id] })}
+                                    >
+                                      <i className="bi bi-plus-circle small"></i>
+                                      <span className="fw-bold extra-small">{addon.name} ({addon.duration}m)</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               {/* Booking Grid */}
               <div className="row g-4 mb-3">
@@ -4646,10 +4868,14 @@ const Step3QueueSummary = ({
                         <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-person-fill me-2"></i>Barber</div>
                         <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(1)}>Edit</button>
                       </div>
-                      <div className="d-flex align-items-center">
-                        <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
-                          <i className="bi bi-person-badge text-primary fs-5"></i>
-                        </div>
+                      <div className="d-flex align-items-center mt-2">
+                        {selectedBarber?.profile_picture_url ? (
+                          <img src={selectedBarber.profile_picture_url} alt={selectedBarber.full_name} className="flex-shrink-0 me-3 mt-1" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                        ) : (
+                          <div className="bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3 mt-1" style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: '0 2px 4px rgba(13,110,253,0.2)' }}>
+                            {selectedBarber?.full_name ? selectedBarber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
+                          </div>
+                        )}
                         <div className="fw-bold text-dark fs-5">{selectedBarber?.full_name}</div>
                       </div>
                     </div>
@@ -4660,14 +4886,14 @@ const Step3QueueSummary = ({
                 <div className="col-md-6">
                   <div className="info-card h-100 p-3">
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                      <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-scissors me-2"></i>Selected Services</div>
+                      <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-scissors me-2 text-primary"></i>Selected Services</div>
                       <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(2)}>Edit</button>
                     </div>
-                    <div className="services-list">
+                    <div className="services-list mb-4">
                       {bookingData.selectedServices?.map(serviceId => {
                         const service = services.find(s => s.id === serviceId);
                         return (
-                          <div key={serviceId} className="service-item d-flex justify-content-between align-items-center">
+                          <div key={serviceId} className="service-item d-flex justify-content-between align-items-center mb-2">
                             <div>
                               <div className="fw-bold text-dark mb-0 small">{service?.name}</div>
                               <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{service?.duration} mins</div>
@@ -4676,22 +4902,35 @@ const Step3QueueSummary = ({
                           </div>
                         );
                       })}
-                      {bookingData.selectedAddOns?.map(addonId => {
-                        const addon = addOns.find(a => a.id === addonId);
-                        return (
-                          <div key={addonId} className="service-item d-flex justify-content-between align-items-center">
-                            <div>
-                              <div className="fw-bold text-dark mb-0 small">{addon?.name} <span className="badge bg-light text-muted fw-normal ms-1">Add-on</span></div>
-                              <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{addon?.duration} mins</div>
-                            </div>
-                            <div className="fw-bold text-primary small">{formatPrice(addon?.price)}</div>
-                          </div>
-                        );
-                      })}
                     </div>
-                    <div className="mt-3 pt-3 border-top text-end">
-                      <span className="text-muted small">Total duration: </span>
-                      <span className="fw-bold text-dark">{calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} mins</span>
+
+                    <div className="d-flex justify-content-between align-items-center mb-3 mt-4">
+                      <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-plus-circle me-2 text-warning"></i>Extra Add-ons</div>
+                    </div>
+                    <div className="services-list">
+                      {bookingData.selectedAddOns && bookingData.selectedAddOns.length > 0 ? (
+                        bookingData.selectedAddOns.map(addonId => {
+                          const addon = addOns.find(a => a.id === addonId);
+                          return (
+                            <div key={addonId} className="service-item d-flex justify-content-between align-items-center mb-2 bg-warning bg-opacity-5 p-2 rounded-2">
+                              <div>
+                                <div className="fw-bold text-dark mb-0 small">{addon?.name}</div>
+                                <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{addon?.duration} mins</div>
+                              </div>
+                              <div className="fw-bold text-warning-emphasis small">{formatPrice(addon?.price)}</div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-muted extra-small italic py-2">No add-ons selected</div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-top d-flex justify-content-between align-items-end">
+                      <div className="text-muted extra-small">Total session time:</div>
+                      <div className="text-end">
+                        <span className="fw-bold text-dark">{calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} mins</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4798,7 +5037,12 @@ const Step3QueueSummary = ({
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
                     <h5 className="mb-0 fw-bold">Grand Total</h5>
-                    <p className="mb-0 small opacity-75">All items included</p>
+                    <p className="mb-0 small opacity-85 fw-medium">
+                      {bookingData.isUrgent
+                        ? <span className="text-warning-emphasis"><i className="bi bi-lightning-fill me-1"></i>Includes ₱{QUEUE_SETTINGS.URGENT_FEE || 100} Priority Fee</span>
+                        : 'Final amount including all services'
+                      }
+                    </p>
                   </div>
                   <div className="text-end">
                     <div className="display-5 fw-bold">{formatPrice(calculateTotal())}</div>
@@ -4823,12 +5067,13 @@ const Step3QueueSummary = ({
                     className="btn btn-success btn-lg w-100 py-3 rounded-pill fw-bold shadow-sm"
                     disabled={
                       loading ||
+                      statusLoading ||
                       !bookingData.selectedBarber ||
                       bookingData.selectedServices.length === 0 ||
                       !bookingData.selectedDate ||
-                      (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase())) ||
-                      (bookingData.appointmentType === 'scheduled' && bookingData.selectedTimeSlot &&
-                        wouldCrossLunchBreak(bookingData.selectedTimeSlot, calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)))
+                      realTimeStatus.queueStatus?.isOverflowingWorkHours ||
+                      (bookingData.appointmentType === 'scheduled' && realTimeStatus.availability?.hasConflict) ||
+                      (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase()))
                     }
                     onClick={onSubmit}
                   >

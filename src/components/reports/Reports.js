@@ -11,11 +11,11 @@ const Reports = () => {
     start: new Date().toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
-  
+
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Export functionality
   const reportRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -23,7 +23,7 @@ const Reports = () => {
   // Export functions
   const exportToPDF = async () => {
     if (!reportRef.current) return;
-    
+
     setIsExporting(true);
     try {
       const canvas = await html2canvas(reportRef.current, {
@@ -32,45 +32,45 @@ const Reports = () => {
         allowTaint: true,
         backgroundColor: '#ffffff'
       });
-      
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
+
       // Add header with date range
       pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
       pdf.text(`${reportTypes.find(t => t.value === reportType)?.label || 'Report'}`, 20, 20);
-      
+
       pdf.setFontSize(12);
       pdf.setFont('helvetica', 'normal');
       const dateText = `Date Range: ${new Date(dateRange.start).toLocaleDateString()} - ${new Date(dateRange.end).toLocaleDateString()}`;
       pdf.text(dateText, 20, 30);
-      
+
       pdf.setFontSize(10);
       const generatedText = `Generated on: ${new Date().toLocaleString()}`;
       pdf.text(generatedText, 20, 40);
-      
+
       // Add a line separator
       pdf.setLineWidth(0.5);
       pdf.line(20, 45, 190, 45);
-      
+
       const imgWidth = 190;
       const pageHeight = 250; // Reduced to account for header
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
-      
+
       let position = 50; // Start below header
-      
+
       pdf.addImage(imgData, 'PNG', 20, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
-      
+
       while (heightLeft >= 0) {
         position = heightLeft - imgHeight + 50; // Account for header on new pages
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 20, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
+
       const fileName = `${reportType}_report_${dateRange.start}_to_${dateRange.end}.pdf`;
       pdf.save(fileName);
     } catch (error) {
@@ -83,7 +83,7 @@ const Reports = () => {
 
   const exportToImage = async () => {
     if (!reportRef.current) return;
-    
+
     setIsExporting(true);
     try {
       const canvas = await html2canvas(reportRef.current, {
@@ -92,37 +92,37 @@ const Reports = () => {
         allowTaint: true,
         backgroundColor: '#ffffff'
       });
-      
+
       // Create a new canvas with header information
       const headerCanvas = document.createElement('canvas');
       const headerCtx = headerCanvas.getContext('2d');
-      
+
       // Set canvas size (add space for header)
       headerCanvas.width = canvas.width;
       headerCanvas.height = canvas.height + 80; // Add space for header
-      
+
       // Fill background
       headerCtx.fillStyle = '#ffffff';
       headerCtx.fillRect(0, 0, headerCanvas.width, headerCanvas.height);
-      
+
       // Add header text
       headerCtx.fillStyle = '#000000';
       headerCtx.font = 'bold 24px Arial';
       headerCtx.textAlign = 'left';
       headerCtx.fillText(`${reportTypes.find(t => t.value === reportType)?.label || 'Report'}`, 20, 30);
-      
+
       headerCtx.font = '18px Arial';
       const dateText = `Date Range: ${new Date(dateRange.start).toLocaleDateString()} - ${new Date(dateRange.end).toLocaleDateString()}`;
       headerCtx.fillText(dateText, 20, 55);
-      
+
       headerCtx.font = '14px Arial';
       headerCtx.fillStyle = '#666666';
       const generatedText = `Generated on: ${new Date().toLocaleString()}`;
       headerCtx.fillText(generatedText, 20, 75);
-      
+
       // Draw the original report content below the header
       headerCtx.drawImage(canvas, 0, 80);
-      
+
       const link = document.createElement('a');
       link.download = `${reportType}_report_${dateRange.start}_to_${dateRange.end}.png`;
       link.href = headerCanvas.toDataURL();
@@ -142,7 +142,6 @@ const Reports = () => {
     { value: 'customers', label: 'Customer Analytics' },
     { value: 'services', label: 'Service Performance' },
     { value: 'queue', label: 'Queue Analytics' },
-    { value: 'double_booking', label: 'Double Booking Insights' },
     { value: 'inventory', label: 'Inventory Report' },
     { value: 'system', label: 'System Activity Logs' }
   ];
@@ -156,7 +155,7 @@ const Reports = () => {
   const generateReport = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       let data;
       switch (reportType) {
@@ -182,23 +181,20 @@ const Reports = () => {
         case 'queue':
           data = await generateQueueReport();
           break;
-        case 'double_booking':
-          data = await generateDoubleBookingReport();
-          break;
         case 'system':
           data = await generateSystemReport();
           break;
         default:
           throw new Error('Invalid report type');
       }
-      
+
       // Validate data before setting
       if (!data) {
         throw new Error('No data returned from report generation');
       }
-      
+
       setReportData(data);
-      
+
       // Log report generation
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('system_logs').insert({
@@ -237,95 +233,79 @@ const Reports = () => {
       .lte('created_at', dateRange.end);
 
 
-    // Calculate revenue (simplified - no add-ons)
+    // Calculate revenue with multi-service and add-on support
     const revenueByBarber = {};
     const revenueByService = {};
+    const dailyRevenueMap = {};
     let totalRevenue = 0;
     let totalOrderRevenue = 0;
     let completedAppointmentsCount = 0;
     let completedOrdersCount = 0;
 
+    // Process Appointments
     appointments?.forEach(apt => {
-      const barberId = apt.barber_id;
-      const serviceId = apt.service_id;
-      const servicePrice = apt.service?.price || 0;
-      const totalPrice = apt.total_price || servicePrice;
-      
-      // Only count revenue for completed appointments (done or completed status)
-      if (!['completed'].includes(apt.status)) {
-        return;
+      if (apt.status === 'completed') {
+        const amount = apt.total_price || apt.service?.price || 0;
+        const date = apt.appointment_date;
+
+        dailyRevenueMap[date] = (dailyRevenueMap[date] || 0) + amount;
+        totalRevenue += amount;
+        completedAppointmentsCount++;
+
+        // Revenue by barber
+        const bId = apt.barber_id;
+        if (!revenueByBarber[bId]) {
+          revenueByBarber[bId] = { name: apt.barber?.full_name || 'Unknown', revenue: 0, appointments: 0 };
+        }
+        revenueByBarber[bId].revenue += amount;
+        revenueByBarber[bId].appointments += 1;
+
+        // Revenue by service (support multi-service data)
+        const services = Array.isArray(apt.services_data) && apt.services_data.length > 0
+          ? apt.services_data
+          : [{ id: apt.service_id, name: apt.service?.name || 'Unknown', price: apt.service?.price || 0 }];
+
+        services.forEach(svc => {
+          const sId = svc.id || 'misc';
+          if (!revenueByService[sId]) {
+            revenueByService[sId] = { name: svc.name || 'Unknown', revenue: 0, count: 0 };
+          }
+          revenueByService[sId].count += 1;
+          revenueByService[sId].revenue += (svc.price || (amount / services.length));
+        });
       }
-
-      completedAppointmentsCount++;
-
-      // Revenue by barber
-      if (!revenueByBarber[barberId]) {
-        revenueByBarber[barberId] = {
-          name: apt.barber?.full_name || 'Unknown',
-          revenue: 0,
-          appointments: 0
-        };
-      }
-      revenueByBarber[barberId].revenue += totalPrice;
-      revenueByBarber[barberId].appointments += 1;
-
-      // Revenue by service
-      if (!revenueByService[serviceId]) {
-        revenueByService[serviceId] = {
-          name: apt.service?.name || 'Unknown',
-          revenue: 0,
-          count: 0
-        };
-      }
-      revenueByService[serviceId].revenue += totalPrice;
-      revenueByService[serviceId].count += 1;
-
-      totalRevenue += totalPrice;
     });
 
-    // Calculate order revenue - only count completed orders (picked_up status)
+    // Process Orders
     orders?.forEach(order => {
-      // Only count completed orders (picked_up status)
       if (order.status === 'picked_up') {
-        totalOrderRevenue += order.total_amount || 0;
+        const amount = order.total_amount || 0;
+        const date = order.created_at?.split('T')[0];
+
+        if (date) {
+          dailyRevenueMap[date] = (dailyRevenueMap[date] || 0) + amount;
+        }
+        totalOrderRevenue += amount;
         completedOrdersCount++;
       }
     });
 
-    // Daily revenue (only for completed appointments)
-    const dailyRevenue = {};
-    appointments?.forEach(apt => {
-      if (!['completed'].includes(apt.status)) {
-        return;
-      }
-      const date = apt.appointment_date;
-      const price = apt.total_price || apt.service?.price || 0;
-      if (!dailyRevenue[date]) {
-        dailyRevenue[date] = 0;
-      }
-      dailyRevenue[date] += price;
-    });
-
-    // Get today's revenue
     const today = new Date().toISOString().split('T')[0];
-    const todayRevenue = dailyRevenue[today] || 0;
-
-
 
     return {
       summary: {
         totalRevenue,
         totalOrderRevenue,
         totalCombinedRevenue: totalRevenue + totalOrderRevenue,
-        totalAppointments: completedAppointmentsCount, // Only count completed appointments
-        totalOrders: completedOrdersCount, // Only count completed orders (picked_up)
+        totalAppointments: completedAppointmentsCount,
+        totalOrders: completedOrdersCount,
         averageTransaction: completedAppointmentsCount > 0 ? totalRevenue / completedAppointmentsCount : 0,
         averageOrderValue: completedOrdersCount > 0 ? totalOrderRevenue / completedOrdersCount : 0,
-        todayRevenue
+        todayRevenue: dailyRevenueMap[today] || 0
       },
-      revenueByBarber: Object.values(revenueByBarber || {}),
-      revenueByService: Object.values(revenueByService || {}),
-      dailyRevenue
+      revenueByBarber: Object.values(revenueByBarber),
+      revenueByService: Object.values(revenueByService),
+      dailyRevenue: Object.entries(dailyRevenueMap).map(([date, revenue]) => ({ date, revenue })).sort((a, b) => new Date(a.date) - new Date(b.date))
     };
   };
 
@@ -343,9 +323,10 @@ const Reports = () => {
 
     // Status breakdown
     const statusBreakdown = {
-      scheduled: 0,
+      pending: 0,
+      confirmed: 0,
       ongoing: 0,
-      done: 0,
+      completed: 0,
       cancelled: 0
     };
 
@@ -357,7 +338,7 @@ const Reports = () => {
 
     appointments?.forEach(apt => {
       statusBreakdown[apt.status] = (statusBreakdown[apt.status] || 0) + 1;
-      
+
       // Count appointment types
       if (apt.appointment_type === 'queue') queueAppointments++;
       if (apt.appointment_type === 'scheduled') scheduledAppointments++;
@@ -374,7 +355,7 @@ const Reports = () => {
           name: apt.barber?.full_name || 'Unknown',
           total: 0,
           queueAppointments: 0,
-          statusBreakdown: { scheduled: 0, ongoing: 0, done: 0, cancelled: 0 }
+          statusBreakdown: { pending: 0, confirmed: 0, ongoing: 0, completed: 0, cancelled: 0 }
         };
       }
       appointmentsByBarber[barberId].total += 1;
@@ -384,30 +365,30 @@ const Reports = () => {
       }
     });
 
-    // Appointments by service
+    // Appointments by service (Corrected multi-service logic)
     const appointmentsByService = {};
     appointments?.forEach(apt => {
-      const serviceId = apt.service_id;
-      if (!appointmentsByService[serviceId]) {
-        appointmentsByService[serviceId] = {
-          name: apt.service?.name || 'Unknown',
-          total: 0,
-          completed: 0,
-          totalDuration: 0,
-          revenue: 0
-        };
-      }
-      appointmentsByService[serviceId].total += 1;
-      if (apt.status === 'completed') {
-        appointmentsByService[serviceId].completed += 1;
-        appointmentsByService[serviceId].revenue += apt.total_price || apt.service?.price || 0;
-      }
-      appointmentsByService[serviceId].totalDuration += apt.total_duration || apt.service?.duration || 0;
-    });
+      const services = Array.isArray(apt.services_data) && apt.services_data.length > 0
+        ? apt.services_data
+        : [{ id: apt.service_id, name: apt.service?.name || 'Unknown', price: apt.service?.price || 0 }];
 
-    // Calculate averages for services
-    Object.values(appointmentsByService).forEach(service => {
-      service.averageDuration = service.total > 0 ? Math.round(service.totalDuration / service.total) : 0;
+      services.forEach(svc => {
+        const sId = svc.id || 'misc';
+        if (!appointmentsByService[sId]) {
+          appointmentsByService[sId] = {
+            name: svc.name || 'Unknown',
+            total: 0,
+            completed: 0,
+            revenue: 0
+          };
+        }
+        appointmentsByService[sId].total += 1;
+        if (apt.status === 'completed') {
+          appointmentsByService[sId].completed += 1;
+          const svcRevenue = svc.price || (apt.total_price / services.length) || 0;
+          appointmentsByService[sId].revenue += svcRevenue;
+        }
+      });
     });
 
     // Daily breakdown
@@ -428,7 +409,7 @@ const Reports = () => {
       if (apt.appointment_type === 'scheduled') dailyBreakdown[date].scheduled += 1;
       if (apt.appointment_type === 'queue') dailyBreakdown[date].queue += 1;
       if (apt.status === 'completed') dailyBreakdown[date].completed += 1;
-      if (apt.status === 'cancelled') dailyBreakdown[date].cancelled += 1;
+      if (['cancelled', 'cancel'].includes(apt.status)) dailyBreakdown[date].cancelled += 1;
     });
 
     return {
@@ -456,25 +437,35 @@ const Reports = () => {
 
     // Get appointment data for customers
     const customerStats = {};
-    
+
     for (const customer of customers || []) {
       const { data: appointments } = await supabase
         .from('appointments')
         .select('*, service:service_id(price)')
+        .eq('customer_id', customer.id);
+
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('*')
         .eq('customer_id', customer.id)
-        .gte('appointment_date', dateRange.start)
-        .lte('appointment_date', dateRange.end);
+        .eq('status', 'picked_up');
+
+      const apptSpend = appointments?.filter(apt => apt.status === 'completed')
+        .reduce((sum, apt) => sum + (apt.total_price || apt.service?.price || 0), 0) || 0;
+
+      const orderSpend = orders?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
 
       customerStats[customer.id] = {
         ...customer,
         appointments: appointments?.length || 0,
-        totalSpent: appointments?.reduce((sum, apt) => sum + (apt.service?.price || 0), 0) || 0,
+        completedAppointments: appointments?.filter(apt => apt.status === 'completed').length || 0,
+        totalSpent: apptSpend + orderSpend,
         lastVisit: appointments?.[0]?.appointment_date || null
       };
     }
 
     // New customers in period
-    const newCustomers = customers?.filter(c => 
+    const newCustomers = customers?.filter(c =>
       new Date(c.created_at) >= new Date(dateRange.start) &&
       new Date(c.created_at) <= new Date(dateRange.end)
     ).length || 0;
@@ -507,7 +498,9 @@ const Reports = () => {
       servicePerformance[service.id] = {
         ...service,
         bookings: appointments?.length || 0,
-        revenue: (appointments?.length || 0) * service.price
+        completedBookings: appointments?.filter(apt => apt.status === 'completed').length || 0,
+        revenue: appointments?.filter(apt => apt.status === 'completed')
+          .reduce((sum, apt) => sum + (apt.total_price || service.price), 0) || 0
       };
     }
 
@@ -529,10 +522,11 @@ const Reports = () => {
     // Low stock items
     const lowStock = products?.filter(p => p.stock_quantity < 5) || [];
 
-    // Get sales data
+    // Get sales data - only count 'picked_up' orders
     const { data: orders } = await supabase
       .from('orders')
-      .select('items')
+      .select('items, status')
+      .eq('status', 'picked_up')
       .gte('created_at', dateRange.start)
       .lte('created_at', dateRange.end);
 
@@ -601,17 +595,24 @@ const Reports = () => {
           averageWaitTime: 0
         };
       }
+      const status = apt.status || 'pending';
+      if (queueByBarber[barberId].hasOwnProperty(status)) {
+        queueByBarber[barberId][status] += 1;
+      } else {
+        // Handle confirmed/ongoing/etc as pending for queue metrics if needed, 
+        // or just track them as-is by initializing
+        queueByBarber[barberId][status] = (queueByBarber[barberId][status] || 0) + 1;
+      }
       queueByBarber[barberId].total += 1;
-      queueByBarber[barberId][apt.status] += 1;
     });
 
     // Calculate average wait time per barber
     Object.keys(queueByBarber).forEach(barberId => {
-      const barberQueues = queueAppointments?.filter(apt => 
+      const barberQueues = queueAppointments?.filter(apt =>
         apt.barber_id === barberId && apt.estimated_wait_time
       ) || [];
       if (barberQueues.length > 0) {
-        queueByBarber[barberId].averageWaitTime = 
+        queueByBarber[barberId].averageWaitTime =
           barberQueues.reduce((sum, apt) => sum + apt.estimated_wait_time, 0) / barberQueues.length;
       }
     });
@@ -640,81 +641,7 @@ const Reports = () => {
     };
   };
 
-  const generateDoubleBookingReport = async () => {
-    // Get double booking appointments
-    const { data: doubleBookings } = await supabase
-      .from('appointments')
-      .select(`
-        *,
-        customer:customer_id(full_name),
-        barber:barber_id(full_name),
-        service:service_id(name, price)
-      `)
-      .eq('is_double_booking', true)
-      .gte('appointment_date', dateRange.start)
-      .lte('appointment_date', dateRange.end);
 
-    const totalDoubleBookings = doubleBookings?.length || 0;
-    const completedDoubleBookings = doubleBookings?.filter(apt => apt.status === 'completed').length || 0;
-    const cancelledDoubleBookings = doubleBookings?.filter(apt => apt.status === 'cancelled').length || 0;
-
-    // Revenue from double bookings
-    const doubleBookingRevenue = doubleBookings?.reduce((sum, apt) => 
-      sum + (apt.status === 'completed' ? (apt.total_price || apt.service?.price || 0) : 0), 0) || 0;
-
-    // Double bookings by barber
-    const doubleBookingsByBarber = {};
-    doubleBookings?.forEach(apt => {
-      const barberId = apt.barber_id;
-      if (!doubleBookingsByBarber[barberId]) {
-        doubleBookingsByBarber[barberId] = {
-          name: apt.barber?.full_name || 'Unknown',
-          total: 0,
-          completed: 0,
-          revenue: 0
-        };
-      }
-      doubleBookingsByBarber[barberId].total += 1;
-      if (apt.status === 'completed') {
-        doubleBookingsByBarber[barberId].completed += 1;
-        doubleBookingsByBarber[barberId].revenue += apt.total_price || apt.service?.price || 0;
-      }
-    });
-
-    // Friend booking patterns
-    const friendBookingPatterns = {};
-    doubleBookings?.forEach(apt => {
-      if (apt.double_booking_data?.friend_name) {
-        const friendName = apt.double_booking_data.friend_name;
-        if (!friendBookingPatterns[friendName]) {
-          friendBookingPatterns[friendName] = {
-            name: friendName,
-            bookings: 0,
-            totalSpent: 0,
-            lastBooking: apt.appointment_date
-          };
-        }
-        friendBookingPatterns[friendName].bookings += 1;
-        if (apt.status === 'completed') {
-          friendBookingPatterns[friendName].totalSpent += apt.total_price || apt.service?.price || 0;
-        }
-      }
-    });
-
-    return {
-      summary: {
-        totalDoubleBookings: totalDoubleBookings || 0,
-        completedDoubleBookings: completedDoubleBookings || 0,
-        cancelledDoubleBookings: cancelledDoubleBookings || 0,
-        doubleBookingRevenue: doubleBookingRevenue || 0,
-        completionRate: totalDoubleBookings ? (completedDoubleBookings / totalDoubleBookings * 100) : 0,
-        averageRevenuePerBooking: completedDoubleBookings ? (doubleBookingRevenue / completedDoubleBookings) : 0
-      },
-      doubleBookingsByBarber: Object.values(doubleBookingsByBarber || {}),
-      friendBookingPatterns: Object.values(friendBookingPatterns || {}),
-      doubleBookings: doubleBookings || []
-    };
-  };
 
   const generateSystemReport = async () => {
     const { data: logs, count } = await supabase
@@ -847,16 +774,16 @@ const Reports = () => {
             <div className="col-md-4 text-end">
               {reportData && (
                 <div className="btn-group" role="group">
-                  <button 
-                    className="btn btn-danger" 
+                  <button
+                    className="btn btn-danger"
                     onClick={exportToPDF}
                     disabled={isExporting}
                   >
                     <i className="bi bi-file-earmark-pdf me-2"></i>
                     {isExporting ? 'Exporting...' : 'Export PDF'}
                   </button>
-                  <button 
-                    className="btn btn-info" 
+                  <button
+                    className="btn btn-info"
                     onClick={exportToImage}
                     disabled={isExporting}
                   >
@@ -868,7 +795,7 @@ const Reports = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="card-body">
           <div className="row mb-4">
             <div className="col-md-4">
@@ -888,7 +815,7 @@ const Reports = () => {
                 ))}
               </select>
             </div>
-            
+
             <div className="col-md-4">
               <label className="form-label fw-bold">
                 <i className="bi bi-calendar-event me-2"></i>
@@ -909,17 +836,17 @@ const Reports = () => {
                     cursor: 'pointer'
                   }}
                 />
-                <i className="bi bi-calendar3 position-absolute" 
-                   style={{
-                     left: '0.75rem',
-                     top: '50%',
-                     transform: 'translateY(-50%)',
-                     color: '#6c757d',
-                     pointerEvents: 'none'
-                   }}></i>
+                <i className="bi bi-calendar3 position-absolute"
+                  style={{
+                    left: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#6c757d',
+                    pointerEvents: 'none'
+                  }}></i>
               </div>
             </div>
-            
+
             <div className="col-md-4">
               <label className="form-label fw-bold">
                 <i className="bi bi-calendar-check me-2"></i>
@@ -940,32 +867,32 @@ const Reports = () => {
                     cursor: 'pointer'
                   }}
                 />
-                <i className="bi bi-calendar3 position-absolute" 
-                   style={{
-                     left: '0.75rem',
-                     top: '50%',
-                     transform: 'translateY(-50%)',
-                     color: '#6c757d',
-                     pointerEvents: 'none'
-                   }}></i>
+                <i className="bi bi-calendar3 position-absolute"
+                  style={{
+                    left: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#6c757d',
+                    pointerEvents: 'none'
+                  }}></i>
               </div>
             </div>
           </div>
-          
+
           {/* Date Range Display */}
           <div className="row mb-3">
             <div className="col-12">
               <div className="alert alert-info d-flex align-items-center mb-0" role="alert">
                 <i className="bi bi-info-circle me-2"></i>
                 <span>
-                  <strong>Selected Date Range:</strong> {new Date(dateRange.start).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })} - {new Date(dateRange.end).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
+                  <strong>Selected Date Range:</strong> {new Date(dateRange.start).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })} - {new Date(dateRange.end).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
                   })}
                 </span>
               </div>
@@ -994,7 +921,6 @@ const Reports = () => {
               {reportType === 'customers' && <CustomerReportView data={reportData} />}
               {reportType === 'services' && <ServiceReportView data={reportData} />}
               {reportType === 'queue' && <QueueReportView data={reportData} />}
-              {reportType === 'double_booking' && <DoubleBookingReportView data={reportData} />}
               {reportType === 'inventory' && <InventoryReportView data={reportData} />}
               {reportType === 'system' && <SystemReportView data={reportData} />}
             </div>
@@ -1091,7 +1017,7 @@ const RevenueReportView = ({ data }) => (
           </table>
         </div>
       </div>
-      
+
       <div className="col-md-6">
         <h5>Revenue by Service</h5>
         <div className="table-responsive">
@@ -1123,7 +1049,7 @@ const RevenueReportView = ({ data }) => (
 const AppointmentsReportView = ({ data }) => {
   // Ensure data has proper structure with defaults
   const summary = data?.summary || {};
-  const statusBreakdown = summary.statusBreakdown || { scheduled: 0, ongoing: 0, done: 0, cancelled: 0 };
+  const statusBreakdown = summary.statusBreakdown || { pending: 0, confirmed: 0, ongoing: 0, completed: 0, cancelled: 0 };
   const appointmentsByBarber = data?.appointmentsByBarber || [];
   const appointmentsByService = data?.appointmentsByService || [];
   const dailyBreakdown = data?.dailyBreakdown || [];
@@ -1155,9 +1081,9 @@ const AppointmentsReportView = ({ data }) => {
                   <td>{(summary.total || 0) > 0 ? (((statusBreakdown.done || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
                 </tr>
                 <tr>
-                  <td>Scheduled</td>
-                  <td>{statusBreakdown.scheduled || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.scheduled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                  <td>Confirmed</td>
+                  <td>{statusBreakdown.confirmed || 0}</td>
+                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.confirmed || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
                 </tr>
                 <tr>
                   <td>Ongoing</td>
@@ -1195,110 +1121,109 @@ const AppointmentsReportView = ({ data }) => {
         </div>
       </div>
 
-    {/* Appointments by Barber */}
-    <div className="row mb-4">
-      <div className="col-12">
-        <h5>Appointments by Barber</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Barber</th>
-                <th>Total</th>
-                <th>Scheduled</th>
-                <th>Queue</th>
-                <th>Ongoing</th>
-                <th>Done</th>
-                <th>Cancelled</th>
-                <th>Completion Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {appointmentsByBarber.map((barber, index) => {
-                const barberStatusBreakdown = barber.statusBreakdown || { scheduled: 0, ongoing: 0, done: 0, cancelled: 0 };
-                return (
+      {/* Appointments by Barber */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <h5>Appointments by Barber</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Barber</th>
+                  <th>Total</th>
+                  <th>Confirmed</th>
+                  <th>Queue</th>
+                  <th>Ongoing</th>
+                  <th>Completed</th>
+                  <th>Cancelled</th>
+                  <th>Completion Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {appointmentsByBarber.map((barber, index) => {
+                  const barberStatusBreakdown = barber.statusBreakdown || { pending: 0, confirmed: 0, ongoing: 0, completed: 0, cancelled: 0 };
+                  return (
+                    <tr key={index}>
+                      <td><strong>{barber.name || 'Unknown'}</strong></td>
+                      <td>{barber.total || 0}</td>
+                      <td>{barberStatusBreakdown?.confirmed || 0}</td>
+                      <td>{barber?.queueAppointments || 0}</td>
+                      <td>{barberStatusBreakdown?.ongoing || 0}</td>
+                      <td>{barberStatusBreakdown?.completed || 0}</td>
+                      <td>{barberStatusBreakdown?.cancelled || barberStatusBreakdown?.cancel || 0}</td>
+                      <td>{(barber?.total || 0) > 0 ? (((barberStatusBreakdown?.completed || 0) / (barber?.total || 1)) * 100).toFixed(1) : 0}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Appointments by Service */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <h5>Appointments by Service</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Total Bookings</th>
+                  <th>Completed</th>
+                  <th>Average Duration</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(appointmentsByService || []).map((service, index) => (
                   <tr key={index}>
-                    <td><strong>{barber.name || 'Unknown'}</strong></td>
-                    <td>{barber.total || 0}</td>
-                    <td>{barberStatusBreakdown.scheduled || 0}</td>
-                    <td>{barber.queueAppointments || 0}</td>
-                    <td>{barberStatusBreakdown.ongoing || 0}</td>
-                    <td>{barberStatusBreakdown.done || 0}</td>
-                    <td>{barberStatusBreakdown.cancelled || 0}</td>
-                    <td>{(barber.total || 0) > 0 ? (((barberStatusBreakdown.done || 0) / (barber.total || 1)) * 100).toFixed(1) : 0}%</td>
+                    <td><strong>{service?.name || 'Unknown'}</strong></td>
+                    <td>{service?.total || 0}</td>
+                    <td>{service?.completed || 0}</td>
+                    <td>₱{(service?.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
 
-    {/* Appointments by Service */}
-    <div className="row mb-4">
-      <div className="col-12">
-        <h5>Appointments by Service</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Service</th>
-                <th>Total Bookings</th>
-                <th>Completed</th>
-                <th>Average Duration</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {appointmentsByService.map((service, index) => (
-                <tr key={index}>
-                  <td><strong>{service.name || 'Unknown'}</strong></td>
-                  <td>{service.total || 0}</td>
-                  <td>{service.completed || 0}</td>
-                  <td>{service.averageDuration || 0} min</td>
-                  <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      {/* Daily Breakdown */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <h5>Daily Appointment Breakdown</h5>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Total</th>
+                  <th>Scheduled</th>
+                  <th>Queue</th>
+                  <th>Completed</th>
+                  <th>Cancelled</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {dailyBreakdown.map((day, index) => (
+                  <tr key={index}>
+                    <td><strong>{day.date ? new Date(day.date).toLocaleDateString() : 'Unknown Date'}</strong></td>
+                    <td>{day.total || 0}</td>
+                    <td>{day.scheduled || 0}</td>
+                    <td>{day.queue || 0}</td>
+                    <td>{day?.completed || 0}</td>
+                    <td>{day?.cancelled || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
-
-    {/* Daily Breakdown */}
-    <div className="row mb-4">
-      <div className="col-12">
-        <h5>Daily Appointment Breakdown</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Total</th>
-                <th>Scheduled</th>
-                <th>Queue</th>
-                <th>Completed</th>
-                <th>Cancelled</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dailyBreakdown.map((day, index) => (
-                <tr key={index}>
-                  <td><strong>{day.date ? new Date(day.date).toLocaleDateString() : 'Unknown Date'}</strong></td>
-                  <td>{day.total || 0}</td>
-                  <td>{day.scheduled || 0}</td>
-                  <td>{day.queue || 0}</td>
-                  <td>{day.completed || 0}</td>
-                  <td>{day.cancelled || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
   );
 };
 
@@ -1318,15 +1243,15 @@ const CustomerReportView = ({ data }) => (
             <tbody>
               <tr>
                 <td><strong>Total Customers</strong></td>
-                <td><strong>{data.summary.totalCustomers}</strong></td>
+                <td><strong>{data?.summary?.totalCustomers || 0}</strong></td>
               </tr>
               <tr>
                 <td>New Customers</td>
-                <td>{data.summary.newCustomers}</td>
+                <td>{data?.summary?.newCustomers || 0}</td>
               </tr>
               <tr>
                 <td>Repeat Customers</td>
-                <td>{data.summary.repeatCustomers}</td>
+                <td>{data?.summary?.repeatCustomers || 0}</td>
               </tr>
             </tbody>
           </table>
@@ -1654,111 +1579,6 @@ const QueueReportView = ({ data }) => (
   </div>
 );
 
-const DoubleBookingReportView = ({ data }) => {
-  // Ensure data has proper structure with defaults
-  const summary = data?.summary || {};
-  const doubleBookingsByBarber = data?.doubleBookingsByBarber || [];
-  const friendBookingPatterns = data?.friendBookingPatterns || [];
 
-  return (
-    <div>
-      <div className="row mb-4">
-        <div className="col-12">
-          <h5>Double Booking Summary</h5>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>Total Friend Bookings</strong></td>
-                  <td><strong>{summary.totalDoubleBookings || 0}</strong></td>
-                </tr>
-                <tr>
-                  <td>Completed</td>
-                  <td>{summary.completedDoubleBookings || 0}</td>
-                </tr>
-                <tr>
-                  <td>Cancelled</td>
-                  <td>{summary.cancelledDoubleBookings || 0}</td>
-                </tr>
-                <tr>
-                  <td>Revenue from Friends</td>
-                  <td className="currency-table-cell">₱{(summary.doubleBookingRevenue || 0).toFixed(2)}</td>
-                </tr>
-                <tr>
-                  <td>Average Revenue per Booking</td>
-                  <td className="currency-table-cell">₱{(summary.averageRevenuePerBooking || 0).toFixed(2)}</td>
-                </tr>
-                <tr>
-                  <td>Completion Rate</td>
-                  <td>{(summary.completionRate || 0).toFixed(1)}%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-    <div className="row">
-      <div className="col-md-6">
-        <h5>Friend Bookings by Barber</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Barber</th>
-                <th>Total</th>
-                <th>Completed</th>
-                <th>Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {doubleBookingsByBarber.map((barber, index) => (
-                <tr key={index}>
-                  <td>{barber.name || 'Unknown'}</td>
-                  <td>{barber.total || 0}</td>
-                  <td>{barber.completed || 0}</td>
-                  <td className="currency-table-cell">₱{(barber.revenue || 0).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="col-md-6">
-        <h5>Top Friends by Bookings</h5>
-        <div className="table-responsive">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Friend Name</th>
-                <th>Bookings</th>
-                <th>Total Spent</th>
-                <th>Last Booking</th>
-              </tr>
-            </thead>
-            <tbody>
-              {friendBookingPatterns.slice(0, 10).map((friend, index) => (
-                <tr key={index}>
-                  <td>{friend.name || 'Unknown'}</td>
-                  <td>{friend.bookings || 0}</td>
-                  <td className="currency-table-cell">₱{(friend.totalSpent || 0).toFixed(2)}</td>
-                  <td>{friend.lastBooking ? new Date(friend.lastBooking).toLocaleDateString() : 'N/A'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-  );
-};
 
 export default Reports;

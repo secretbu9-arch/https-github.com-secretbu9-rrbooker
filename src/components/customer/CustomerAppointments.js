@@ -1556,7 +1556,7 @@ const CustomerAppointments = () => {
           <div className="row g-3 g-md-4">
             {getPaginatedAppointments().map((appointment) => (
               <div key={appointment.id} className="col-12 col-sm-6 col-lg-4">
-                <div className={`card appointment-card-premium h-100 shadow-sm ${appointment.status === 'ongoing' ? 'border-primary border-2' : ''} ${appointment.is_urgent ? 'border-warning border-2' : ''}`}>
+                <div className={`card appointment-card-premium h-100 shadow-sm ${appointment.status === 'ongoing' ? 'border-success border-2 shadow' : ''} ${appointment.is_urgent ? 'border-warning border-2' : ''}`}>
                   <div className="card-header d-flex justify-content-between align-items-center">
                     <div className="d-flex align-items-center">
                       <i className={`bi ${getStatusIcon(appointment.status)} me-2`}></i>
@@ -1655,11 +1655,9 @@ const CustomerAppointments = () => {
                     )}
 
                     {appointment.status === 'ongoing' && (
-                      <div className="alert alert-primary py-2 mb-2">
-                        <small>
-                          <i className="bi bi-scissors me-1"></i>
-                          Your appointment is in progress!
-                        </small>
+                      <div className="alert alert-success py-2 mb-2 border-0 bg-success bg-opacity-10 text-success fw-bold d-flex align-items-center">
+                        <div className="spinner-grow spinner-grow-sm me-2" role="status"></div>
+                        <span>Your appointment is in progress!</span>
                       </div>
                     )}
 

@@ -47,32 +47,7 @@ const ResetPassword = () => {
     return { checks, score, strength, color };
   };
 
-  const generateSuggestedPassword = () => {
-    const length = 12;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()+";
-    let retVal = "";
 
-    // Ensure we meet all requirements
-    retVal += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
-    retVal += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
-    retVal += "0123456789"[Math.floor(Math.random() * 10)];
-    retVal += "!@#$%^&*()"[Math.floor(Math.random() * 10)];
-
-    for (let i = 4, n = charset.length; i < length; ++i) {
-      retVal += charset.charAt(Math.floor(Math.random() * n));
-    }
-
-    // Shuffle the result
-    return retVal.split('').sort(() => 0.5 - Math.random()).join('');
-  };
-
-  const handleSuggestPassword = () => {
-    const suggested = generateSuggestedPassword();
-    setNewPassword(suggested);
-    setConfirmPassword(suggested);
-    setShowPassword(true);
-    setShowConfirmPassword(true);
-  };
 
   // Check for token in URL (from email link)
   useEffect(() => {
@@ -104,8 +79,8 @@ const ResetPassword = () => {
 
     // Validate password strength
     const passwordStrength = checkPasswordStrength(newPassword);
-    if (passwordStrength.score < 3) {
-      setError('Password is too weak. Please include at least 3 requirements (uppercase, lowercase, number, or special character).');
+    if (passwordStrength.score < 6) {
+      setError('Password must meet all 6 security requirements.');
       return;
     }
 
@@ -137,8 +112,8 @@ const ResetPassword = () => {
 
     // Validate password strength (especially for recovery links)
     const passwordStrength = checkPasswordStrength(newPassword);
-    if (passwordStrength.score < 3) {
-      setError('Password is too weak. Please include at least 3 requirements.');
+    if (passwordStrength.score < 6) {
+      setError('Password must meet all security requirements.');
       return;
     }
 
@@ -288,22 +263,13 @@ const ResetPassword = () => {
                 >
                   <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                 </button>
-                <button
-                  type="button"
-                  className="password-toggle-btn suggestion-btn"
-                  onClick={handleSuggestPassword}
-                  tabIndex="-1"
-                  title="Suggest a strong password"
-                  style={{ right: '40px' }}
-                >
-                  <i className="bi bi-magic"></i>
-                </button>
+
               </div>
 
-              {newPassword && checkPasswordStrength(newPassword).score < 3 && (
+              {newPassword && checkPasswordStrength(newPassword).score < 6 && (
                 <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                   <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                  Password is too weak
+                  Password does not meet all requirements
                 </div>
               )}
 
@@ -411,7 +377,7 @@ const ResetPassword = () => {
             <button
               type="submit"
               className="action-button"
-              disabled={loading || !newPassword || checkPasswordStrength(newPassword).score < 3 || newPassword !== confirmPassword}
+              disabled={loading || !newPassword || checkPasswordStrength(newPassword).score < 6 || newPassword !== confirmPassword}
             >
               {loading ? (
                 <span className="spinner" role="status" aria-hidden="true"></span>
@@ -486,22 +452,13 @@ const ResetPassword = () => {
                     >
                       <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                     </button>
-                    <button
-                      type="button"
-                      className="password-toggle-btn suggestion-btn"
-                      onClick={handleSuggestPassword}
-                      tabIndex="-1"
-                      title="Suggest a strong password"
-                      style={{ right: '40px' }}
-                    >
-                      <i className="bi bi-magic"></i>
-                    </button>
+
                   </div>
 
-                  {newPassword && checkPasswordStrength(newPassword).score < 3 && (
+                  {newPassword && checkPasswordStrength(newPassword).score < 6 && (
                     <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                       <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                      Password is too weak
+                      Password does not meet all requirements
                     </div>
                   )}
 
@@ -590,7 +547,7 @@ const ResetPassword = () => {
               disabled={
                 loading ||
                 otpCode.length < 6 ||
-                (searchParams.get('token') && (checkPasswordStrength(newPassword).score < 3 || newPassword !== confirmPassword))
+                (searchParams.get('token') && (checkPasswordStrength(newPassword).score < 6 || newPassword !== confirmPassword))
               }
             >
               {loading ? (

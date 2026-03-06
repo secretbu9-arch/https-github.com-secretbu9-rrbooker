@@ -19,8 +19,6 @@ const ManageProducts = () => {
   });
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
@@ -30,6 +28,9 @@ const ManageProducts = () => {
   const [duplicateProduct, setDuplicateProduct] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [productToUpdateStock, setProductToUpdateStock] = useState(null);
+  const [stockToAdd, setStockToAdd] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -44,77 +45,82 @@ const ManageProducts = () => {
     }
   }, [formData.image_url]);
 
-  useEffect(() => {
-    // Apply filters and sorting
-    if (products.length > 0) {
-      let filtered = [...products];
-      
-      // Apply search filter
-      if (searchQuery.trim() !== '') {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter(product => 
-          product.name.toLowerCase().includes(query) || 
-          (product.description && product.description.toLowerCase().includes(query))
-        );
-      }
-      
-      // Apply category filter
-      if (selectedCategory !== 'all') {
-        filtered = filtered.filter(product => product.category === selectedCategory);
-      }
-      
-      // Apply sorting
-      filtered.sort((a, b) => {
-        let valA, valB;
-        
-        switch (sortBy) {
-          case 'name':
-            valA = a.name.toLowerCase();
-            valB = b.name.toLowerCase();
-            break;
-          case 'price':
-            valA = parseFloat(a.price);
-            valB = parseFloat(b.price);
-            break;
-          case 'stock':
-            valA = parseInt(a.stock_quantity);
-            valB = parseInt(b.stock_quantity);
-            break;
-          default:
-            valA = a.name.toLowerCase();
-            valB = b.name.toLowerCase();
-        }
-        
-        if (sortDirection === 'asc') {
-          return valA > valB ? 1 : valA < valB ? -1 : 0;
-        } else {
-          return valA < valB ? 1 : valA > valB ? -1 : 0;
-        }
-      });
-      
-      setFilteredProducts(filtered);
+  // Memoize filtered and sorted products to prevent re-calculating on every keystroke in the form
+  const filteredProducts = React.useMemo(() => {
+    if (!products.length) return [];
+
+    let filtered = [...products];
+
+    // Apply search filter
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(query) ||
+        (product.description && product.description.toLowerCase().includes(query))
+      );
     }
+
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(product => product.category === selectedCategory);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let valA, valB;
+
+      switch (sortBy) {
+        case 'name':
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+          break;
+        case 'price':
+          valA = parseFloat(a.price);
+          valB = parseFloat(b.price);
+          break;
+        case 'stock':
+          valA = parseInt(a.stock_quantity);
+          valB = parseInt(b.stock_quantity);
+          break;
+        default:
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+      }
+
+      if (sortDirection === 'asc') {
+        return valA > valB ? 1 : valA < valB ? -1 : 0;
+      } else {
+        return valA < valB ? 1 : valA > valB ? -1 : 0;
+      }
+    });
+
+    return filtered;
   }, [products, searchQuery, selectedCategory, sortBy, sortDirection]);
+
+  // Memoize unique categories
+  const categories = React.useMemo(() => {
+    return [...new Set(products.map(p => p.category).filter(Boolean))];
+  }, [products]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
-      
+
       console.log('Fetched products:', data);
       setProducts(data || []);
-      setFilteredProducts(data || []);
-      
-      // Extract unique categories
-      const uniqueCategories = [...new Set(data.map(product => product.category).filter(Boolean))];
-      setCategories(uniqueCategories);
+      // setFilteredProducts(data || []); // Removed, now handled by useMemo
+
+      // Extract unique categories // Removed, now handled by useMemo
+      // const uniqueCategories = [...new Set(data.map(product => product.category).filter(Boolean))];
+      // setCategories(uniqueCategories);
     } catch (err) {
       console.error('Error fetching products:', err);
       setError('Failed to load products. Please try again later.');
@@ -149,6 +155,9 @@ const ManageProducts = () => {
     setDuplicateProduct(null);
     setShowDeleteModal(false);
     setProductToDelete(null);
+    setShowStockModal(false);
+    setProductToUpdateStock(null);
+    setStockToAdd('');
   };
 
   const handleEditProduct = (product) => {
@@ -164,7 +173,7 @@ const ManageProducts = () => {
     setImagePreview(product.image_url || '');
     setEditingId(product.id);
     setShowAddForm(true);
-    
+
     // Scroll to form
     window.scrollTo({
       top: 0,
@@ -174,39 +183,39 @@ const ManageProducts = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       // Validate inputs
       const price = parseFloat(formData.price);
       const stockQuantity = parseInt(formData.stock_quantity);
-      
+
       if (isNaN(price) || price < 0) {
         setError('Price must be a non-negative number.');
         return;
       }
-      
+
       if (isNaN(stockQuantity) || stockQuantity < 0) {
         setError('Stock quantity must be a non-negative number.');
         return;
       }
-      
+
       // Check for duplicate product name (case-insensitive)
       const productNameLower = formData.name.trim().toLowerCase();
-      const existingProduct = products.find(p => 
-        p.name.trim().toLowerCase() === productNameLower && 
+      const existingProduct = products.find(p =>
+        p.name.trim().toLowerCase() === productNameLower &&
         (!editingId || p.id !== editingId)
       );
-      
+
       if (existingProduct) {
         setDuplicateProduct(existingProduct);
         setShowDuplicateModal(true);
         return;
       }
-      
+
       setLoading(true);
       setSaveButtonDisabled(true);
       setError(null);
-      
+
       // Prepare the data object
       const productData = {
         name: formData.name.trim(),
@@ -217,38 +226,44 @@ const ManageProducts = () => {
         category: formData.category,
         is_active: formData.is_active
       };
-      
+
       console.log('Saving product data:', productData);
       console.log('Editing ID:', editingId);
-      
-      let result;
-      
+
+      // let result; // No longer needed as we handle data directly
+
       if (editingId) {
-        // Update existing product
-        result = await supabase
+        // Update existing product in DB
+        const { data: updatedData, error: updateError } = await supabase
           .from('products')
           .update(productData)
-          .eq('id', editingId);
+          .eq('id', editingId)
+          .select();
+
+        if (updateError) throw updateError;
+
+        // Update local state instead of refetching everything
+        if (updatedData && updatedData[0]) {
+          setProducts(prev => prev.map(p => p.id === editingId ? updatedData[0] : p));
+        }
       } else {
-        // Create new product
-        result = await supabase
+        // Create new product in DB
+        const { data: newData, error: insertError } = await supabase
           .from('products')
-          .insert([productData]);
+          .insert([productData])
+          .select();
+
+        if (insertError) throw insertError;
+
+        // Add to local state
+        if (newData && newData[0]) {
+          setProducts(prev => [newData[0], ...prev]);
+        }
       }
-      
-      if (result.error) {
-        console.error(editingId ? 'Update error:' : 'Insert error:', result.error);
-        throw result.error;
-      }
-      
-      console.log(editingId ? 'Update result:' : 'Insert result:', result);
-      
-      // Refresh products list
-      await fetchProducts();
-      
-      // Reset form on success
+
+      // Reset form on success (no refetch needed!)
       resetForm();
-      
+
     } catch (err) {
       console.error('Error saving product:', err);
       setError(`Failed to ${editingId ? 'update' : 'create'} product. Please try again later.`);
@@ -262,26 +277,26 @@ const ManageProducts = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Toggle the active status
       const { error } = await supabase
         .from('products')
-        .update({ 
+        .update({
           is_active: !currentStatus
         })
         .eq('id', productId);
-      
+
       if (error) throw error;
-      
+
       // Update the local state
-      setProducts(prevProducts => 
-        prevProducts.map(product => 
-          product.id === productId 
-            ? { ...product, is_active: !currentStatus } 
+      setProducts(prevProducts =>
+        prevProducts.map(product =>
+          product.id === productId
+            ? { ...product, is_active: !currentStatus }
             : product
         )
       );
-      
+
       // Log the action
       const product = products.find(p => p.id === productId);
       await supabase.from('system_logs').insert([{
@@ -292,7 +307,7 @@ const ManageProducts = () => {
           new_status: !currentStatus ? 'active' : 'inactive'
         }
       }]);
-      
+
     } catch (err) {
       console.error('Error toggling product status:', err);
       setError('Failed to update product status. Please try again.');
@@ -309,22 +324,22 @@ const ManageProducts = () => {
 
   const confirmDeleteProduct = async () => {
     if (!productToDelete) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       // Delete the product
       const { error } = await supabase
         .from('products')
         .delete()
         .eq('id', productToDelete.id);
-      
+
       if (error) throw error;
-      
+
       // Update local state
       setProducts(prevProducts => prevProducts.filter(p => p.id !== productToDelete.id));
-      
+
       // Log the action
       await supabase.from('system_logs').insert([{
         action: 'product_deleted',
@@ -333,11 +348,11 @@ const ManageProducts = () => {
           product_id: productToDelete.id
         }
       }]);
-      
+
       // Close modal
       setShowDeleteModal(false);
       setProductToDelete(null);
-      
+
     } catch (err) {
       console.error('Error deleting product:', err);
       setError('Failed to delete product. Please try again.');
@@ -346,53 +361,62 @@ const ManageProducts = () => {
     }
   };
 
-  const handleAddStock = async (productId, currentStock) => {
-    const quantity = prompt('Enter quantity to add to stock:', '10');
-    if (quantity === null) return; // User canceled
-    
-    const quantityToAdd = parseInt(quantity);
+  const handleAddStock = (product) => {
+    setProductToUpdateStock(product);
+    setStockToAdd('10'); // Default value
+    setShowStockModal(true);
+  };
+
+  const confirmAddStock = async () => {
+    if (!productToUpdateStock) return;
+
+    const quantityToAdd = parseInt(stockToAdd);
     if (isNaN(quantityToAdd) || quantityToAdd <= 0) {
       setError('Please enter a valid positive number.');
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
-      
-      const newStock = currentStock + quantityToAdd;
-      
+
+      const newStock = (productToUpdateStock.stock_quantity || 0) + quantityToAdd;
+
       // Update stock
       const { error } = await supabase
         .from('products')
-        .update({ 
+        .update({
           stock_quantity: newStock
         })
-        .eq('id', productId);
-      
+        .eq('id', productToUpdateStock.id);
+
       if (error) throw error;
-      
+
       // Update the local state
-      setProducts(prevProducts => 
-        prevProducts.map(product => 
-          product.id === productId 
-            ? { ...product, stock_quantity: newStock } 
+      setProducts(prevProducts =>
+        prevProducts.map(product =>
+          product.id === productToUpdateStock.id
+            ? { ...product, stock_quantity: newStock }
             : product
         )
       );
-      
+
       // Log the action
-      const product = products.find(p => p.id === productId);
       await supabase.from('system_logs').insert([{
         action: 'product_stock_updated',
         details: {
-          product_name: product?.name,
-          product_id: productId,
+          product_name: productToUpdateStock.name,
+          product_id: productToUpdateStock.id,
           added_quantity: quantityToAdd,
           new_stock: newStock
         }
       }]);
-      
+
+      // Close modal
+      setShowStockModal(false);
+      setProductToUpdateStock(null);
+      setStockToAdd('');
+
     } catch (err) {
       console.error('Error updating stock:', err);
       setError('Failed to update stock. Please try again.');
@@ -429,19 +453,19 @@ const ManageProducts = () => {
       <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
         <h2 className="mb-0 fw-bold">Manage Products</h2>
       </div>
-      
+
       {error && (
         <div className="alert alert-danger alert-dismissible fade show" role="alert">
           {error}
-          <button 
-            type="button" 
-            className="btn-close" 
-            onClick={() => setError(null)} 
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError(null)}
             aria-label="Close"
           ></button>
         </div>
       )}
-      
+
       {/* Search, Filter, and Add */}
       <div className="card mb-4">
         <div className="card-body">
@@ -469,9 +493,9 @@ const ManageProducts = () => {
                 )}
               </div>
             </div>
-            
+
             <div className="col-md-2">
-              <select 
+              <select
                 className="form-select"
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -482,10 +506,10 @@ const ManageProducts = () => {
                 ))}
               </select>
             </div>
-            
+
             <div className="col-md-3">
               <div className="input-group">
-                <select 
+                <select
                   className="form-select"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
@@ -494,7 +518,7 @@ const ManageProducts = () => {
                   <option value="price">Sort by Price</option>
                   <option value="stock">Sort by Stock</option>
                 </select>
-                <button 
+                <button
                   className="btn btn-outline-secondary"
                   onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
                 >
@@ -502,7 +526,7 @@ const ManageProducts = () => {
                 </button>
               </div>
             </div>
-            
+
             <div className="col-md-3 text-end">
               <button
                 className="btn btn-primary w-100"
@@ -518,7 +542,7 @@ const ManageProducts = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Add/Edit Form */}
       {showAddForm && (
         <div className="card mb-4">
@@ -568,7 +592,7 @@ const ManageProducts = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="row">
                 <div className="col-md-6 mb-3">
                   <label htmlFor="category" className="form-label">Category</label>
@@ -600,8 +624,8 @@ const ManageProducts = () => {
                       placeholder="https://example.com/image.jpg"
                     />
                     {formData.image_url && (
-                      <button 
-                        className="btn btn-outline-secondary" 
+                      <button
+                        className="btn btn-outline-secondary"
                         type="button"
                         onClick={() => {
                           const url = formData.image_url;
@@ -613,14 +637,14 @@ const ManageProducts = () => {
                     )}
                   </div>
                   <div className="form-text">Paste a direct URL to an image (JPG, PNG, etc.)</div>
-                  
+
                   {/* Image Preview */}
                   {imagePreview && (
                     <div className="mt-2 text-center">
-                      <img 
-                        src={imagePreview} 
-                        alt="Preview" 
-                        className="img-thumbnail" 
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="img-thumbnail"
                         style={{ maxHeight: '100px' }}
                         onError={handleImageError}
                       />
@@ -628,7 +652,7 @@ const ManageProducts = () => {
                   )}
                 </div>
               </div>
-              
+
               <div className="mb-3">
                 <label htmlFor="description" className="form-label">Description</label>
                 <textarea
@@ -640,7 +664,7 @@ const ManageProducts = () => {
                   rows="3"
                 ></textarea>
               </div>
-              
+
               <div className="mb-3 form-check">
                 <input
                   type="checkbox"
@@ -655,11 +679,11 @@ const ManageProducts = () => {
                   Inactive products won't be visible to customers.
                 </small>
               </div>
-              
+
               <div className="d-flex gap-2">
-                <button 
-                  type="submit" 
-                  className="btn btn-primary" 
+                <button
+                  type="submit"
+                  className="btn btn-primary"
                   disabled={saveButtonDisabled}
                 >
                   {loading ? (
@@ -671,9 +695,9 @@ const ManageProducts = () => {
                     <>Save Product</>
                   )}
                 </button>
-                <button 
-                  type="button" 
-                  className="btn btn-outline-secondary" 
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
                   onClick={resetForm}
                   disabled={loading}
                 >
@@ -684,12 +708,12 @@ const ManageProducts = () => {
           </div>
         </div>
       )}
-      
+
       {/* Duplicate Product Modal */}
       {showDuplicateModal && (
-        <div 
-          className="modal show d-block" 
-          tabIndex="-1" 
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -753,9 +777,9 @@ const ManageProducts = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && productToDelete && (
-        <div 
-          className="modal show d-block" 
-          tabIndex="-1" 
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -836,6 +860,102 @@ const ManageProducts = () => {
         </div>
       )}
 
+      {/* Add Stock Modal */}
+      {showStockModal && productToUpdateStock && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowStockModal(false);
+              setProductToUpdateStock(null);
+            }
+          }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header bg-success text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-box-fill me-2"></i>
+                  Add Stock: {productToUpdateStock.name}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => {
+                    setShowStockModal(false);
+                    setProductToUpdateStock(null);
+                  }}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <div className="mb-4 text-center">
+                  <div className="display-6 fw-bold text-success mb-2">
+                    {productToUpdateStock.stock_quantity || 0}
+                  </div>
+                  <div className="text-muted small text-uppercase ls-1">Current Stock</div>
+                </div>
+
+                <div className="form-group mb-3">
+                  <label htmlFor="stockToAdd" className="form-label fw-semibold">Quantity to Add</label>
+                  <div className="input-group input-group-lg">
+                    <span className="input-group-text bg-light border-end-0">
+                      <i className="bi bi-plus-lg text-success"></i>
+                    </span>
+                    <input
+                      type="number"
+                      id="stockToAdd"
+                      className="form-control bg-light border-start-0 ps-0"
+                      value={stockToAdd}
+                      onChange={(e) => setStockToAdd(e.target.value)}
+                      min="1"
+                      placeholder="Enter quantity"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="form-text mt-2">
+                    New total will be: <span className="fw-bold text-dark">{(productToUpdateStock.stock_quantity || 0) + (parseInt(stockToAdd) || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer bg-light border-top-0 px-4 py-3">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary px-4"
+                  onClick={() => {
+                    setShowStockModal(false);
+                    setProductToUpdateStock(null);
+                  }}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success px-4"
+                  onClick={confirmAddStock}
+                  disabled={loading || !stockToAdd || parseInt(stockToAdd) <= 0}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check2-circle me-2"></i>
+                      Confirm Add
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Products List */}
       <div className="card">
         <div className="card-header d-flex justify-content-between align-items-center">
@@ -847,7 +967,7 @@ const ManageProducts = () => {
             <div className="text-center py-4">
               <p className="text-muted">
                 {searchQuery || selectedCategory !== 'all'
-                  ? 'No products found matching your filters.' 
+                  ? 'No products found matching your filters.'
                   : 'No products available. Add your first product using the button above.'}
               </p>
             </div>
@@ -870,7 +990,7 @@ const ManageProducts = () => {
                         <div className="d-flex align-items-center">
                           <div className="me-3">
                             {product.image_url ? (
-                              <img 
+                              <img
                                 src={product.image_url}
                                 alt={product.name}
                                 style={{ width: '50px', height: '50px', objectFit: 'cover' }}
@@ -915,7 +1035,7 @@ const ManageProducts = () => {
                           </button>
                           <button
                             className="btn btn-sm btn-outline-success"
-                            onClick={() => handleAddStock(product.id, product.stock_quantity)}
+                            onClick={() => handleAddStock(product)}
                             title="Add Stock"
                           >
                             <i className="bi bi-plus-circle"></i>

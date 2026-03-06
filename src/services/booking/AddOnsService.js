@@ -13,7 +13,7 @@ class AddOnsService {
    */
   async getAddOns() {
     const now = Date.now();
-    
+
     // Return cached data if still valid
     if (this.addOnsCache && this.lastFetch && (now - this.lastFetch) < this.cacheTimeout) {
       console.log('📦 Returning cached add-ons data');
@@ -26,7 +26,7 @@ class AddOnsService {
         .from('add_ons')
         .select('id, name, description, price, duration, category, is_active')
         .eq('is_active', true)
-        .order('name');
+        .order('price', { ascending: true });
 
       if (error) {
         console.error('❌ Error fetching add-ons:', error);
@@ -36,18 +36,18 @@ class AddOnsService {
       // Update cache
       this.addOnsCache = data || [];
       this.lastFetch = now;
-      
+
       console.log(`✅ Fetched ${this.addOnsCache.length} add-ons from database`);
       return this.addOnsCache;
     } catch (error) {
       console.error('❌ Failed to fetch add-ons:', error);
-      
+
       // Return cached data if available, even if expired
       if (this.addOnsCache) {
         console.log('⚠️ Using expired cached add-ons data');
         return this.addOnsCache;
       }
-      
+
       // Return empty array as fallback
       return [];
     }
@@ -70,22 +70,22 @@ class AddOnsService {
    */
   async calculateAddOnsDuration(addOnsData) {
     if (!addOnsData) return 0;
-    
+
     try {
       let addOnIds;
-      
+
       // Handle different data types
       if (Array.isArray(addOnsData)) {
         addOnIds = addOnsData;
       } else if (typeof addOnsData === 'string') {
         // If it's a string, check if it's empty or invalid
         if (addOnsData.trim() === '') return 0;
-        
+
         // Handle empty string or invalid JSON
         if (addOnsData === '[]' || addOnsData === 'null' || addOnsData === 'undefined') {
           return 0;
         }
-        
+
         try {
           addOnIds = JSON.parse(addOnsData);
         } catch (parseError) {
@@ -96,11 +96,11 @@ class AddOnsService {
         // For other data types (null, undefined, numbers, etc.), return 0
         return 0;
       }
-      
+
       if (!Array.isArray(addOnIds) || addOnIds.length === 0) return 0;
-      
+
       const addOns = await this.getAddOns();
-      
+
       // Legacy mapping for duration
       const legacyDurationMapping = {
         'addon1': 15, // Beard Trim
@@ -114,19 +114,19 @@ class AddOnsService {
         'addon9': 25, // Face Mask
         'addon10': 30 // Hair Treatment
       };
-      
+
       return addOnIds.reduce((total, addonId) => {
         // First try to find by UUID in database
         const addon = addOns.find(a => a.id === addonId);
         if (addon) {
           return total + addon.duration;
         }
-        
+
         // If not found, try legacy mapping
         if (legacyDurationMapping[addonId]) {
           return total + legacyDurationMapping[addonId];
         }
-        
+
         return total;
       }, 0);
     } catch (error) {
@@ -142,22 +142,22 @@ class AddOnsService {
    */
   async calculateAddOnsPrice(addOnsData) {
     if (!addOnsData) return 0;
-    
+
     try {
       let addOnIds;
-      
+
       // Handle different data types
       if (Array.isArray(addOnsData)) {
         addOnIds = addOnsData;
       } else if (typeof addOnsData === 'string') {
         // If it's a string, check if it's empty or invalid
         if (addOnsData.trim() === '') return 0;
-        
+
         // Handle empty string or invalid JSON
         if (addOnsData === '[]' || addOnsData === 'null' || addOnsData === 'undefined') {
           return 0;
         }
-        
+
         try {
           addOnIds = JSON.parse(addOnsData);
         } catch (parseError) {
@@ -168,11 +168,11 @@ class AddOnsService {
         // For other data types (null, undefined, numbers, etc.), return 0
         return 0;
       }
-      
+
       if (!Array.isArray(addOnIds) || addOnIds.length === 0) return 0;
-      
+
       const addOns = await this.getAddOns();
-      
+
       // Legacy mapping for price
       const legacyPriceMapping = {
         'addon1': 50.00, // Beard Trim
@@ -186,19 +186,19 @@ class AddOnsService {
         'addon9': 75.00, // Face Mask
         'addon10': 90.00 // Hair Treatment
       };
-      
+
       return addOnIds.reduce((total, addonId) => {
         // First try to find by UUID in database
         const addon = addOns.find(a => a.id === addonId);
         if (addon) {
           return total + addon.price;
         }
-        
+
         // If not found, try legacy mapping
         if (legacyPriceMapping[addonId]) {
           return total + legacyPriceMapping[addonId];
         }
-        
+
         return total;
       }, 0);
     } catch (error) {
@@ -214,7 +214,7 @@ class AddOnsService {
    */
   async getAddOnsDisplay(addOnsData) {
     if (!addOnsData) return '';
-    
+
     try {
       // Handle different data formats
       let addOnItems;
@@ -233,13 +233,13 @@ class AddOnsService {
         // Handle other data types
         addOnItems = [addOnsData];
       }
-      
+
       if (!Array.isArray(addOnItems) || addOnItems.length === 0) return '';
-      
+
       // Legacy mapping for addon1, addon2, etc. format
       const legacyMapping = {
         'addon1': 'Beard Trim',
-        'addon2': 'Hot Towel Treatment', 
+        'addon2': 'Hot Towel Treatment',
         'addon3': 'Scalp Massage',
         'addon4': 'Hair Wash',
         'addon5': 'Styling',
@@ -249,7 +249,7 @@ class AddOnsService {
         'addon9': 'Face Mask',
         'addon10': 'Hair Treatment'
       };
-      
+
       // Map each item to its display name
       const addOnNames = await Promise.all(
         addOnItems
@@ -278,7 +278,7 @@ class AddOnsService {
             return item.length > 20 ? item.substring(0, 20) + '...' : item;
           })
       );
-      
+
       return addOnNames.join(', ');
     } catch (error) {
       console.error('Error parsing add-ons data:', error);

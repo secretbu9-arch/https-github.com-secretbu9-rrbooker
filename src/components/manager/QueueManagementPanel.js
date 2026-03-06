@@ -62,23 +62,28 @@ const QueueManagementPanel = () => {
         `)
         .eq('barber_id', selectedBarber)
         .eq('appointment_date', selectedDate)
-        .in('status', ['scheduled', 'pending', 'ongoing'])
+        .in('status', ['confirmed', 'pending', 'ongoing', 'completed'])
         .order('queue_position', { ascending: true, nullsLast: true });
 
       if (allError) throw allError;
 
-      // Separate queue and scheduled appointments
-      const queueAppointments = allAppointments?.filter(apt => 
-        apt.queue_position !== null && apt.appointment_type === 'queue'
+      // Separate queue, scheduled and completed appointments
+      const queueAppointments = allAppointments?.filter(apt =>
+        apt.queue_position !== null && apt.appointment_type === 'queue' && apt.status !== 'completed'
       ) || [];
 
-      const scheduledAppointments = allAppointments?.filter(apt => 
-        apt.queue_position === null && apt.appointment_type === 'scheduled'
+      const completedAppointments = allAppointments?.filter(apt =>
+        apt.status === 'completed'
+      ) || [];
+
+      const scheduledAppointments = allAppointments?.filter(apt =>
+        apt.queue_position === null && apt.appointment_type === 'scheduled' && apt.status !== 'completed'
       ) || [];
 
       setQueueData({
         queue: queueAppointments,
         scheduled: scheduledAppointments,
+        completed: completedAppointments,
         total: allAppointments?.length || 0
       });
 
@@ -177,7 +182,7 @@ const QueueManagementPanel = () => {
   const getStatusBadgeColor = (status) => {
     switch (status) {
       case 'ongoing': return 'success';
-      case 'scheduled': return 'primary';
+      case 'confirmed': return 'primary';
       case 'pending': return 'warning';
       default: return 'secondary';
     }
@@ -188,7 +193,7 @@ const QueueManagementPanel = () => {
     try {
       setSelectedCustomer(appointment);
       setLoading(true);
-      
+
       // Fetch customer history
       const { data: history, error } = await supabase
         .from('appointments')
@@ -200,7 +205,7 @@ const QueueManagementPanel = () => {
         .eq('customer_id', appointment.customer_id)
         .order('appointment_date', { ascending: false })
         .limit(10);
-      
+
       if (error) throw error;
       setCustomerHistory(history || []);
       setShowCustomerDetails(true);
@@ -292,20 +297,20 @@ const QueueManagementPanel = () => {
                     <table className="table table-hover">
                       <thead>
                         <tr>
-                          <th style={{width: '80px'}}>Position</th>
+                          <th style={{ width: '80px' }}>Position</th>
                           <th>Customer</th>
                           <th>Service</th>
                           <th>Priority</th>
                           <th>Status</th>
                           <th>Wait Time</th>
-                          <th style={{width: '200px'}}>Actions</th>
+                          <th style={{ width: '200px' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {queueData.queue.map((appointment) => (
                           <tr key={appointment.id} className={appointment.status === 'ongoing' ? 'table-success' : ''}>
                             <td>
-                              <div className="input-group input-group-sm" style={{width: '70px'}}>
+                              <div className="input-group input-group-sm" style={{ width: '70px' }}>
                                 <input
                                   type="number"
                                   className="form-control"
@@ -351,7 +356,7 @@ const QueueManagementPanel = () => {
                                 className={`form-select form-select-sm badge bg-${getPriorityBadgeColor(appointment.priority_level)}`}
                                 value={appointment.priority_level || 'normal'}
                                 onChange={(e) => handleChangePriority(appointment.id, e.target.value)}
-                                style={{border: 'none', color: 'white'}}
+                                style={{ border: 'none', color: 'white' }}
                               >
                                 <option value="urgent">Urgent</option>
                                 <option value="high">High</option>
@@ -365,8 +370,8 @@ const QueueManagementPanel = () => {
                               </span>
                             </td>
                             <td>
-                              {appointment.estimated_wait_time !== null 
-                                ? `${appointment.estimated_wait_time} min` 
+                              {appointment.estimated_wait_time !== null
+                                ? `${appointment.estimated_wait_time} min`
                                 : 'Calculating...'}
                             </td>
                             <td>
@@ -396,8 +401,50 @@ const QueueManagementPanel = () => {
                   </div>
                 ) : (
                   <div className="text-center text-muted py-4">
-                    <i className="bi bi-inbox" style={{fontSize: '3rem'}}></i>
+                    <i className="bi bi-inbox" style={{ fontSize: '3rem' }}></i>
                     <p className="mt-2">No customers in queue</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Completed Appointments Section */}
+          <div className="col-lg-8 mb-4">
+            <div className="card shadow-sm border-0 rounded-4">
+              <div className="card-header bg-success bg-opacity-10 py-3">
+                <h5 className="mb-0 text-success fw-bold">
+                  <i className="bi bi-check-all me-2"></i>
+                  Completed Today ({queueData.completed?.length || 0})
+                </h5>
+              </div>
+              <div className="card-body">
+                {queueData.completed && queueData.completed.length > 0 ? (
+                  <div className="table-responsive">
+                    <table className="table table-hover table-sm">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Customer</th>
+                          <th>Service</th>
+                          <th>Completed At</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {queueData.completed.map((appointment) => (
+                          <tr key={appointment.id}>
+                            <td className="fw-medium">{appointment.customer?.full_name}</td>
+                            <td>{appointment.service?.name}</td>
+                            <td>{appointment.updated_at ? new Date(appointment.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
+                            <td><span className="badge bg-success rounded-pill px-2">Completed</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted py-4">
+                    <p className="mb-0 small italic">No completed services for this date.</p>
                   </div>
                 )}
               </div>
@@ -468,7 +515,7 @@ const QueueManagementPanel = () => {
                   </div>
                 ) : (
                   <div className="text-center text-muted py-4">
-                    <i className="bi bi-calendar-x" style={{fontSize: '2rem'}}></i>
+                    <i className="bi bi-calendar-x" style={{ fontSize: '2rem' }}></i>
                     <p className="mt-2 mb-0">No scheduled appointments</p>
                   </div>
                 )}
@@ -511,7 +558,7 @@ const QueueManagementPanel = () => {
 
       {/* Customer Details Modal */}
       {showCustomerDetails && selectedCustomer && (
-        <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
@@ -530,7 +577,7 @@ const QueueManagementPanel = () => {
                       <strong>Name:</strong> {selectedCustomer.customer?.full_name || 'N/A'}
                     </div>
                     <div className="mb-3">
-                      <strong>Phone:</strong> 
+                      <strong>Phone:</strong>
                       {selectedCustomer.customer?.phone ? (
                         <a href={`tel:${selectedCustomer.customer.phone}`} className="ms-2">
                           {selectedCustomer.customer.phone}
@@ -540,7 +587,7 @@ const QueueManagementPanel = () => {
                       )}
                     </div>
                     <div className="mb-3">
-                      <strong>Email:</strong> 
+                      <strong>Email:</strong>
                       {selectedCustomer.customer?.email ? (
                         <a href={`mailto:${selectedCustomer.customer.email}`} className="ms-2">
                           {selectedCustomer.customer.email}
@@ -549,7 +596,7 @@ const QueueManagementPanel = () => {
                         <span className="ms-2 text-muted">N/A</span>
                       )}
                     </div>
-                    
+
                     {/* Current Appointment Details */}
                     <h6 className="text-primary mt-4">Current Appointment</h6>
                     <div className="mb-2">
@@ -562,13 +609,13 @@ const QueueManagementPanel = () => {
                       <strong>Queue Position:</strong> #{selectedCustomer.queue_position || 'N/A'}
                     </div>
                     <div className="mb-2">
-                      <strong>Priority:</strong> 
+                      <strong>Priority:</strong>
                       <span className={`badge bg-${getPriorityBadgeColor(selectedCustomer.priority_level)} ms-2`}>
                         {selectedCustomer.priority_level || 'normal'}
                       </span>
                     </div>
                     <div className="mb-2">
-                      <strong>Status:</strong> 
+                      <strong>Status:</strong>
                       <span className={`badge bg-${getStatusBadgeColor(selectedCustomer.status)} ms-2`}>
                         {selectedCustomer.status}
                       </span>
@@ -579,7 +626,7 @@ const QueueManagementPanel = () => {
                   <div className="col-md-6">
                     <h6 className="text-primary">Recent History</h6>
                     {customerHistory.length > 0 ? (
-                      <div className="table-responsive" style={{maxHeight: '300px', overflowY: 'auto'}}>
+                      <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                         <table className="table table-sm">
                           <thead>
                             <tr>
@@ -625,7 +672,7 @@ const QueueManagementPanel = () => {
                         </p>
                         {selectedCustomer.double_booking_data.friend_phone && (
                           <p className="mb-1">
-                            <strong>Friend's Phone:</strong> 
+                            <strong>Friend's Phone:</strong>
                             <a href={`tel:${selectedCustomer.double_booking_data.friend_phone}`} className="ms-2">
                               {selectedCustomer.double_booking_data.friend_phone}
                             </a>
@@ -644,7 +691,7 @@ const QueueManagementPanel = () => {
                   Close
                 </button>
                 {selectedCustomer.customer?.phone && (
-                  <a 
+                  <a
                     href={`tel:${selectedCustomer.customer.phone}`}
                     className="btn btn-primary"
                   >

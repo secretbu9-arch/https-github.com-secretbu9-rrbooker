@@ -1,295 +1,478 @@
-import { supabase } from '../../supabaseClient';
-import { PushService } from '../notifications/PushService';
+/**
+ * QueueService - Advanced queue management with proper type separation
+ * Handles queue operations without affecting scheduled appointments
+ */
+
+import { supabase } from '../../supabaseClient.js';
+import dateService from '../core/DateService.js';
+import appointmentTypeManager from '../booking/AppointmentTypeManager.js';
+import { PushService } from '../notifications/PushService.js';
 
 class QueueService {
-  // Get queue status for a barber
-  async getBarberQueueStatus(barberId, date) {
-    try {
-      const { data, error } = await supabase
-        .rpc('get_barber_queue_status', {
-          p_barber_id: barberId,
-          p_appointment_date: date
-        });
-
-      if (error) throw error;
-      return data?.[0] || null;
-    } catch (error) {
-      console.error('Error getting barber queue status:', error);
-      throw error;
-    }
+  constructor() {
+    this.maxQueueSize = 15;
+    this.defaultServiceDuration = 30; // minutes
   }
 
-  // Process scheduled appointments for queue insertion
-  async processScheduledAppointments() {
+  /**
+   * Get comprehensive queue data for a barber on a specific date
+   * @param {string} barberId - Barber ID
+   * @param {string} date - Date string (YYYY-MM-DD)
+   * @returns {Object} Complete queue information
+   */
+  async getBarberQueueData(barberId, date) {
     try {
-      const { data, error } = await supabase
-        .rpc('process_scheduled_appointments_for_queue');
+      console.log('🔄 QueueService: Getting queue data for barber:', barberId, 'date:', date);
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error processing scheduled appointments:', error);
-      throw error;
-    }
-  }
-
-  // Update queue position for an appointment
-  async updateQueuePosition(appointmentId, newPosition) {
-    try {
-      const appointment = await this.getAppointment(appointmentId);
-      if (!appointment) throw new Error('Appointment not found');
-
-      const { data, error } = await supabase
-        .rpc('manager_reorder_queue', {
-          p_barber_id: appointment.barber_id,
-          p_appointment_date: appointment.appointment_date,
-          p_appointment_id: appointmentId,
-          p_new_position: newPosition
-        });
-
-      if (error) throw error;
-
-      if (data) {
-        // Send notification to customer
-        await this.notifyCustomerPositionChange(appointment, newPosition);
-        return true;
+      // Validate and normalize date
+      const dateValidation = dateService.validateAndNormalizeDate(date);
+      if (!dateValidation.isValid) {
+        throw new Error(`Invalid date format: ${dateValidation.error}`);
       }
-      return false;
-    } catch (error) {
-      console.error('Error updating queue position:', error);
-      throw error;
-    }
-  }
 
-  // Update priority level for an appointment
-  async updatePriorityLevel(appointmentId, newPriority) {
-    try {
-      const appointment = await this.getAppointment(appointmentId);
-      if (!appointment) throw new Error('Appointment not found');
+      const normalizedDate = dateValidation.normalized;
+      const dayBoundaries = dateService.getDayBoundaries(normalizedDate);
 
-      const { error } = await supabase
+      console.log('📅 Date info:', {
+        original: date,
+        normalized: normalizedDate,
+        boundaries: dayBoundaries
+      });
+
+      // Get all appointments for the barber on this date
+      const { data: allAppointments, error: appointmentsError } = await supabase
         .from('appointments')
-        .update({
-          priority_level: newPriority,
-          manager_adjusted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', appointmentId);
-
-      if (error) throw error;
-
-      // Reorder queue based on new priority
-      await this.reorderQueueByPriority(appointment.barber_id, appointment.appointment_date);
-
-      // Send notification to customer
-      await this.notifyCustomerPriorityChange(appointment, newPriority);
-
-      return true;
-    } catch (error) {
-      console.error('Error updating priority level:', error);
-      throw error;
-    }
-  }
-
-  // Reorder queue based on priority levels
-  async reorderQueueByPriority(barberId, appointmentDate) {
-    try {
-      // Get all appointments in queue for this barber and date
-      const { data: queueAppointments, error } = await supabase
-        .from('appointments')
-        .select('id, queue_position, priority_level, appointment_time, created_at')
+        .select(`
+          *,
+          customer:customer_id(id, full_name, email, phone),
+          service:service_id(id, name, price, duration, description)
+        `)
         .eq('barber_id', barberId)
-        .eq('appointment_date', appointmentDate)
-        .in('status', ['scheduled', 'pending', 'ongoing'])
-        .not('queue_position', 'is', null)
-        .order('queue_position', { ascending: true });
+        .eq('appointment_date', normalizedDate)
+        .in('status', ['confirmed', 'scheduled', 'ongoing', 'pending'])
+        .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (appointmentsError) {
+        throw new Error(`Failed to fetch appointments: ${appointmentsError.message}`);
+      }
 
-      // Sort by priority and time
-      const sortedAppointments = queueAppointments.sort((a, b) => {
-        const priorityOrder = { 'urgent': 0, 'high': 1, 'normal': 2, 'low': 3 };
-        const aPriority = priorityOrder[a.priority_level] || 2;
-        const bPriority = priorityOrder[b.priority_level] || 2;
+      console.log('📋 Raw appointments fetched:', allAppointments?.length || 0);
 
-        if (aPriority !== bPriority) {
-          return aPriority - bPriority;
+      // Separate appointments by type
+      const separatedAppointments = appointmentTypeManager.separateAppointmentsByType(allAppointments || []);
+
+      console.log('📊 Appointment separation:', separatedAppointments.summary);
+
+      // Process each type separately
+      const result = {
+        date: normalizedDate,
+        barberId: barberId,
+        currentAppointment: null,
+        scheduledAppointments: [],
+        queueAppointments: [],
+        pendingRequests: [],
+        statistics: {
+          total: separatedAppointments.summary.total,
+          scheduled: separatedAppointments.summary.scheduled,
+          queue: separatedAppointments.summary.queue,
+          pending: 0,
+          current: 0
+        },
+        validation: {
+          hasErrors: separatedAppointments.summary.invalid > 0,
+          errors: separatedAppointments.invalid
+        },
+        debug: {
+          dateFormats: dateService.getCurrentDateFormats(),
+          dayBoundaries: dayBoundaries,
+          separation: separatedAppointments.summary
         }
+      };
 
-        // If same priority, sort by appointment time or creation time
+      // Process scheduled appointments
+      result.scheduledAppointments = this.processScheduledAppointments(separatedAppointments.scheduled);
+
+      // Process queue appointments
+      result.queueAppointments = this.processQueueAppointments(separatedAppointments.queue);
+
+      // Process pending requests (queue appointments with pending status)
+      result.pendingRequests = this.processPendingRequests(separatedAppointments.queue);
+
+      // Find current appointment (ongoing)
+      result.currentAppointment = this.findCurrentAppointment(allAppointments || []);
+
+      // Update statistics
+      result.statistics.pending = result.pendingRequests.length;
+      result.statistics.current = result.currentAppointment ? 1 : 0;
+
+      console.log('✅ Queue data processed:', {
+        scheduled: result.scheduledAppointments.length,
+        queue: result.queueAppointments.length,
+        pending: result.pendingRequests.length,
+        current: result.currentAppointment ? 'Found' : 'None'
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('❌ QueueService error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process scheduled appointments
+   * @param {Array} scheduledAppointments - Array of scheduled appointments
+   * @returns {Array} Processed scheduled appointments
+   */
+  processScheduledAppointments(scheduledAppointments) {
+    return scheduledAppointments
+      .filter(apt => apt.status === 'scheduled')
+      .sort((a, b) => {
+        // Sort by appointment_time
         if (a.appointment_time && b.appointment_time) {
           return a.appointment_time.localeCompare(b.appointment_time);
         }
-
-        return new Date(a.created_at) - new Date(b.created_at);
-      });
-
-      // Update queue positions
-      for (let i = 0; i < sortedAppointments.length; i++) {
-        const newPosition = i + 1;
-        if (sortedAppointments[i].queue_position !== newPosition) {
-          await supabase
-            .from('appointments')
-            .update({
-              queue_position: newPosition,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', sortedAppointments[i].id);
-        }
-      }
-
-      // Update estimated wait times
-      await supabase.rpc('update_estimated_wait_times', {
-        p_barber_id: barberId,
-        p_appointment_date: appointmentDate
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Error reordering queue by priority:', error);
-      throw error;
-    }
+        // Fallback to creation time
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      })
+      .map(apt => ({
+        ...apt,
+        type: 'scheduled',
+        displayOrder: apt.appointment_time || '00:00',
+        estimatedDuration: apt.total_duration || apt.service?.duration || this.defaultServiceDuration
+      }));
   }
 
-  // Get appointment details
-  async getAppointment(appointmentId) {
+  /**
+   * Process queue appointments
+   * @param {Array} queueAppointments - Array of queue appointments
+   * @returns {Array} Processed queue appointments
+   */
+  processQueueAppointments(queueAppointments) {
+    return queueAppointments
+      .filter(apt => apt.status === 'confirmed' || apt.status === 'scheduled')
+      .sort((a, b) => {
+        // Sort by queue_position
+        const aPos = a.queue_position || 999;
+        const bPos = b.queue_position || 999;
+        return aPos - bPos;
+      })
+      .map((apt, index) => ({
+        ...apt,
+        type: 'queue',
+        displayOrder: apt.queue_position || (index + 1),
+        estimatedDuration: apt.total_duration || apt.service?.duration || this.defaultServiceDuration,
+        estimatedWaitTime: this.calculateWaitTime(apt, index)
+      }));
+  }
+
+  /**
+   * Process pending requests
+   * @param {Array} queueAppointments - Array of queue appointments
+   * @returns {Array} Pending requests
+   */
+  processPendingRequests(queueAppointments) {
+    return queueAppointments
+      .filter(apt => apt.status === 'pending')
+      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+      .map(apt => ({
+        ...apt,
+        type: 'pending',
+        displayOrder: new Date(apt.created_at || 0).getTime(),
+        estimatedDuration: apt.total_duration || apt.service?.duration || this.defaultServiceDuration
+      }));
+  }
+
+  /**
+   * Find current appointment (ongoing)
+   * @param {Array} allAppointments - All appointments
+   * @returns {Object|null} Current appointment
+   */
+  findCurrentAppointment(allAppointments) {
+    const current = allAppointments.find(apt => apt.status === 'ongoing');
+    return current ? {
+      ...current,
+      type: 'current',
+      displayOrder: 0
+    } : null;
+  }
+
+  /**
+   * Calculate estimated wait time for queue appointment
+   * @param {Object} appointment - Queue appointment
+   * @param {number} position - Position in queue
+   * @returns {number} Estimated wait time in minutes
+   */
+  calculateWaitTime(appointment, position) {
+    // This is a simplified calculation
+    // In a real system, you'd consider service durations of appointments ahead
+    const baseWaitTime = position * this.defaultServiceDuration;
+    return Math.max(0, baseWaitTime);
+  }
+
+  /**
+   * Accept a pending queue request
+   * @param {string} appointmentId - Appointment ID
+   * @param {string} barberId - Barber ID
+   * @param {boolean} isUrgent - Is urgent request
+   * @returns {Object} Result of acceptance
+   */
+  async acceptQueueRequest(appointmentId, barberId, isUrgent = false) {
     try {
-      const { data, error } = await supabase
+      console.log('🔄 Accepting queue request:', appointmentId, 'urgent:', isUrgent);
+
+      // Get the appointment
+      const { data: appointment, error: fetchError } = await supabase
         .from('appointments')
-        .select(`
-id,
-  customer_id,
-  barber_id,
-  appointment_date,
-  appointment_time,
-  status,
-  queue_position,
-  priority_level,
-  barber: barber_id(full_name, email)
-        `)
+        .select('*')
         .eq('id', appointmentId)
         .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting appointment:', error);
-      throw error;
-    }
-  }
+      if (fetchError || !appointment) {
+        throw new Error('Appointment not found');
+      }
 
-  // Notify customer about position change
-  async notifyCustomerPositionChange(appointment, newPosition) {
-    try {
-      // Use CentralizedNotificationService to prevent duplicates
-      const { default: centralizedNotificationService } = await import('./CentralizedNotificationService');
-      await centralizedNotificationService.createQueuePositionNotification({
-        userId: appointment.customer_id,
-        appointmentId: appointment.id,
-        queuePosition: newPosition,
-        reason: 'Position updated by system',
-        barberName: appointment.barber?.full_name
+      // Validate appointment type
+      const validation = appointmentTypeManager.validateAppointmentType(appointment);
+      if (!validation.isValid || validation.type !== 'queue') {
+        throw new Error('Invalid appointment type for queue acceptance');
+      }
+
+      // Get current queue to determine position
+      const queueData = await this.getBarberQueueData(barberId, appointment.appointment_date);
+
+      let queuePosition;
+      if (isUrgent) {
+        // Urgent appointments go to position 1
+        queuePosition = 1;
+        // Increment positions of existing queue appointments only
+        await this.incrementQueuePositions(barberId, appointment.appointment_date, 1);
+      } else {
+        // Regular appointments go to the end
+        queuePosition = queueData.queueAppointments.length + 1;
+      }
+
+      // Update appointment
+      const updateData = {
+        status: 'confirmed',
+        queue_position: queuePosition,
+        priority_level: isUrgent ? 'urgent' : 'normal',
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update(updateData)
+        .eq('id', appointmentId);
+
+      if (updateError) {
+        throw new Error(`Failed to update appointment: ${updateError.message}`);
+      }
+
+      // Send notification to customer
+      await this.notifyCustomerQueueAcceptance(appointment, queuePosition, isUrgent);
+
+      console.log('✅ Queue request accepted:', {
+        appointmentId,
+        queuePosition,
+        isUrgent
       });
-    } catch (error) {
-      console.warn('Failed to send position change notification:', error);
-    }
-  }
-
-  // Notify customer about priority change
-  async notifyCustomerPriorityChange(appointment, newPriority) {
-    try {
-      // Use CentralizedNotificationService to prevent duplicates
-      const { default: centralizedNotificationService } = await import('./CentralizedNotificationService');
-      await centralizedNotificationService.createNotification({
-        userId: appointment.customer_id,
-        title: 'Queue Priority Updated',
-        message: `Your appointment priority has been updated to ${newPriority}. Your position in the queue may have changed.`,
-        type: 'queue_priority_update',
-        category: 'queue_update',
-        priority: 'normal',
-        channels: ['app', 'push'],
-        data: {
-          appointment_id: appointment.id,
-          new_priority: newPriority,
-          barber_name: appointment.barber?.full_name
-        },
-        appointmentId: appointment.id
-      });
-    } catch (error) {
-      console.warn('Failed to send priority change notification:', error);
-    }
-  }
-
-  // Get queue analytics
-  async getQueueAnalytics(date = null) {
-    try {
-      const targetDate = date || new Date().toISOString().split('T')[0];
-
-      const { data, error } = await supabase
-        .from('enhanced_queue_analytics')
-        .select('*')
-        .eq('appointment_date', targetDate);
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error getting queue analytics:', error);
-      throw error;
-    }
-  }
-
-  // Get customer's queue position
-  async getCustomerQueuePosition(appointmentId) {
-    try {
-      const appointment = await this.getAppointment(appointmentId);
-      if (!appointment || !appointment.queue_position) return null;
-
-      const queueStatus = await this.getBarberQueueStatus(
-        appointment.barber_id,
-        appointment.appointment_date
-      );
 
       return {
-        appointment,
-        queueStatus,
-        position: appointment.queue_position,
-        estimatedWaitTime: appointment.estimated_wait_time
+        success: true,
+        appointmentId,
+        queuePosition,
+        isUrgent,
+        message: `Appointment accepted and assigned queue position #${queuePosition}`
       };
+
     } catch (error) {
-      console.error('Error getting customer queue position:', error);
+      console.error('❌ Error accepting queue request:', error);
       throw error;
     }
   }
 
-  // Set up real-time queue updates
-  setupQueueUpdates(barberId, date, callback) {
-    const channelName = `queue - updates - ${barberId} -${date} `;
+  /**
+   * Increment queue positions for existing queue appointments
+   * @param {string} barberId - Barber ID
+   * @param {string} date - Date
+   * @param {number} startPosition - Starting position to increment from
+   */
+  async incrementQueuePositions(barberId, date, startPosition) {
+    try {
+      // Only increment queue appointments, not scheduled ones
+      // Fetch appointments that need their queue positions incremented
+      const { data: existingAppointments, error: fetchError } = await supabase
+        .from('appointments')
+        .select('id, queue_position')
+        .eq('barber_id', barberId)
+        .eq('appointment_date', date)
+        .in('status', ['confirmed', 'scheduled'])
+        .eq('appointment_type', 'queue') // Only queue appointments
+        .not('queue_position', 'is', null)
+        .gte('queue_position', startPosition);
 
-    const subscription = supabase
-      .channel(channelName)
-      .on('postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'appointments',
-          filter: `barber_id = eq.${barberId} `
-        },
-        (payload) => {
-          console.log('Queue update received:', payload);
-          callback(payload);
+      if (fetchError) {
+        console.warn('Warning: Could not fetch appointments for queue position increment:', fetchError);
+        return;
+      }
+
+      if (existingAppointments && existingAppointments.length > 0) {
+        // Update each appointment's queue position
+        for (const apt of existingAppointments) {
+          const { error: updateError } = await supabase
+            .from('appointments')
+            .update({
+              queue_position: (apt.queue_position || 0) + 1,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', apt.id);
+
+          if (updateError) {
+            console.warn(`Warning: Could not increment queue position for appointment ${apt.id}:`, updateError);
+          }
         }
-      )
-      .subscribe();
-
-    return subscription;
+      }
+    } catch (error) {
+      console.warn('Warning: Error incrementing queue positions:', error);
+    }
   }
 
-  // Clean up queue subscriptions
-  cleanupQueueUpdates(subscription) {
-    if (subscription) {
-      subscription.unsubscribe();
+  /**
+   * Notify customer about queue acceptance
+   * @param {Object} appointment - Appointment object
+   * @param {number} queuePosition - Queue position
+   * @param {boolean} isUrgent - Is urgent
+   */
+  async notifyCustomerQueueAcceptance(appointment, queuePosition, isUrgent) {
+    try {
+      const title = isUrgent ? 'Urgent Appointment Confirmed! 🚨' : 'Appointment Confirmed! ✅';
+      const message = isUrgent
+        ? `Your urgent appointment has been confirmed. You are #${queuePosition} in the queue.`
+        : `Your appointment has been confirmed. You are #${queuePosition} in the queue.`;
+
+      // Use CentralizedNotificationService to prevent duplicates
+      const { default: centralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
+      await centralizedNotificationService.createBookingConfirmationNotification({
+        userId: appointment.customer_id,
+        appointmentId: appointment.id,
+        queuePosition: queuePosition,
+        estimatedTime: null,
+        appointmentType: 'queue',
+        appointmentTime: null,
+        isUrgent: isUrgent
+      });
+
+    } catch (error) {
+      console.warn('Failed to send queue acceptance notification:', error);
     }
+  }
+
+  /**
+   * Get queue statistics and analytics
+   * @param {string} barberId - Barber ID
+   * @param {string} date - Date
+   * @returns {Object} Queue statistics
+   */
+  async getQueueStatistics(barberId, date) {
+    try {
+      const queueData = await this.getBarberQueueData(barberId, date);
+
+      const stats = {
+        date: date,
+        barberId: barberId,
+        summary: queueData.statistics,
+        averageWaitTime: this.calculateAverageWaitTime(queueData.queueAppointments),
+        queueEfficiency: this.calculateQueueEfficiency(queueData),
+        recommendations: this.getQueueRecommendations(queueData)
+      };
+
+      return stats;
+    } catch (error) {
+      console.error('Error getting queue statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate average wait time
+   * @param {Array} queueAppointments - Queue appointments
+   * @returns {number} Average wait time in minutes
+   */
+  calculateAverageWaitTime(queueAppointments) {
+    if (queueAppointments.length === 0) return 0;
+
+    const totalWaitTime = queueAppointments.reduce((sum, apt) => {
+      return sum + (apt.estimatedWaitTime || 0);
+    }, 0);
+
+    return Math.round(totalWaitTime / queueAppointments.length);
+  }
+
+  /**
+   * Calculate queue efficiency
+   * @param {Object} queueData - Queue data
+   * @returns {Object} Efficiency metrics
+   */
+  calculateQueueEfficiency(queueData) {
+    const total = queueData.statistics.total;
+    const scheduled = queueData.statistics.scheduled;
+    const queue = queueData.statistics.queue;
+
+    return {
+      scheduledRatio: total > 0 ? Math.round((scheduled / total) * 100) : 0,
+      queueRatio: total > 0 ? Math.round((queue / total) * 100) : 0,
+      isBalanced: Math.abs(scheduled - queue) <= 2,
+      recommendation: this.getEfficiencyRecommendation(scheduled, queue)
+    };
+  }
+
+  /**
+   * Get efficiency recommendation
+   * @param {number} scheduled - Number of scheduled appointments
+   * @param {number} queue - Number of queue appointments
+   * @returns {string} Recommendation
+   */
+  getEfficiencyRecommendation(scheduled, queue) {
+    if (queue > scheduled * 2) {
+      return 'Consider encouraging more scheduled appointments to reduce queue wait times';
+    } else if (scheduled > queue * 2) {
+      return 'Queue is underutilized - consider promoting walk-in availability';
+    } else {
+      return 'Good balance between scheduled and queue appointments';
+    }
+  }
+
+  /**
+   * Get queue recommendations
+   * @param {Object} queueData - Queue data
+   * @returns {Array} Recommendations
+   */
+  getQueueRecommendations(queueData) {
+    const recommendations = [];
+
+    if (queueData.statistics.queue > this.maxQueueSize) {
+      recommendations.push('Queue is at maximum capacity - consider closing new queue requests');
+    }
+
+    if (queueData.validation.hasErrors) {
+      recommendations.push('Fix data validation errors to ensure proper queue operation');
+    }
+
+    if (queueData.statistics.pending > 5) {
+      recommendations.push('High number of pending requests - consider faster response times');
+    }
+
+    const urgentCount = queueData.queueAppointments.filter(apt => apt.priority_level === 'urgent').length;
+    if (urgentCount > 2) {
+      recommendations.push('Multiple urgent appointments - consider priority management');
+    }
+
+    return recommendations;
   }
 }
 
-export default new QueueService();
+// Create singleton instance
+const queueService = new QueueService();
+export default queueService;

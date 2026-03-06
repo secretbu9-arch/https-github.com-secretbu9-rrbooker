@@ -162,7 +162,7 @@ export const ROUTES = {
   // Barber routes
   SCHEDULE: '/schedule',
   QUEUE: '/queue',
-  PENDING_REQUESTS: '/pending',         // New
+  PENDING_REQUESTS: '/appointment-requests',         // New
   BARBER_PROFILE: '/barber-profile',    // New
   DAY_OFF_MANAGER: '/day-off-manager',  // New
   BARBER_REVENUE: '/barber/revenue',

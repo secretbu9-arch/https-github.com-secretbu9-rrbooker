@@ -5,7 +5,7 @@ import { supabase } from '../../supabaseClient';
 // REMOVED: PushService and NotificationService imports - use only CentralizedNotificationService
 import LoadingSpinner from '../common/LoadingSpinner';
 import addOnsService from '../../services/booking/AddOnsService';
-import enhancedQueueService from '../../services/queue/EnhancedQueueService';
+import queueService from '../../services/queue/QueueService';
 import dateService from '../../services/core/DateService';
 import appointmentTypeManager from '../../services/booking/AppointmentTypeManager';
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
@@ -18,6 +18,8 @@ const BarberQueue = () => {
   const [currentAppointment, setCurrentAppointment] = useState(null);
   const [queuedAppointments, setQueuedAppointments] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [completedAppointments, setCompletedAppointments] = useState([]);
+  const [cancelledAppointments, setCancelledAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
@@ -34,6 +36,10 @@ const BarberQueue = () => {
   const [timeline, setTimeline] = useState([]);
   const [queueStats, setQueueStats] = useState({});
   const [efficiency, setEfficiency] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  });
 
 
   useEffect(() => {
@@ -72,7 +78,7 @@ const BarberQueue = () => {
 
     const subscription = AdvancedHybridQueueService.subscribeToQueue(
       user.id,
-      today,
+      selectedDate,
       handleQueueUpdate
     );
 
@@ -113,7 +119,7 @@ const BarberQueue = () => {
     // Cleanup on unmount
     return () => {
       console.log('🧹 Cleaning up Advanced Hybrid Queue subscriptions');
-      AdvancedHybridQueueService.unsubscribeFromQueue(`${user.id}-${today}`);
+      AdvancedHybridQueueService.unsubscribeFromQueue(`${user.id}-${selectedDate}`);
       if (interval) clearInterval(interval);
       clearTimeout(window.queueUpdateTimeout);
       window.removeEventListener('appointmentStatusChanged', handleAppointmentChange);
@@ -178,7 +184,7 @@ const BarberQueue = () => {
       // Use Advanced Hybrid Queue Service
       const queueData = await AdvancedHybridQueueService.getUnifiedQueue(
         user.id,
-        new Date().toISOString().split('T')[0]
+        selectedDate
       );
 
       if (queueData.success) {
@@ -191,17 +197,30 @@ const BarberQueue = () => {
         setEfficiency(queueData.efficiency || 0);
 
         // Update legacy state for compatibility - filter by appointment_type
-        setQueuedAppointments(queueData.timeline.filter(apt => apt.appointment_type === 'queue'));
+        setQueuedAppointments(queueData.timeline.filter(apt =>
+          apt.appointment_type === 'queue' &&
+          apt.status !== 'completed' &&
+          apt.status !== 'cancelled' &&
+          apt.status !== 'cancel'
+        ));
         setPendingRequests(queueData.timeline.filter(apt => apt.status === 'pending'));
+        setCompletedAppointments(queueData.timeline.filter(apt => apt.status === 'completed' || apt.status === 'done'));
+        setCancelledAppointments(queueData.timeline.filter(apt => apt.status === 'cancelled' || apt.status === 'cancel'));
 
         // Calculate enhanced stats
-        const totalTimeMinutes = queueData.timeline.reduce((total, apt) => {
+        const activeAppointments = queueData.timeline.filter(apt =>
+          apt.status !== 'completed' &&
+          apt.status !== 'done' &&
+          apt.status !== 'cancelled' &&
+          apt.status !== 'cancel'
+        );
+        const totalTimeMinutes = activeAppointments.reduce((total, apt) => {
           return total + (apt.total_duration || 30);
         }, 0);
 
         setStats({
           completed: queueData.stats.completed || 0,
-          remaining: queueData.timeline.length,
+          remaining: activeAppointments.length,
           totalTime: totalTimeMinutes,
           pendingRequests: queueData.timeline.filter(apt => apt.status === 'pending').length,
           efficiency: queueData.efficiency || 0
@@ -346,16 +365,16 @@ const BarberQueue = () => {
 
       if (action === 'accept') {
         // Use enhanced queue service for acceptance
-        const result = await enhancedQueueService.acceptQueueRequest(
+        const result = await queueService.acceptQueueRequest(
           appointmentId,
           user.id,
           appointment.is_urgent
         );
 
         if (result.success) {
-          console.log('✅ Enhanced queue acceptance completed:', result);
+          console.log('✅ Queue acceptance completed:', result);
 
-          // Notification is already sent by EnhancedQueueService.notifyCustomerQueueAcceptance()
+          // Notification is already sent by queueService.notifyCustomerQueueAcceptance()
           // No need to send duplicate notification here
 
           // Log the action
@@ -483,9 +502,14 @@ const BarberQueue = () => {
       }
 
       // Database update - simplified approach
+      const updateData = { status };
+      if (status === 'cancelled' || status === 'cancel') {
+        updateData.queue_position = null;
+      }
+
       const { error } = await supabase
         .from('appointments')
-        .update({ status })
+        .update(updateData)
         .eq('id', appointmentId);
 
       if (error) throw error;
@@ -598,54 +622,71 @@ const BarberQueue = () => {
     <div className="container py-4" style={{ maxWidth: '1200px' }}>
       {/* Header */}
       <div
-        className="d-flex justify-content-between align-items-center mb-3 mb-md-4 queue-status-header"
-        style={{
-          borderRadius: '12px',
-          padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
-        }}
+        className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 bg-white p-3 p-md-4 rounded-4 shadow-sm border"
       >
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-3 mb-3 mb-md-0">
           <div
-            className="d-flex align-items-center justify-content-center"
+            className="d-flex align-items-center justify-content-center bg-primary bg-opacity-10 text-primary"
             style={{
-              width: 'clamp(32px, 7vw, 38px)',
-              height: 'clamp(32px, 7vw, 38px)',
-              borderRadius: '999px',
-              background: 'rgba(255,255,255,0.16)',
+              width: '45px',
+              height: '45px',
+              borderRadius: '12px',
             }}
           >
-            <i className="bi bi-list-ol" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.1rem)' }}></i>
+            <i className="bi bi-list-ol fs-4"></i>
           </div>
           <div>
             <h3
-              className="mb-0 text-white fw-bold"
-              style={{ fontSize: 'clamp(1rem, 4vw, 1.25rem)' }}
+              className="mb-0 fw-bold text-dark"
+              style={{ fontSize: '1.25rem', letterSpacing: '-0.5px' }}
             >
-              Today's Queue & Requests
+              {new Date(selectedDate).toDateString() === new Date().toDateString() ? "Queue Management" : "Daily Queue"}
             </h3>
-            <small
-              className="text-white-50 d-none d-sm-inline"
-              style={{ fontSize: 'clamp(0.75rem, 2.2vw, 0.85rem)' }}
-            >
-              Quickly see who&apos;s waiting and manage new booking requests
-            </small>
+            <p className="text-muted small mb-0">
+              {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
           </div>
         </div>
+
+        {/* Date Selector Navigation */}
+        <div className="d-flex align-items-center gap-2 bg-light p-1 rounded-pill border">
+          <button
+            className="btn btn-white btn-sm rounded-circle shadow-sm border-0"
+            style={{ width: '32px', height: '32px', padding: 0 }}
+            onClick={() => {
+              const d = new Date(selectedDate);
+              d.setDate(d.getDate() - 1);
+              setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+            }}
+          >
+            <i className="bi bi-chevron-left"></i>
+          </button>
+
+          <div className="px-3">
+            <span className="fw-bold text-dark small" style={{ minWidth: '100px', display: 'inline-block', textAlign: 'center' }}>
+              {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+
+          <button
+            className="btn btn-white btn-sm rounded-circle shadow-sm border-0"
+            style={{ width: '32px', height: '32px', padding: 0 }}
+            onClick={() => {
+              const d = new Date(selectedDate);
+              d.setDate(d.getDate() + 1);
+              setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+            }}
+          >
+            <i className="bi bi-chevron-right"></i>
+          </button>
+        </div>
+
         <button
-          className="btn btn-light rounded-circle"
+          className="btn btn-outline-light text-dark border-0 hover-bg-light btn-sm ms-md-3 d-none d-md-block"
           onClick={fetchQueueData}
-          style={{
-            width: 'clamp(35px, 8vw, 40px)',
-            height: 'clamp(35px, 8vw, 40px)',
-            padding: 0,
-            minWidth: '35px',
-          }}
           title="Refresh queue"
         >
-          <i
-            className="bi bi-arrow-clockwise"
-            style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}
-          ></i>
+          <i className="bi bi-arrow-clockwise"></i>
         </button>
       </div>
 
@@ -768,36 +809,18 @@ const BarberQueue = () => {
             <button
               className="btn text-white flex-fill"
               onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
+              disabled={!!currentAppointment} // Strict restriction
               style={{
                 background: '#16a34a',
                 borderRadius: '8px',
                 padding: 'clamp(0.625rem, 2vw, 0.75rem)',
                 fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
                 fontWeight: '500',
-                border: 'none'
-              }}
-            >
-              Start
-            </button>
-            <button
-              className="btn text-white flex-fill"
-              onClick={() => {
-                if (queuedAppointments.length > 1) {
-                  handleAppointmentStatus(queuedAppointments[1].id, 'ongoing');
-                }
-              }}
-              disabled={queuedAppointments.length <= 1}
-              style={{
-                background: '#eab308',
-                borderRadius: '8px',
-                padding: 'clamp(0.625rem, 2vw, 0.75rem)',
-                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
-                fontWeight: '500',
                 border: 'none',
-                opacity: queuedAppointments.length <= 1 ? 0.5 : 1
+                opacity: currentAppointment ? 0.6 : 1
               }}
             >
-              Next
+              {currentAppointment ? 'Barber Busy' : 'Start Service'}
             </button>
           </div>
         </div>
@@ -823,7 +846,7 @@ const BarberQueue = () => {
               fontWeight: 'bold',
               fontSize: 'clamp(1rem, 3vw, 1.2rem)'
             }}>
-              1
+              {currentAppointment.queue_position || 1}
             </div>
 
             {/* Customer Info */}
@@ -856,24 +879,8 @@ const BarberQueue = () => {
                 border: 'none'
               }}
             >
-              Complete
+              Mark as Completed
             </button>
-            {queuedAppointments.length > 0 && (
-              <button
-                className="btn text-white flex-fill"
-                onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
-                style={{
-                  background: '#eab308',
-                  borderRadius: '8px',
-                  padding: 'clamp(0.625rem, 2vw, 0.75rem)',
-                  fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
-                  fontWeight: '500',
-                  border: 'none'
-                }}
-              >
-                Next
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -965,6 +972,63 @@ const BarberQueue = () => {
         })()}
       </div>
 
+      {/* Completed Today Section */}
+      <div className="mb-3 mb-md-4">
+        <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Completed Today</h5>
+        {completedAppointments.length === 0 ? (
+          <div className="text-center py-4" style={{
+            background: '#f9fafb',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            opacity: 0.6
+          }}>
+            <p className="text-muted mb-0 small">No completed services yet</p>
+          </div>
+        ) : (
+          <div className="d-flex flex-column gap-2">
+            {completedAppointments.map((appointment) => (
+              <div
+                key={appointment.id}
+                className="d-flex align-items-center"
+                style={{
+                  background: '#f3f4f6',
+                  borderRadius: '12px',
+                  padding: 'clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
+                  gap: 'clamp(0.5rem, 2vw, 1rem)',
+                  borderLeft: '4px solid #10b981',
+                  opacity: 0.8
+                }}
+              >
+                {/* Icon */}
+                <div className="d-flex align-items-center justify-content-center flex-shrink-0 text-success" style={{
+                  width: 'clamp(30px, 7vw, 35px)',
+                  height: 'clamp(30px, 7vw, 35px)',
+                  background: '#d1fae5',
+                  borderRadius: '50%',
+                  fontSize: 'clamp(0.8rem, 2vw, 0.9rem)'
+                }}>
+                  <i className="bi bi-check-lg"></i>
+                </div>
+
+                {/* Customer Info */}
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 'clamp(0.85rem, 2.2vw, 0.95rem)', fontWeight: '500', color: '#374151' }}>
+                    {appointment.customer?.full_name}
+                  </div>
+                  <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', color: '#6b7280' }}>
+                    {getServicesDisplay(appointment)}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', fontWeight: 'bold', color: '#059669' }}>
+                  DONE
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Pending Requests Section */}
       <div>
         <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Pending Requests</h5>
@@ -1049,6 +1113,63 @@ const BarberQueue = () => {
         )}
       </div>
 
+
+      {/* Cancelled Today Section */}
+      <div className="mb-3 mb-md-4">
+        <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Cancelled Today</h5>
+        {cancelledAppointments.length === 0 ? (
+          <div className="text-center py-4" style={{
+            background: '#f9fafb',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            opacity: 0.6
+          }}>
+            <p className="text-muted mb-0 small">No cancelled appointments yet</p>
+          </div>
+        ) : (
+          <div className="d-flex flex-column gap-2">
+            {cancelledAppointments.map((appointment) => (
+              <div
+                key={appointment.id}
+                className="d-flex align-items-center"
+                style={{
+                  background: '#fef2f2',
+                  borderRadius: '12px',
+                  padding: 'clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
+                  gap: 'clamp(0.5rem, 2vw, 1rem)',
+                  borderLeft: '4px solid #ef4444',
+                  opacity: 0.8
+                }}
+              >
+                {/* Icon */}
+                <div className="d-flex align-items-center justify-content-center flex-shrink-0 text-danger" style={{
+                  width: 'clamp(30px, 7vw, 35px)',
+                  height: 'clamp(30px, 7vw, 35px)',
+                  background: '#fee2e2',
+                  borderRadius: '50%',
+                  fontSize: 'clamp(0.8rem, 2vw, 0.9rem)'
+                }}>
+                  <i className="bi bi-x-lg"></i>
+                </div>
+
+                {/* Customer Info */}
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 'clamp(0.85rem, 2.2vw, 0.95rem)', fontWeight: '500', color: '#374151' }}>
+                    {appointment.customer?.full_name}
+                  </div>
+                  <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', color: '#6b7280' }}>
+                    {getServicesDisplay(appointment)}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', fontWeight: 'bold', color: '#b91c1c' }}>
+                  CANCELLED
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Reschedule Modal */}
       <RescheduleModal

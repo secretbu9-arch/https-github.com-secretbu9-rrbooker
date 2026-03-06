@@ -277,6 +277,58 @@ class CentralizedNotificationService {
   }
 
   /**
+   * Create emergency priority notification
+   * @param {Object} params - Notification parameters
+   */
+  async createEmergencyPriorityNotification({
+    userId,
+    appointmentId,
+    newTime,
+    reason = 'Urgent Priority'
+  }) {
+    const title = '🚨 Urgent Priority Approved';
+    const message = `Your appointment has been granted Urgent Priority! Your new estimated start time is ${newTime}. Please be ready.`;
+
+    return this.createNotification({
+      userId,
+      title,
+      message,
+      type: 'urgent_priority',
+      category: 'appointment_update',
+      priority: 'high',
+      channels: ['app', 'push'],
+      appointmentId,
+      data: { newTime, reason, isUrgentPriority: true }
+    });
+  }
+
+  /**
+   * Create schedule shift notification for affected customers
+   * @param {Object} params - Notification parameters
+   */
+  async createScheduleShiftNotification({
+    userId,
+    appointmentId,
+    newTime,
+    reason = 'an emergency booking'
+  }) {
+    const title = '📅 Schedule Update';
+    const message = `Due to ${reason}, your appointment time has shifted slightly. Your new estimated start time is ${newTime}. We apologize for the inconvenience.`;
+
+    return this.createNotification({
+      userId,
+      title,
+      message,
+      type: 'schedule_shift',
+      category: 'appointment_update',
+      priority: 'normal',
+      channels: ['app', 'push'],
+      appointmentId,
+      data: { newTime, reason }
+    });
+  }
+
+  /**
    * Create booking confirmation notification
    * @param {Object} params - Notification parameters
    * @returns {Promise<Object>} Created notification
@@ -337,7 +389,7 @@ class CentralizedNotificationService {
       if (checkError) throw checkError;
 
       // Determine notification content based on appointment type
-      const title = appointmentType === 'scheduled' ? 'Appointment Scheduled! 📅' : 'Booking Confirmed! 🎉';
+      const title = 'Appointment Confirmed! 📅';
       const message = appointmentType === 'scheduled'
         ? `Great news! Your appointment with ${barberName} is set for ${appointmentTime || 'the selected time'}.`
         : `You're in the queue! Your appointment with ${barberName} is confirmed. You are #${queuePosition} in line.`;
@@ -448,6 +500,11 @@ class CentralizedNotificationService {
     orderId = null,
     queueEntryId = null
   }) {
+    // Robustly extract appointmentId/orderId if not explicitly provided
+    if (!appointmentId && data?.appointment_id) appointmentId = data.appointment_id;
+    if (!orderId && data?.order_id) orderId = data.order_id;
+    if (!queueEntryId && data?.queue_entry_id) queueEntryId = data.queue_entry_id;
+
     // Create unique key without timestamp to catch true duplicates
     // Include appointmentId/orderId/queueEntryId in key for better duplicate detection
     // For reschedule requests, also include request_id if available

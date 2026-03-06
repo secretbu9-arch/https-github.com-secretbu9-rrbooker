@@ -7,13 +7,13 @@ import { formatDate, formatTime, getStatusColor, parseAddOnsData, mapLegacyAddon
 import { APPOINTMENT_STATUS } from '../utils/constants';
 import LoadingSpinner from '../common/LoadingSpinner';
 import SearchAndFilter from '../common/SearchAndFilter';
-import AppointmentProductPurchase from './AppointmentProductPurchase';
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
 import UnifiedSlotBookingService from '../../services/booking/UnifiedSlotBookingService';
-import { 
-  BOOKING_STATUS, 
-  APPOINTMENT_FIELDS, 
-  PRIORITY_LEVELS 
+import PriorityQueueService from '../../services/queue/PriorityQueueService';
+import {
+  BOOKING_STATUS,
+  APPOINTMENT_FIELDS,
+  PRIORITY_LEVELS
 } from '../../constants/booking.constants';
 
 const ManageAppointments = () => {
@@ -27,19 +27,17 @@ const ManageAppointments = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showWalkInModal, setShowWalkInModal] = useState(false);
-  const [showAppointmentProductModal, setShowAppointmentProductModal] = useState(false);
-  const [selectedAppointmentForProduct, setSelectedAppointmentForProduct] = useState(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusUpdateData, setStatusUpdateData] = useState({ appointmentId: null, newStatus: null });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [customers, setCustomers] = useState([]);
-  
+
   // Advanced Hybrid Queue System state
   const [queueAnalytics, setQueueAnalytics] = useState({});
   const [realTimeUpdates, setRealTimeUpdates] = useState(false);
   const [efficiencyMetrics, setEfficiencyMetrics] = useState({});
-  
+
   // Allowed statuses for ManageAppointments: Only Pending, Confirmed, Ongoing, Completed, Cancelled
   const ALLOWED_STATUSES = [
     APPOINTMENT_STATUS.PENDING,
@@ -48,7 +46,7 @@ const ManageAppointments = () => {
     APPOINTMENT_STATUS.COMPLETED,
     APPOINTMENT_STATUS.CANCELLED
   ];
-  
+
   const normalizeStatus = (status) => {
     const value = status?.toLowerCase();
     switch (value) {
@@ -56,8 +54,7 @@ const ManageAppointments = () => {
         return APPOINTMENT_STATUS.COMPLETED;
       case 'cancel':
         return APPOINTMENT_STATUS.CANCELLED;
-      case 'scheduled':
-        return APPOINTMENT_STATUS.CONFIRMED;
+
       default:
         return value;
     }
@@ -78,12 +75,12 @@ const ManageAppointments = () => {
       APPOINTMENT_STATUS.COMPLETED,
       APPOINTMENT_STATUS.CANCELLED
     ];
-    
+
     // If the canonical status is in the allowed list, use it directly
     if (allowedStatuses.includes(canonical)) {
       return [canonical];
     }
-    
+
     // For any other status, return empty array (will be caught by validation)
     return [];
   };
@@ -94,10 +91,8 @@ const ManageAppointments = () => {
       updated_at: new Date().toISOString()
     };
 
-    if ([APPOINTMENT_STATUS.COMPLETED, APPOINTMENT_STATUS.CANCELLED].includes(canonicalStatus)) {
+    if (canonicalStatus === APPOINTMENT_STATUS.CANCELLED) {
       payload.queue_position = null;
-    } else if (canonicalStatus === APPOINTMENT_STATUS.ONGOING) {
-      payload.queue_position = 0;
     }
 
     return payload;
@@ -111,7 +106,7 @@ const ManageAppointments = () => {
     double_booking_only: false,
     add_on_id: ''
   });
-  
+
   const [formData, setFormData] = useState({
     customer_id: '',
     barber_id: '',
@@ -145,20 +140,20 @@ const ManageAppointments = () => {
   // const [walkInAlternativeBarbers, setWalkInAlternativeBarbers] = useState([]);
   // const [walkInShowAlternatives, setWalkInShowAlternatives] = useState(false);
   // const [walkInLoadingSlots, setWalkInLoadingSlots] = useState(false);
-  
+
   const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     fetchInitialData();
-    
+
     // Set up Advanced Hybrid Queue real-time updates for managers
     const handleManagerUpdate = (update) => {
       console.log('🔔 Manager received Advanced Hybrid Queue update:', update);
-      
+
       // Refresh appointments and analytics
-          fetchAppointments();
+      fetchAppointments();
       fetchQueueAnalytics();
-      
+
       // Show notification for important updates
       if (update.event === 'queue_rebalanced' || update.event === 'efficiency_improved') {
         console.log(`📊 Queue analytics updated: ${update.event}`);
@@ -171,7 +166,7 @@ const ManageAppointments = () => {
     );
 
     setRealTimeUpdates(true);
-    
+
     return () => {
       console.log('🧹 Cleaning up Advanced Hybrid Queue manager subscription');
       AdvancedHybridQueueService.unsubscribeFromManagerUpdates();
@@ -198,7 +193,7 @@ const ManageAppointments = () => {
           .select('id, full_name, email')
           .eq('role', 'customer')
           .order('full_name');
-        
+
         if (error) {
           console.error('Error fetching customers:', error);
         } else {
@@ -208,14 +203,14 @@ const ManageAppointments = () => {
         console.error('Error fetching customers:', error);
       }
     };
-    
+
     fetchCustomers();
   }, []);
 
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch all in parallel
       const [barbersResult, servicesResult, customersResult, addOnsResult] = await Promise.all([
         fetchBarbers(),
@@ -223,18 +218,18 @@ const ManageAppointments = () => {
         fetchCustomers(),
         fetchAddOns()
       ]);
-      
+
       setBarbers(barbersResult);
       setServices(servicesResult);
       setAddOns(addOnsResult);
       setCustomers(customersResult);
-      
+
       // Then fetch appointments
       await fetchAppointments();
-      
+
       // Fetch queue analytics
       await fetchQueueAnalytics();
-      
+
     } catch (error) {
       console.error('Error fetching initial data:', error);
       setError('Failed to load initial data. Please refresh the page.');
@@ -262,7 +257,7 @@ const ManageAppointments = () => {
       .select('id, full_name, email')
       .eq('role', 'barber')
       .order('full_name');
-    
+
     if (error) throw error;
     return data || [];
   };
@@ -272,8 +267,8 @@ const ManageAppointments = () => {
       .from('services')
       .select('*')
       .eq('is_active', true)
-      .order('name');
-    
+      .order('price', { ascending: true });
+
     if (error) throw error;
     return data || [];
   };
@@ -283,13 +278,13 @@ const ManageAppointments = () => {
       .from('add_ons')
       .select('*')
       .eq('is_active', true)
-      .order('name');
-    
+      .order('price', { ascending: true });
+
     if (error) {
       console.error('Error fetching add-ons:', error);
       throw error;
     }
-    
+
     console.log('Fetched add-ons:', data);
     return data || [];
   };
@@ -300,7 +295,7 @@ const ManageAppointments = () => {
       .select('id, full_name, email, phone')
       .eq('role', 'customer')
       .order('full_name');
-    
+
     if (error) throw error;
     return data || [];
   };
@@ -309,7 +304,7 @@ const ManageAppointments = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Build query based on filters
       let query = supabase
         .from('appointments')
@@ -321,51 +316,51 @@ const ManageAppointments = () => {
         `)
         .order('appointment_date', { ascending: false })
         .order('appointment_time', { ascending: true });
-      
+
       // Apply status filter
       if (filters.status) {
         query = query.eq('status', filters.status);
       }
-      
+
       // Apply barber filter
       if (filters.barber_id) {
         query = query.eq('barber_id', filters.barber_id);
       }
-      
+
       // Apply date range filter
       if (filters.date_range) {
         const today = new Date().toISOString().split('T')[0];
-        
+
         if (filters.date_range === 'today') {
           query = query.eq('appointment_date', today);
         } else if (filters.date_range === 'week') {
           const weekLater = new Date();
           weekLater.setDate(weekLater.getDate() + 7);
           const weekLaterStr = weekLater.toISOString().split('T')[0];
-          
+
           query = query.gte('appointment_date', today).lte('appointment_date', weekLaterStr);
         } else if (filters.date_range === 'month') {
           const monthLater = new Date();
           monthLater.setMonth(monthLater.getMonth() + 1);
           const monthLaterStr = monthLater.toISOString().split('T')[0];
-          
+
           query = query.gte('appointment_date', today).lte('appointment_date', monthLaterStr);
         } else if (filters.date_range === 'custom' && filters.start_date && filters.end_date) {
           query = query.gte('appointment_date', filters.start_date).lte('appointment_date', filters.end_date);
         }
       }
-      
+
       // Apply search filter
       if (filters.search) {
         // This is a simplified approach. For better performance,
         // you might want to use text search or create specific indexes
         query = query.or(`customer.full_name.ilike.%${filters.search}%,barber.full_name.ilike.%${filters.search}%`);
       }
-      
+
       const { data, error } = await query;
-      
+
       if (error) throw error;
-      
+
       // Debug: Log double booking appointments
       const doubleBookings = data?.filter(apt => apt.is_double_booking);
       if (doubleBookings && doubleBookings.length > 0) {
@@ -381,10 +376,10 @@ const ManageAppointments = () => {
       } else {
         console.log('❌ No double booking appointments found in current data');
       }
-      
+
       const normalizedAppointments = (data || []).map(normalizeAppointmentRecord);
       setAppointments(normalizedAppointments);
-      
+
     } catch (error) {
       console.error('Error fetching appointments:', error);
       setError('Failed to load appointments. Please try again.');
@@ -401,13 +396,13 @@ const ManageAppointments = () => {
         .select('appointment_time, service:service_id(duration)')
         .eq('barber_id', formData.barber_id)
         .eq('appointment_date', formData.appointment_date)
-        .in('status', ['confirmed', 'ongoing']);
+        .in('status', ['pending', 'confirmed', 'ongoing']);
 
       if (error) throw error;
 
       // Generate time slots with lunch break (8:00 AM - 11:30 AM, 1:00 PM - 4:30 PM) - 30-minute intervals
       const timeSlots = [];
-      
+
       // Morning slots: 8:00 AM - 11:30 AM (30-minute intervals)
       for (let hour = 8; hour <= 11; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
@@ -417,7 +412,7 @@ const ManageAppointments = () => {
           timeSlots.push(time);
         }
       }
-      
+
       // Afternoon slots: 1:00 PM - 4:30 PM (30-minute intervals)
       for (let hour = 13; hour <= 16; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
@@ -435,7 +430,7 @@ const ManageAppointments = () => {
         if (selectedAppointment && selectedAppointment.appointment_time === time) {
           return true;
         }
-        
+
         // Otherwise, exclude booked times
         return !bookedTimes.includes(time);
       });
@@ -571,7 +566,7 @@ const ManageAppointments = () => {
   // Calculate available slots with duration (helper function)
   const calculateAvailableSlotsWithDuration = (appointments, serviceDuration) => {
     const timeSlots = [];
-    
+
     // Generate all possible time slots (8:00 AM - 4:30 PM, 30-minute intervals)
     for (let hour = 8; hour <= 16; hour++) {
       for (let minute of ['00', '30']) {
@@ -579,18 +574,18 @@ const ManageAppointments = () => {
         if (hour === 16 && minute === '30') {
           const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
           const timeInMinutes = hour * 60 + parseInt(minute);
-          
+
           // Check if this slot is available
           const isAvailable = !appointments?.some(apt => {
             if (!apt.appointment_time) return false; // Skip queue appointments
-            
+
             const aptTime = apt.appointment_time.split(':');
             const aptTimeInMinutes = parseInt(aptTime[0]) * 60 + parseInt(aptTime[1]);
             const aptDuration = apt.total_duration || 30;
-            
+
             // Check if the new appointment would conflict
-            return timeInMinutes < aptTimeInMinutes + aptDuration && 
-                   timeInMinutes + serviceDuration > aptTimeInMinutes;
+            return timeInMinutes < aptTimeInMinutes + aptDuration &&
+              timeInMinutes + serviceDuration > aptTimeInMinutes;
           });
 
           if (isAvailable) {
@@ -601,21 +596,21 @@ const ManageAppointments = () => {
           }
           break; // End after 4:30 PM
         }
-        
+
         const timeString = `${hour.toString().padStart(2, '0')}:${minute}`;
         const timeInMinutes = hour * 60 + parseInt(minute);
-        
+
         // Check if this slot is available
         const isAvailable = !appointments?.some(apt => {
           if (!apt.appointment_time) return false; // Skip queue appointments
-          
+
           const aptTime = apt.appointment_time.split(':');
           const aptTimeInMinutes = parseInt(aptTime[0]) * 60 + parseInt(aptTime[1]);
           const aptDuration = apt.total_duration || 30;
-          
+
           // Check if the new appointment would conflict
-          return timeInMinutes < aptTimeInMinutes + aptDuration && 
-                 timeInMinutes + serviceDuration > aptTimeInMinutes;
+          return timeInMinutes < aptTimeInMinutes + aptDuration &&
+            timeInMinutes + serviceDuration > aptTimeInMinutes;
         });
 
         if (isAvailable) {
@@ -626,7 +621,7 @@ const ManageAppointments = () => {
         }
       }
     }
-    
+
     return timeSlots;
   };
 
@@ -648,12 +643,12 @@ const ManageAppointments = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    
+
     // Clear validation error for this field
     if (formErrors[name]) {
       setFormErrors(prev => ({
@@ -665,48 +660,48 @@ const ManageAppointments = () => {
 
   const validateForm = () => {
     const errors = {};
-    
+
     // Required fields
     if (!formData.barber_id) {
       errors.barber_id = 'Barber is required';
     }
-    
+
     if (!formData.service_id) {
       errors.service_id = 'Service is required';
     }
-    
+
     if (!formData.appointment_date) {
       errors.appointment_date = 'Date is required';
     }
-    
+
     // Only require time if it's a scheduled appointment
     if (formData.appointment_type === 'scheduled' && !formData.appointment_time) {
       errors.appointment_time = 'Time is required for scheduled appointments';
     }
-    
+
     // Only require queue position if it's a queue appointment and user wants to set it manually
     // (It's optional - can be auto-assigned)
-    
+
     if (!formData.status) {
       errors.status = 'Status is required';
     } else if (!ALLOWED_STATUSES.includes(formData.status)) {
       errors.status = `Status must be one of: ${ALLOWED_STATUSES.join(', ')}`;
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+
       const updates = {
         barber_id: formData.barber_id,
         service_id: formData.service_id,
@@ -719,18 +714,18 @@ const ManageAppointments = () => {
         status: formData.status,
         updated_at: new Date().toISOString()
       };
-      
+
       // If switching to scheduled, clear queue position
       if (formData.appointment_type === 'scheduled') {
         updates.queue_position = null;
         updates.priority_level = null;
       }
-      
+
       // If switching to queue, clear appointment time
       if (formData.appointment_type === 'queue') {
         updates.appointment_time = null;
       }
-      
+
       // Update appointment
       const { data, error } = await supabase
         .from('appointments')
@@ -743,21 +738,21 @@ const ManageAppointments = () => {
           service:service_id(id, name, price, duration, description)
         `)
         .single();
-      
+
       if (error) throw error;
-      
+
       // Update local state
-      setAppointments(prev => 
+      setAppointments(prev =>
         prev.map(apt => apt.id === selectedAppointment.id ? normalizeAppointmentRecord(data) : apt)
       );
-      
       // Create notification using centralized service (handles both database and push)
       try {
         const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
         await centralizedNotificationService.createNotification({
           userId: selectedAppointment.customer_id,
+          appointmentId: selectedAppointment.id,
           title: 'Appointment Updated 📝',
-          message: `Your appointment has been updated by the manager. New details: ${formData.appointment_date} at ${formData.appointment_time}`,
+          message: `Your appointment has been updated by the manager. New details: ${formData.appointment_date}${formData.appointment_time ? ` at ${formData.appointment_time}` : ' (Queue)'}`,
           type: 'appointment',
           channels: ['app', 'push'],
           data: {
@@ -772,10 +767,10 @@ const ManageAppointments = () => {
       } catch (notificationError) {
         console.warn('Failed to send appointment update notification:', notificationError);
       }
-      
+
       // Close modal and reset form
       closeEditModal();
-      
+
     } catch (error) {
       console.error('Error updating appointment:', error);
       setError('Failed to update appointment. Please try again.');
@@ -793,139 +788,92 @@ const ManageAppointments = () => {
   const confirmStatusUpdate = async () => {
     const { appointmentId, newStatus } = statusUpdateData;
     const canonicalStatus = normalizeStatus(newStatus);
-    
+
     try {
       setLoading(true);
-      
-      // Validate that only allowed statuses can be set
-      if (!ALLOWED_STATUSES.includes(canonicalStatus)) {
-        setError(`Invalid status. Only allowed statuses are: ${ALLOWED_STATUSES.join(', ')}`);
-        setLoading(false);
-        return;
-      }
-      
-      const statusOptions = getDatabaseStatusOptions(canonicalStatus);
-      let updatedAppointment = null;
-      let lastError = null;
 
-      for (const dbStatus of statusOptions) {
-        console.log('Attempting appointment status update', { appointmentId, dbStatus, canonicalStatus });
-        const payload = buildStatusUpdatePayload(dbStatus, canonicalStatus);
-        const { data, error } = await supabase
-          .from('appointments')
-          .update(payload)
-          .eq('id', appointmentId)
-          .select(`
-            *,
-            customer:customer_id(id, full_name, email, phone),
-            barber:barber_id(id, full_name, email, phone),
-            service:service_id(id, name, price, duration, description)
-          `)
-          .single();
+      const payload = buildStatusUpdatePayload(canonicalStatus, canonicalStatus);
 
-        if (!error) {
-          updatedAppointment = normalizeAppointmentRecord(data);
-          break;
-        }
+      const { data, error } = await supabase
+        .from('appointments')
+        .update(payload)
+        .eq('id', appointmentId)
+        .select(`
+          *,
+          customer:customer_id(id, full_name, email, phone),
+          barber:barber_id(id, full_name, email, phone),
+          service:service_id(id, name, price, duration, description)
+        `)
+        .single();
 
-        lastError = error;
-        
-        // Log the full error for debugging
-        console.error('Status update error details:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          status: error.status,
-          dbStatus,
-          canonicalStatus
-        });
+      if (error) throw error;
 
-        // Handle constraint violations and other database errors
-        // Database should only accept: pending, confirmed, ongoing, completed, cancelled
-        const isConstraintError = error.code === '23514' || 
-                                  error.code === 'PGRST116' || 
-                                  error.code === '23505' ||
-                                  (error.status === 400);
-        
-        if (isConstraintError) {
-          console.warn('Status update failed, may need database constraint update', {
-            appointmentId,
-            attemptedStatus: dbStatus,
-            canonicalStatus,
-            error: error.message,
-            errorCode: error.code
-          });
-          
-          // No fallback needed - database should only accept the 5 allowed statuses
-          // If update fails, it means the database constraint needs to be updated
-          
-          // Continue to next option if available
-          if (statusOptions.length > 1) {
-            continue;
-          }
-        }
+      const updatedAppointment = normalizeAppointmentRecord(data);
 
-        // For other errors, throw immediately
-        if (error.code !== '23514' && error.code !== 'PGRST116') {
-          console.error('Non-constraint error during status update:', error);
-          throw error;
+      // Handle queue collapse if cancelled
+      if (canonicalStatus === 'cancelled' && updatedAppointment.queue_position != null) {
+        try {
+          const { default: ComprehensiveQueueManager } = await import('../../services/queue/ComprehensiveQueueManager');
+          await ComprehensiveQueueManager.collapseQueuePositions(
+            updatedAppointment.barber_id,
+            updatedAppointment.appointment_date,
+            updatedAppointment.queue_position
+          );
+        } catch (collapseErr) {
+          console.warn('Queue collapse error:', collapseErr);
         }
       }
 
-      if (!updatedAppointment) {
-        throw lastError || new Error('Failed to update appointment status.');
-      }
-
-      // Update local state
-      setAppointments(prev => 
+      setAppointments(prev =>
         prev.map(apt => apt.id === appointmentId ? updatedAppointment : apt)
       );
 
-      if (selectedAppointment?.id === appointmentId) {
-        setSelectedAppointment(updatedAppointment);
-      }
+      setShowStatusModal(false);
+      setStatusUpdateData({ appointmentId: null, newStatus: null });
 
-      // Create notification using centralized service (ONLY way to create notifications)
+      // Notify
       const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
-      
-      // Notify customer
       await centralizedNotificationService.createAppointmentStatusNotification({
         userId: updatedAppointment.customer_id,
         appointmentId: appointmentId,
         status: canonicalStatus,
         changedBy: 'manager'
       });
-      
-      // Notify barber
-      await centralizedNotificationService.createAppointmentStatusNotification({
-        userId: updatedAppointment.barber_id,
-        appointmentId: appointmentId,
-        status: canonicalStatus,
-        changedBy: 'manager'
-      });
-      
-      // Close modal on success
-      setShowStatusModal(false);
-      setStatusUpdateData({ appointmentId: null, newStatus: null });
-      
+
     } catch (error) {
-      console.error('Error updating appointment status:', error);
-      
-      // Provide more detailed error message
-      let errorMessage = 'Failed to update appointment status.';
-      
-      if (error.message) {
-        errorMessage += ` ${error.message}`;
-      }
-      
-      if (error.code === '23514' || error.code === 'PGRST116') {
-        errorMessage += ' The database may not support this status value. Please contact support.';
-      } else if (error.code === '400' || error.status === 400) {
-        errorMessage += ' Invalid request. The status value may not be allowed by the database.';
-      }
-      
-      setError(errorMessage);
+      console.error('Error updating status:', error);
+      setError('Failed to update: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveEmergency = async (appointment) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (appointment.appointment_date < today) {
+      alert("Cannot approve Urgent Priority for past appointments.");
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to approve this appointment for Urgent Priority? This will shift the entire schedule.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const managerId = (await supabase.auth.getUser()).data.user?.id;
+
+      await PriorityQueueService.approveEmergencyBooking(
+        appointment.id,
+        managerId || 'system',
+        'Manager urgent override'
+      );
+
+      alert('Urgent Priority request approved. Queue has been recalculated.');
+      fetchAppointments();
+    } catch (error) {
+      console.error('Emergency approval failed:', error);
+      alert('Failed to approve emergency: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -983,12 +931,12 @@ const ManageAppointments = () => {
 
   const handleWalkInChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     setWalkInFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-    
+
     // Clear validation error for this field
     if (formErrors[name]) {
       setFormErrors(prev => ({
@@ -1027,7 +975,7 @@ const ManageAppointments = () => {
       appointment_type: appointmentType
     }));
   };
-
+  
   // Handle alternative barber selection for walk-in - REMOVED: Not needed for queue-based walk-ins
   const handleWalkInAlternativeBarberSelect = (barberId) => {
     console.log('🎯 Selected alternative barber for walk-in:', barberId);
@@ -1045,47 +993,47 @@ const ManageAppointments = () => {
 
   const validateWalkInForm = () => {
     const errors = {};
-    
+
     // Required fields
     if (!walkInFormData.customer_name.trim()) {
       errors.customer_name = 'Customer name is required';
     }
-    
+
     if (!walkInFormData.barber_id) {
       errors.barber_id = 'Barber is required';
     }
-    
+
     if (!walkInFormData.service_id) {
       errors.service_id = 'Service is required';
     }
-    
+
     if (!walkInFormData.appointment_date) {
       errors.appointment_date = 'Date is required';
     }
-    
+
     // Time is now optional since we use the slot system
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleWalkInSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateWalkInForm()) {
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(''); // Clear previous errors
-      
+
       console.log('🚀 Starting walk-in appointment creation...');
       console.log('📋 Form data:', walkInFormData);
-      
+
       // Check if customer exists, if not create a minimal customer record for walk-ins
       let customerId = walkInFormData.primary_customer_id || null;
-      
+
       // Try to find existing customer by email if provided
       if (!customerId && walkInFormData.customer_email) {
         console.log('🔍 Checking for existing customer by email...');
@@ -1096,7 +1044,7 @@ const ManageAppointments = () => {
             .eq('email', walkInFormData.customer_email)
             .eq('role', 'customer')
             .maybeSingle();
-          
+
           if (customerSearchError) {
             console.error('❌ Error searching for customer:', customerSearchError);
           } else if (existingCustomer) {
@@ -1107,21 +1055,21 @@ const ManageAppointments = () => {
           console.error('❌ Error in customer search:', error);
         }
       }
-      
+
       // If no customer found, create a minimal customer record for walk-ins
       // Since customer_id is NOT NULL, we need to create a customer record
       if (!customerId || customerId === '') {
         console.log('👤 Creating minimal customer record for walk-in...');
         try {
           // Generate a unique email for walk-in customer
-          const walkInEmail = walkInFormData.customer_email || 
+          const walkInEmail = walkInFormData.customer_email ||
             `walkin-${Date.now()}-${Math.random().toString(36).substring(7)}@walkin.local`;
-          
+
           // Generate a random password (won't be used, but required for signUp)
-          const randomPassword = Math.random().toString(36).substring(2, 15) + 
-            Math.random().toString(36).substring(2, 15) + 
+          const randomPassword = Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15) +
             Math.random().toString(36).substring(2, 15) + 'A1!'; // Add complexity for password requirements
-          
+
           // Create auth user first (required for foreign key constraint)
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email: walkInEmail,
@@ -1135,7 +1083,7 @@ const ManageAppointments = () => {
               }
             }
           });
-          
+
           if (authError) {
             console.error('❌ Error creating auth user for walk-in:', authError);
             // If email already exists, try to find the user
@@ -1146,7 +1094,7 @@ const ManageAppointments = () => {
                 .select('id')
                 .eq('email', walkInEmail)
                 .maybeSingle();
-              
+
               if (existingUser) {
                 customerId = existingUser.id;
                 console.log('✅ Found existing user:', customerId);
@@ -1171,7 +1119,7 @@ const ManageAppointments = () => {
               })
               .select('id')
               .single();
-            
+
             if (userError) {
               console.error('❌ Error creating user record:', userError);
               // If user already exists, use the existing ID
@@ -1181,7 +1129,7 @@ const ManageAppointments = () => {
                   .select('id')
                   .eq('email', walkInEmail)
                   .maybeSingle();
-                
+
                 if (existingUser) {
                   customerId = existingUser.id;
                   console.log('✅ Using existing user record:', customerId);
@@ -1203,27 +1151,27 @@ const ManageAppointments = () => {
           throw new Error(`Failed to create walk-in customer: ${error.message}`);
         }
       }
-      
+
       // Ensure customerId is not null or empty string
       if (!customerId || customerId === '') {
         throw new Error('Customer ID is required but could not be created or found');
       }
-      
+
       console.log('👤 Walk-in customer ID:', customerId);
 
       // Validate required data before proceeding
       if (!walkInFormData.barber_id) {
         throw new Error('Barber ID is required');
       }
-      
+
       if (!walkInFormData.service_id) {
         throw new Error('Service ID is required');
       }
-      
+
       if (!walkInFormData.appointment_date) {
         throw new Error('Appointment date is required');
       }
-      
+
       // Note: customerId can be null for walk-ins without accounts
 
       console.log('📅 Creating walk-in appointment with Advanced Hybrid Queue System...');
@@ -1249,13 +1197,13 @@ const ManageAppointments = () => {
       // Calculate add-ons price and duration
       let addOnsPrice = 0;
       let addOnsDuration = 0;
-      
+
       if (walkInFormData.add_ons_data && walkInFormData.add_ons_data.length > 0) {
         const { data: addOnsData, error: addOnsError } = await supabase
           .from('add_ons')
           .select('price, duration')
           .in('id', walkInFormData.add_ons_data);
-        
+
         if (!addOnsError && addOnsData) {
           addOnsPrice = addOnsData.reduce((sum, addon) => sum + addon.price, 0);
           addOnsDuration = addOnsData.reduce((sum, addon) => sum + addon.duration, 0);
@@ -1297,7 +1245,7 @@ const ManageAppointments = () => {
       }
 
       console.log('✅ Walk-in appointment created successfully with Advanced Hybrid System:', result);
-      
+
       // Fetch the created appointment with full details
       const { data: createdAppointment, error: fetchError } = await supabase
         .from('appointments')
@@ -1309,17 +1257,17 @@ const ManageAppointments = () => {
         `)
         .eq('id', result.appointment_id)
         .single();
-      
+
       if (fetchError) {
         console.error('⚠️ Error fetching created appointment:', fetchError);
         // Don't throw error, we have the appointment ID from result
       }
 
       const data = createdAppointment || { id: result.appointment_id };
-      
+
       // Update local state
       setAppointments(prev => [normalizeAppointmentRecord(data), ...prev]);
-      
+
       // Create notification for barber using CentralizedNotificationService to prevent duplicates
       console.log('📢 Creating notification for barber...');
       try {
@@ -1345,19 +1293,19 @@ const ManageAppointments = () => {
         console.error('⚠️ Error creating notification:', notificationError);
         // Don't throw error for notification failure
       }
-      
+
       // Show success message with position and estimated time
       const successMessage = `✅ Walk-in appointment created successfully!\n` +
         `Customer: ${walkInFormData.customer_name}\n` +
         `Position: #${result.position}\n` +
         `Estimated time: ${result.estimated_time || 'TBD'}`;
-      
+
       // You can add a success state here if needed
       console.log('🎉 Walk-in appointment creation completed successfully!', successMessage);
-      
+
       // Close modal and reset form
       closeWalkInModal();
-      
+
     } catch (error) {
       console.error('❌ Error creating walk-in appointment:', error);
       const errorMessage = error.message || 'Failed to create walk-in appointment. Please try again.';
@@ -1386,23 +1334,7 @@ const ManageAppointments = () => {
     setShowWalkInModal(false);
   };
 
-  // Product purchase handlers
 
-  const handleAppointmentProductPurchase = (appointment) => {
-    setSelectedAppointmentForProduct(appointment);
-    setShowAppointmentProductModal(true);
-  };
-
-  const closeAppointmentProductModal = () => {
-    setShowAppointmentProductModal(false);
-    setSelectedAppointmentForProduct(null);
-  };
-
-  const handleProductPurchaseSuccess = (order) => {
-    console.log('Product purchase completed:', order);
-    // Refresh appointments or show success message
-    fetchAppointments();
-  };
 
   if (loading && !appointments.length && !barbers.length && !services.length) {
     return <LoadingSpinner />;
@@ -1413,10 +1345,10 @@ const ManageAppointments = () => {
       {error && (
         <div className="alert alert-danger alert-dismissible fade show" role="alert">
           {error}
-          <button 
-            type="button" 
-            className="btn-close" 
-            onClick={() => setError(null)} 
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError(null)}
             aria-label="Close"
           ></button>
         </div>
@@ -1440,7 +1372,7 @@ const ManageAppointments = () => {
       </div>
 
       {/* Search and Filters */}
-      <SearchAndFilter 
+      <SearchAndFilter
         type="appointments"
         onResults={setAppointments}
         initialFilters={filters}
@@ -1514,7 +1446,7 @@ const ManageAppointments = () => {
                       if (filters.double_booking_only) {
                         if (!appointment.is_double_booking) return false;
                       }
-                      
+
                       // Apply add-on filter
                       return true;
                     })
@@ -1522,186 +1454,204 @@ const ManageAppointments = () => {
                       const canonicalStatus = normalizeStatus(appointment.status) || appointment.status;
                       const displayStatus = canonicalStatus || appointment.status || '';
 
+                      const isPriorityOne = appointment.priority_level === '1';
+                      const isUrgent = appointment.priority_level === 'urgent';
+                      const hasHighPriority = isPriorityOne || isUrgent;
+
                       return (
-                    <tr key={appointment.id}>
-                      <td>
-                        {formatDate(appointment.appointment_date)} <br />
-                        <small className="text-muted">{formatTime(appointment.appointment_time)}</small>
-                      </td>
-                      <td>
-                        <div className="d-flex align-items-start">
-                          <div className="me-3 d-flex flex-column align-items-center">
-                            {appointment.is_double_booking ? (
-                              <div className="text-center">
-                                <div className="bg-info text-white rounded-circle d-flex align-items-center justify-content-center mb-1" 
-                                     style={{width: '32px', height: '32px'}}>
-                                  <i className="bi bi-people-fill fs-6"></i>
+                        <tr key={appointment.id} className={isPriorityOne ? 'table-danger border-left-priority' : isUrgent ? 'table-warning opacity-90' : ''}>
+                          <td>
+                            {formatDate(appointment.appointment_date)} <br />
+                            <small className="text-muted">{formatTime(appointment.appointment_time)}</small>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-start">
+                              <div className="me-3 d-flex flex-column align-items-center">
+                                {appointment.is_double_booking ? (
+                                  <div className="text-center">
+                                    <div className="bg-info text-white rounded-circle d-flex align-items-center justify-content-center mb-1"
+                                      style={{ width: '32px', height: '32px' }}>
+                                      <i className="bi bi-people-fill fs-6"></i>
+                                    </div>
+                                    <small className="text-info fw-bold">Double</small>
+                                  </div>
+                                ) : (
+                                  <div className="text-center">
+                                    <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mb-1"
+                                      style={{ width: '32px', height: '32px' }}>
+                                      <i className="bi bi-person-fill fs-6"></i>
+                                    </div>
+                                    <small className="text-primary fw-bold">Single</small>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-grow-1">
+                                <div className="fw-bold text-dark">
+                                  {appointment.customer?.full_name || 'Unknown'}
                                 </div>
-                                <small className="text-info fw-bold">Double</small>
+                                <small className="text-muted d-block mb-2">
+                                  <i className="bi bi-telephone me-1"></i>
+                                  {appointment.customer?.phone || 'No phone'}
+                                </small>
+                                {appointment.is_double_booking && appointment.double_booking_data && (
+                                  <div className="p-2 bg-info bg-opacity-10 border border-info rounded">
+                                    <div className="text-dark">
+                                      <div className="mb-1">
+                                        <i className="bi bi-person-check me-1 text-info"></i>
+                                        <strong>Service For:</strong> {appointment.double_booking_data.friend_name || 'Friend'}
+                                      </div>
+                                      {appointment.double_booking_data.friend_phone && (
+                                        <div className="mb-1">
+                                          <i className="bi bi-telephone me-1 text-info"></i>
+                                          <strong>Contact Number:</strong> {appointment.double_booking_data.friend_phone}
+                                        </div>
+                                      )}
+                                      <div className="mb-1">
+                                        <i className="bi bi-person-plus me-1 text-info"></i>
+                                        <strong>Booked By:</strong> {appointment.double_booking_data.booked_by || 'Customer'}
+                                      </div>
+                                      {appointment.customer?.phone && appointment.customer.phone !== 'No phone' && (
+                                        <div className="mb-0">
+                                          <i className="bi bi-telephone-fill me-1 text-info"></i>
+                                          <strong>Contact Number of Booked Person:</strong> {appointment.customer.phone}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td>{appointment.barber?.full_name || 'Unknown'}</td>
+                          <td>
+                            {appointment.service?.name || 'Unknown'} <br />
+                            <small className="text-muted">{appointment.service?.duration} min</small>
+                            {(() => {
+                              if (!appointment.add_ons_data) return null;
+
+                              const addOnIds = parseAddOnsData(appointment.add_ons_data);
+
+                              if (!addOnIds || addOnIds.length === 0) return null;
+                              if (!addOns || addOns.length === 0) return null;
+
+                              // Fetch full add-on data using UUIDs from database
+                              const appointmentAddOns = addOnIds.map(addonId => {
+                                // First, try to find by original ID (in case it's already a UUID)
+                                let addon = addOns.find(a => a.id === addonId);
+
+                                // If not found, map legacy ID to UUID and try again
+                                if (!addon) {
+                                  const mappedIds = mapLegacyAddonIds([addonId], addOns);
+                                  if (mappedIds.length > 0 && mappedIds[0]) {
+                                    addon = addOns.find(a => a.id === mappedIds[0]);
+                                  }
+                                }
+
+                                // If found, return full addon data from database
+                                if (addon) {
+                                  return {
+                                    name: addon.name,
+                                    price: addon.price,
+                                    duration: addon.duration,
+                                    id: addon.id
+                                  };
+                                }
+
+                                // If not found, skip it
+                                return null;
+                              }).filter(Boolean);
+
+                              if (appointmentAddOns.length > 0) {
+                                return (
+                                  <div className="mt-2">
+                                    <small className="text-muted d-block mb-1">
+                                      <i className="bi bi-plus-circle me-1"></i>
+                                      <strong>Add-ons:</strong>
+                                    </small>
+                                    {appointmentAddOns.map((addon, index) => (
+                                      <span key={index} className="badge bg-secondary me-1 mb-1">
+                                        {addon.name} {addon.price > 0 && `(₱${addon.price})`}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              }
+
+                              return null;
+                            })()}
+                          </td>
+                          <td className="text-center">
+                            {appointment.queue_position !== null && appointment.queue_position !== undefined ? (
+                              <div className="d-flex justify-content-center align-items-center">
+                                <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold"
+                                  style={{ width: '40px', height: '40px', fontSize: '16px' }}>
+                                  {appointment.queue_position}
+                                </div>
                               </div>
                             ) : (
-                              <div className="text-center">
-                                <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mb-1" 
-                                     style={{width: '32px', height: '32px'}}>
-                                  <i className="bi bi-person-fill fs-6"></i>
-                                </div>
-                                <small className="text-primary fw-bold">Single</small>
-                              </div>
+                              <span className="text-muted small">-</span>
                             )}
-                          </div>
-                          <div className="flex-grow-1">
-                            <div className="fw-bold text-dark">
-                              {appointment.customer?.full_name || 'Unknown'}
-                            </div>
-                            <small className="text-muted d-block mb-2">
-                              <i className="bi bi-telephone me-1"></i>
-                              {appointment.customer?.phone || 'No phone'}
-                            </small>
-                            {appointment.is_double_booking && appointment.double_booking_data && (
-                              <div className="p-2 bg-info bg-opacity-10 border border-info rounded">
-                                <div className="text-dark">
-                                  <div className="mb-1">
-                                    <i className="bi bi-person-check me-1 text-info"></i>
-                                    <strong>Service For:</strong> {appointment.double_booking_data.friend_name || 'Friend'}
-                                  </div>
-                                  {appointment.double_booking_data.friend_phone && (
-                                    <div className="mb-1">
-                                      <i className="bi bi-telephone me-1 text-info"></i>
-                                      <strong>Contact Number:</strong> {appointment.double_booking_data.friend_phone}
-                                    </div>
-                                  )}
-                                  <div className="mb-1">
-                                    <i className="bi bi-person-plus me-1 text-info"></i>
-                                    <strong>Booked By:</strong> {appointment.double_booking_data.booked_by || 'Customer'}
-                                  </div>
-                                  {appointment.customer?.phone && appointment.customer.phone !== 'No phone' && (
-                                    <div className="mb-0">
-                                      <i className="bi bi-telephone-fill me-1 text-info"></i>
-                                      <strong>Contact Number of Booked Person:</strong> {appointment.customer.phone}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                          </td>
+                          <td>
+                            <span className={`badge bg-${getStatusColor(displayStatus)}`}>
+                              {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
+                            </span>
+                            {appointment.is_double_booking && (
+                              <span className="badge bg-info ms-1">
+                                <i className="bi bi-people me-1"></i>
+                                Friend
+                              </span>
                             )}
-                          </div>
-                        </div>
-                      </td>
-                      <td>{appointment.barber?.full_name || 'Unknown'}</td>
-                      <td>
-                        {appointment.service?.name || 'Unknown'} <br />
-                        <small className="text-muted">{appointment.service?.duration} min</small>
-                        {(() => {
-                          if (!appointment.add_ons_data) return null;
-                          
-                          const addOnIds = parseAddOnsData(appointment.add_ons_data);
-                          
-                          if (!addOnIds || addOnIds.length === 0) return null;
-                          if (!addOns || addOns.length === 0) return null;
-                          
-                          // Fetch full add-on data using UUIDs from database
-                          const appointmentAddOns = addOnIds.map(addonId => {
-                            // First, try to find by original ID (in case it's already a UUID)
-                            let addon = addOns.find(a => a.id === addonId);
-                            
-                            // If not found, map legacy ID to UUID and try again
-                            if (!addon) {
-                              const mappedIds = mapLegacyAddonIds([addonId], addOns);
-                              if (mappedIds.length > 0 && mappedIds[0]) {
-                                addon = addOns.find(a => a.id === mappedIds[0]);
-                              }
-                            }
-                            
-                            // If found, return full addon data from database
-                            if (addon) {
-                              return {
-                                name: addon.name,
-                                price: addon.price,
-                                duration: addon.duration,
-                                id: addon.id
-                              };
-                            }
-                            
-                            // If not found, skip it
-                            return null;
-                          }).filter(Boolean);
-                          
-                          if (appointmentAddOns.length > 0) {
-                            return (
-                              <div className="mt-2">
-                                <small className="text-muted d-block mb-1">
-                                  <i className="bi bi-plus-circle me-1"></i>
-                                  <strong>Add-ons:</strong>
-                                </small>
-                                {appointmentAddOns.map((addon, index) => (
-                                  <span key={index} className="badge bg-secondary me-1 mb-1">
-                                    {addon.name} {addon.price > 0 && `(₱${addon.price})`}
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          }
-                          
-                          return null;
-                        })()}
-                      </td>
-                      <td className="text-center">
-                        {appointment.queue_position !== null && appointment.queue_position !== undefined ? (
-                          <div className="d-flex justify-content-center align-items-center">
-                            <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" 
-                                 style={{width: '40px', height: '40px', fontSize: '16px'}}>
-                              {appointment.queue_position}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted small">-</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`badge bg-${getStatusColor(displayStatus)}`}>
-                          {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
-                        </span>
-                        {appointment.is_double_booking && (
-                          <span className="badge bg-info ms-1">
-                            <i className="bi bi-people me-1"></i>
-                            Friend
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="dropdown">
-                          <button className="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id={`dropdown-${appointment.id}`} data-bs-toggle="dropdown" aria-expanded="false">
-                            Actions
-                          </button>
-                          <ul className="dropdown-menu" aria-labelledby={`dropdown-${appointment.id}`}>
-                            <li>
-                              <button className="dropdown-item" onClick={() => handleViewDetails(appointment)}>
-                                <i className="bi bi-eye me-2"></i>View Details
+                          </td>
+                          <td>
+                            <div className="dropdown">
+                              <button className="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id={`dropdown-${appointment.id}`} data-bs-toggle="dropdown" aria-expanded="false">
+                                Actions
                               </button>
-                            </li>
-                            <li>
-                              <button className="dropdown-item" onClick={() => handleEdit(appointment)}>
-                                <i className="bi bi-pencil me-2"></i>Edit
-                              </button>
-                            </li>
-                            <li><hr className="dropdown-divider" /></li>
-                            <li className="dropdown-header">Change Status</li>
-                            {ALLOWED_STATUSES.map(status => (
-                              <li key={status}>
-                                {status !== displayStatus && (
-                                  <button 
-                                    className="dropdown-item"
-                                    onClick={() => handleStatusChange(appointment.id, status)}
-                                  >
-                                    <i className={`bi bi-check-circle me-2 text-${getStatusColor(status)}`}></i>
-                                    Mark as {status.charAt(0).toUpperCase() + status.slice(1)}
+                              <ul className="dropdown-menu" aria-labelledby={`dropdown-${appointment.id}`}>
+                                <li>
+                                  <button className="dropdown-item" onClick={() => handleViewDetails(appointment)}>
+                                    <i className="bi bi-eye me-2"></i>View Details
                                   </button>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </td>
-                    </tr>
+                                </li>
+                                <li>
+                                  <button className="dropdown-item" onClick={() => handleEdit(appointment)}>
+                                    <i className="bi bi-pencil me-2"></i>Edit
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    className="dropdown-item text-danger fw-bold"
+                                    onClick={() => handleApproveEmergency(appointment)}
+                                    disabled={
+                                      appointment.priority_level === '1' ||
+                                      appointment.status === 'ongoing' ||
+                                      ['completed', 'cancelled', 'cancel', 'done'].includes(appointment.status?.toLowerCase()) ||
+                                      appointment.appointment_date < new Date().toISOString().split('T')[0]
+                                    }
+                                  >
+                                    <i className="bi bi-lightning-charge-fill me-2"></i>Approve Urgent Priority
+                                  </button>
+                                </li>
+                                <li><hr className="dropdown-divider" /></li>
+                                <li className="dropdown-header">Change Status</li>
+                                {ALLOWED_STATUSES.map(status => (
+                                  <li key={status}>
+                                    {status !== displayStatus && (
+                                      <button
+                                        className="dropdown-item"
+                                        onClick={() => handleStatusChange(appointment.id, status)}
+                                      >
+                                        <i className={`bi bi-check-circle me-2 text-${getStatusColor(status)}`}></i>
+                                        Mark as {status.charAt(0).toUpperCase() + status.slice(1)}
+                                      </button>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </td>
+                        </tr>
                       );
                     })}
                 </tbody>
@@ -1721,9 +1671,9 @@ const ManageAppointments = () => {
                   <i className="bi bi-calendar-check me-2"></i>
                   Appointment Details
                 </h5>
-                <button 
-                  type="button" 
-                  className="btn-close btn-close-white" 
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
                   onClick={closeDetailsModal}
                 ></button>
               </div>
@@ -1732,8 +1682,8 @@ const ManageAppointments = () => {
                 <div className="mb-4 pb-3 border-bottom">
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
                     {selectedAppointment.queue_position !== null && selectedAppointment.queue_position !== undefined && (
-                      <div className="rounded-circle bg-info text-white d-flex align-items-center justify-content-center fw-bold" 
-                           style={{width: '50px', height: '50px', fontSize: '20px'}}>
+                      <div className="rounded-circle bg-info text-white d-flex align-items-center justify-content-center fw-bold"
+                        style={{ width: '50px', height: '50px', fontSize: '20px' }}>
                         {selectedAppointment.queue_position}
                       </div>
                     )}
@@ -1765,7 +1715,7 @@ const ManageAppointments = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="row mb-4">
                   <div className="col-md-6 mb-3">
                     <div className="card border-0 bg-light h-100">
@@ -1789,7 +1739,7 @@ const ManageAppointments = () => {
                             {selectedAppointment.customer?.phone || 'N/A'}
                           </span>
                         </div>
-                        
+
                         {/* Double Booking Information */}
                         {selectedAppointment.is_double_booking && selectedAppointment.double_booking_data && (
                           <div className="mt-3 pt-3 border-top">
@@ -1848,14 +1798,14 @@ const ManageAppointments = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="card border-0 bg-light mb-4">
                   <div className="card-body">
                     <h6 className="card-title text-primary mb-3">
                       <i className="bi bi-list-check me-2"></i>
                       Services & Add-ons
                     </h6>
-                    
+
                     {/* Main Service */}
                     <div className="mb-3 p-3 bg-white rounded border">
                       <div className="d-flex justify-content-between align-items-center">
@@ -1871,26 +1821,26 @@ const ManageAppointments = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Add-ons */}
                     {(() => {
                       if (!selectedAppointment.add_ons_data) return null;
-                      
+
                       const addOnIds = parseAddOnsData(selectedAppointment.add_ons_data);
-                      
+
                       if (!addOnIds || addOnIds.length === 0) return null;
                       if (!addOns || addOns.length === 0) return null;
-                      
+
                       const appointmentAddOns = addOnIds.map(addonId => {
                         let addon = addOns.find(a => a.id === addonId);
-                        
+
                         if (!addon) {
                           const mappedIds = mapLegacyAddonIds([addonId], addOns);
                           if (mappedIds.length > 0 && mappedIds[0]) {
                             addon = addOns.find(a => a.id === mappedIds[0]);
                           }
                         }
-                        
+
                         if (addon) {
                           return {
                             name: addon.name,
@@ -1899,10 +1849,10 @@ const ManageAppointments = () => {
                             id: addon.id
                           };
                         }
-                        
+
                         return null;
                       }).filter(Boolean);
-                      
+
                       if (appointmentAddOns.length > 0) {
                         return (
                           <>
@@ -1932,10 +1882,10 @@ const ManageAppointments = () => {
                           </>
                         );
                       }
-                      
+
                       return null;
                     })()}
-                    
+
                     {/* Total */}
                     <div className="pt-3 border-top">
                       <div className="d-flex justify-content-between align-items-center">
@@ -1946,7 +1896,7 @@ const ManageAppointments = () => {
                             {(() => {
                               const serviceDuration = selectedAppointment.service?.duration || 0;
                               let addOnDuration = 0;
-                              
+
                               if (selectedAppointment.add_ons_data) {
                                 const addOnIds = parseAddOnsData(selectedAppointment.add_ons_data);
                                 if (addOnIds && addOnIds.length > 0 && addOns && addOns.length > 0) {
@@ -1962,7 +1912,7 @@ const ManageAppointments = () => {
                                   }).reduce((sum, duration) => sum + duration, 0);
                                 }
                               }
-                              
+
                               return serviceDuration + addOnDuration;
                             })()} minutes
                           </div>
@@ -1977,7 +1927,7 @@ const ManageAppointments = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 {selectedAppointment.notes && (
                   <div className="card border-0 bg-light mb-4">
                     <div className="card-body">
@@ -1989,7 +1939,7 @@ const ManageAppointments = () => {
                     </div>
                   </div>
                 )}
-                
+
                 {selectedAppointment.priority_level && (
                   <div className="card border-0 bg-light">
                     <div className="card-body">
@@ -2005,15 +1955,15 @@ const ManageAppointments = () => {
                 )}
               </div>
               <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
+                <button
+                  type="button"
+                  className="btn btn-secondary"
                   onClick={closeDetailsModal}
                 >
                   Close
                 </button>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn btn-primary"
                   onClick={() => {
                     closeDetailsModal();
@@ -2038,9 +1988,9 @@ const ManageAppointments = () => {
                   <i className="bi bi-pencil-square me-2"></i>
                   Edit Appointment
                 </h5>
-                <button 
-                  type="button" 
-                  className="btn-close btn-close-white" 
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
                   onClick={closeEditModal}
                 ></button>
               </div>
@@ -2133,7 +2083,7 @@ const ManageAppointments = () => {
                         <i className="bi bi-calendar3 me-2"></i>
                         Appointment Details
                       </h6>
-                      
+
                       <div className="row mb-3">
                         <div className="col-md-6">
                           <label htmlFor="appointment_type" className="form-label fw-bold">Appointment Type</label>
@@ -2152,7 +2102,7 @@ const ManageAppointments = () => {
                             Queue: No specific time, position-based. Scheduled: Specific time slot.
                           </div>
                         </div>
-                        
+
                         <div className="col-md-6">
                           <label htmlFor="appointment_date" className="form-label fw-bold">Date</label>
                           <input
@@ -2276,7 +2226,7 @@ const ManageAppointments = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="col-md-6">
                       <div className="card border-0 bg-light h-100">
                         <div className="card-body">
@@ -2297,7 +2247,7 @@ const ManageAppointments = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Action Buttons */}
                   <div className="d-flex justify-content-end gap-3">
                     <button
@@ -2343,9 +2293,9 @@ const ManageAppointments = () => {
                   <i className="bi bi-person-plus me-2"></i>
                   Add Walk-in Appointment
                 </h5>
-                <button 
-                  type="button" 
-                  className="btn-close btn-close-white" 
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
                   onClick={closeWalkInModal}
                 ></button>
               </div>
@@ -2359,7 +2309,7 @@ const ManageAppointments = () => {
                         Customer Information
                       </h6>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="customer_name" className="form-label">Customer Name *</label>
                       <input
@@ -2376,7 +2326,7 @@ const ManageAppointments = () => {
                         <div className="invalid-feedback">{formErrors.customer_name}</div>
                       )}
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="customer_phone" className="form-label">Phone Number</label>
                       <input
@@ -2389,7 +2339,7 @@ const ManageAppointments = () => {
                         placeholder="Enter phone number"
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="customer_email" className="form-label">Email Address</label>
                       <input
@@ -2403,7 +2353,7 @@ const ManageAppointments = () => {
                       />
                       <div className="form-text">If provided, we'll check for existing customer account</div>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="primary_customer_id" className="form-label">Existing Customer</label>
                       <select
@@ -2429,7 +2379,7 @@ const ManageAppointments = () => {
                     <div className="col-12">
                       <div className="alert alert-info">
                         <i className="bi bi-info-circle me-2"></i>
-                        <strong>Walk-in appointments are single bookings only.</strong> 
+                        <strong>Walk-in appointments are single bookings only.</strong>
                         For double bookings, please use the regular booking system.
                       </div>
                     </div>
@@ -2443,7 +2393,7 @@ const ManageAppointments = () => {
                         Appointment Details
                       </h6>
                     </div>
-                    
+
                     <div className="col-12 mb-4">
                       <h6 className="text-primary mb-3">
                         <i className="bi bi-person-badge me-2"></i>
@@ -2453,44 +2403,41 @@ const ManageAppointments = () => {
                         {barbers.map((barber) => {
                           // Calculate barber availability for today
                           const today = new Date().toISOString().split('T')[0];
-                          const barberAppointmentsToday = appointments.filter(apt => 
-                            apt.barber_id === barber.id && 
-                            apt.appointment_date === today && 
+                          const barberAppointmentsToday = appointments.filter(apt =>
+                            apt.barber_id === barber.id &&
+                            apt.appointment_date === today &&
                             apt.status !== 'cancelled'
                           );
                           const isAvailable = barberAppointmentsToday.length < 16; // Max 8 appointments per day
                           const currentQueue = barberAppointmentsToday.filter(apt => apt.appointment_type === 'queue').length;
-                          
+
                           return (
                             <div key={barber.id} className="col-12">
-                              <div 
-                                className={`card h-100 cursor-pointer border-2 ${
-                                  walkInFormData.barber_id === barber.id 
-                                    ? 'border-primary bg-primary bg-opacity-10' 
-                                    : isAvailable 
-                                      ? 'border-success' 
-                                      : 'border-danger'
-                                }`}
+                              <div
+                                className={`card h-100 cursor-pointer border-2 ${walkInFormData.barber_id === barber.id
+                                  ? 'border-primary bg-primary bg-opacity-10'
+                                  : isAvailable
+                                    ? 'border-success'
+                                    : 'border-danger'
+                                  }`}
                                 onClick={() => handleWalkInChange({ target: { name: 'barber_id', value: barber.id } })}
                                 style={{ cursor: 'pointer' }}
                               >
                                 <div className="card-body">
                                   <div className="d-flex align-items-center">
                                     <div className="me-3">
-                                      <i className={`bi bi-person-circle fs-1 ${
-                                        walkInFormData.barber_id === barber.id 
-                                          ? 'text-primary' 
-                                          : isAvailable 
-                                            ? 'text-success' 
-                                            : 'text-danger'
-                                      }`}></i>
+                                      <i className={`bi bi-person-circle fs-1 ${walkInFormData.barber_id === barber.id
+                                        ? 'text-primary'
+                                        : isAvailable
+                                          ? 'text-success'
+                                          : 'text-danger'
+                                        }`}></i>
                                     </div>
                                     <div className="flex-grow-1">
                                       <h6 className="card-title mb-1">{barber.full_name}</h6>
                                       <div className="mb-2">
-                                        <span className={`badge ${
-                                          isAvailable ? 'bg-success' : 'bg-danger'
-                                        }`}>
+                                        <span className={`badge ${isAvailable ? 'bg-success' : 'bg-danger'
+                                          }`}>
                                           {isAvailable ? 'Available' : 'Fully Booked'}
                                         </span>
                                       </div>
@@ -2515,7 +2462,7 @@ const ManageAppointments = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="col-12 mb-4">
                       <h6 className="text-primary mb-3">
                         <i className="bi bi-scissors me-2"></i>
@@ -2525,32 +2472,30 @@ const ManageAppointments = () => {
                         {services.map((service) => {
                           // Calculate service popularity/availability
                           const today = new Date().toISOString().split('T')[0];
-                          const serviceBookingsToday = appointments.filter(apt => 
-                            apt.service_id === service.id && 
-                            apt.appointment_date === today && 
+                          const serviceBookingsToday = appointments.filter(apt =>
+                            apt.service_id === service.id &&
+                            apt.appointment_date === today &&
                             apt.status !== 'cancelled'
                           );
                           const isPopular = serviceBookingsToday.length >= 3;
-                          
+
                           return (
                             <div key={service.id} className="col-12">
-                              <div 
-                                className={`card h-100 cursor-pointer border-2 ${
-                                  walkInFormData.service_id === service.id 
-                                    ? 'border-primary bg-primary bg-opacity-10' 
-                                    : 'border-secondary'
-                                }`}
+                              <div
+                                className={`card h-100 cursor-pointer border-2 ${walkInFormData.service_id === service.id
+                                  ? 'border-primary bg-primary bg-opacity-10'
+                                  : 'border-secondary'
+                                  }`}
                                 onClick={() => handleWalkInChange({ target: { name: 'service_id', value: service.id } })}
                                 style={{ cursor: 'pointer' }}
                               >
                                 <div className="card-body">
                                   <div className="d-flex align-items-center">
                                     <div className="me-3">
-                                      <i className={`bi bi-scissors fs-1 ${
-                                        walkInFormData.service_id === service.id 
-                                          ? 'text-primary' 
-                                          : 'text-secondary'
-                                      }`}></i>
+                                      <i className={`bi bi-scissors fs-1 ${walkInFormData.service_id === service.id
+                                        ? 'text-primary'
+                                        : 'text-secondary'
+                                        }`}></i>
                                     </div>
                                     <div className="flex-grow-1">
                                       <h6 className="card-title mb-1">{service.name}</h6>
@@ -2592,7 +2537,7 @@ const ManageAppointments = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Add-ons Selection */}
                     <div className="col-12 mb-4">
                       <h6 className="text-primary mb-3">
@@ -2606,8 +2551,8 @@ const ManageAppointments = () => {
                           const addonBookingsToday = appointments.filter(apt => {
                             if (!apt.add_ons_data) return false;
                             try {
-                              const addonIds = typeof apt.add_ons_data === 'string' 
-                                ? JSON.parse(apt.add_ons_data) 
+                              const addonIds = typeof apt.add_ons_data === 'string'
+                                ? JSON.parse(apt.add_ons_data)
                                 : apt.add_ons_data;
                               return Array.isArray(addonIds) && addonIds.includes(addon.id);
                             } catch {
@@ -2615,23 +2560,22 @@ const ManageAppointments = () => {
                             }
                           }).length;
                           const isPopular = addonBookingsToday >= 2;
-                          const isSelected = walkInFormData.add_ons_data && 
-                            (Array.isArray(walkInFormData.add_ons_data) 
+                          const isSelected = walkInFormData.add_ons_data &&
+                            (Array.isArray(walkInFormData.add_ons_data)
                               ? walkInFormData.add_ons_data.includes(addon.id)
                               : walkInFormData.add_ons_data === addon.id);
-                          
+
                           return (
                             <div key={addon.id} className="col-12">
-                              <div 
-                                className={`card h-100 cursor-pointer border-2 ${
-                                  isSelected 
-                                    ? 'border-primary bg-primary bg-opacity-10' 
-                                    : 'border-light'
-                                }`}
+                              <div
+                                className={`card h-100 cursor-pointer border-2 ${isSelected
+                                  ? 'border-primary bg-primary bg-opacity-10'
+                                  : 'border-light'
+                                  }`}
                                 onClick={() => {
                                   const currentAddons = walkInFormData.add_ons_data || [];
                                   const addonIds = Array.isArray(currentAddons) ? currentAddons : [currentAddons];
-                                  
+
                                   let newAddons;
                                   if (isSelected) {
                                     // Remove addon
@@ -2640,12 +2584,12 @@ const ManageAppointments = () => {
                                     // Add addon
                                     newAddons = [...addonIds, addon.id];
                                   }
-                                  
-                                  handleWalkInChange({ 
-                                    target: { 
-                                      name: 'add_ons_data', 
-                                      value: newAddons.length === 0 ? [] : newAddons 
-                                    } 
+
+                                  handleWalkInChange({
+                                    target: {
+                                      name: 'add_ons_data',
+                                      value: newAddons.length === 0 ? [] : newAddons
+                                    }
                                   });
                                 }}
                                 style={{ cursor: 'pointer' }}
@@ -2653,9 +2597,8 @@ const ManageAppointments = () => {
                                 <div className="card-body">
                                   <div className="d-flex align-items-center">
                                     <div className="me-3">
-                                      <i className={`bi bi-plus-circle fs-1 ${
-                                        isSelected ? 'text-primary' : 'text-muted'
-                                      }`}></i>
+                                      <i className={`bi bi-plus-circle fs-1 ${isSelected ? 'text-primary' : 'text-muted'
+                                        }`}></i>
                                     </div>
                                     <div className="flex-grow-1">
                                       <h6 className="card-title mb-1">{addon.name}</h6>
@@ -2697,7 +2640,7 @@ const ManageAppointments = () => {
                         </small>
                       </div>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="priority_level" className="form-label">Priority Level</label>
                       <select
@@ -2715,7 +2658,7 @@ const ManageAppointments = () => {
                         Urgent appointments go to the front of the queue
                       </div>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label htmlFor="appointment_date" className="form-label">Date *</label>
                       <input
@@ -2732,7 +2675,7 @@ const ManageAppointments = () => {
                         <div className="invalid-feedback">{formErrors.appointment_date}</div>
                       )}
                     </div>
-                    
+
                     <div className="col-12 mb-3">
                       <label htmlFor="notes" className="form-label">Notes (Optional)</label>
                       <textarea
@@ -2746,7 +2689,7 @@ const ManageAppointments = () => {
                       ></textarea>
                     </div>
                   </div>
-                  
+
                   {/* Submit Button */}
                   <div className="d-flex justify-content-end gap-2 mt-4">
                     <button
@@ -2782,15 +2725,6 @@ const ManageAppointments = () => {
       )}
 
 
-      {/* Appointment Product Purchase Modal */}
-      {showAppointmentProductModal && selectedAppointmentForProduct && (
-        <AppointmentProductPurchase
-          appointment={selectedAppointmentForProduct}
-          onClose={closeAppointmentProductModal}
-          onSuccess={handleProductPurchaseSuccess}
-        />
-      )}
-
       {/* Status Update Modal */}
       {showStatusModal && statusUpdateData.appointmentId && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -2801,9 +2735,9 @@ const ManageAppointments = () => {
                   <i className="bi bi-arrow-repeat me-2"></i>
                   Update Appointment Status
                 </h5>
-                <button 
-                  type="button" 
-                  className="btn-close btn-close-white" 
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
                   onClick={closeStatusModal}
                   disabled={loading}
                 ></button>
@@ -2815,7 +2749,7 @@ const ManageAppointments = () => {
                   const newStatus = statusUpdateData.newStatus;
                   const customerName = appointment?.customer?.full_name || 'Customer';
                   const serviceName = appointment?.service?.name || 'Service';
-                  
+
                   return (
                     <>
                       <div className="mb-4">
@@ -2838,7 +2772,7 @@ const ManageAppointments = () => {
                           </span>
                         </p>
                       </div>
-                      
+
                       <div className="alert alert-info mb-0">
                         <i className="bi bi-info-circle me-2"></i>
                         Are you sure you want to change the status from <strong>{currentStatus}</strong> to <strong>{newStatus}</strong>?
@@ -2848,16 +2782,16 @@ const ManageAppointments = () => {
                 })()}
               </div>
               <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
+                <button
+                  type="button"
+                  className="btn btn-secondary"
                   onClick={closeStatusModal}
                   disabled={loading}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className={`btn btn-${getStatusColor(statusUpdateData.newStatus)}`}
                   onClick={confirmStatusUpdate}
                   disabled={loading}

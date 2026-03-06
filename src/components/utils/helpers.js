@@ -10,7 +10,7 @@ import addOnsService from '../../services/booking/AddOnsService';
  */
 export const formatDate = (date, options = DATE_FORMATS.MEDIUM) => {
   if (!date) return '';
-  
+
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat('en-US', options).format(dateObj);
 };
@@ -22,12 +22,12 @@ export const formatDate = (date, options = DATE_FORMATS.MEDIUM) => {
  */
 export const formatTime = (timeString) => {
   if (!timeString) return '';
-  
+
   const [hours, minutes] = timeString.split(':');
   const hour = parseInt(hours, 10);
   const period = hour >= 12 ? 'PM' : 'AM';
   const hour12 = hour % 12 || 12;
-  
+
   return `${hour12}:${minutes} ${period}`;
 };
 
@@ -42,7 +42,7 @@ export const formatDuration = (durationMinutes) => {
   } else {
     const hours = Math.floor(durationMinutes / 60);
     const minutes = durationMinutes % 60;
-    
+
     if (minutes === 0) {
       return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
     } else {
@@ -59,7 +59,7 @@ export const formatDuration = (durationMinutes) => {
  */
 export const formatPrice = (price, currency = 'PHP') => {
   if (price === undefined || price === null) return '';
-  
+
   // Format price for Philippine Peso with ₱ symbol and comma separators
   if (currency === 'PHP') {
     return `₱${Number(price).toLocaleString('en-US', {
@@ -67,7 +67,7 @@ export const formatPrice = (price, currency = 'PHP') => {
       maximumFractionDigits: 2
     })}`;
   }
-  
+
   // For other currencies, use Intl.NumberFormat
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -108,9 +108,9 @@ export const calculateWaitTime = (position, queue = [], averageServiceTime = QUE
   if (!queue || queue.length === 0 || position <= 0) {
     return "0 min";
   }
-  
+
   let waitTimeMinutes = 0;
-  
+
   // Sum up service durations for all appointments ahead in the queue
   for (let i = 0; i < Math.min(position - 1, queue.length); i++) {
     const appointment = queue[i];
@@ -118,7 +118,7 @@ export const calculateWaitTime = (position, queue = [], averageServiceTime = QUE
     const addOnsDuration = calculateAddOnsDuration(appointment.add_ons_data);
     waitTimeMinutes += serviceDuration + addOnsDuration;
   }
-  
+
   // Format wait time
   if (waitTimeMinutes < 60) {
     return `${waitTimeMinutes} min`;
@@ -155,27 +155,27 @@ export const calculateAddOnsPrice = async (addOnsData) => {
  */
 export const getServicesDisplay = (appointment, services = []) => {
   const servicesList = [];
-  
+
   // Add primary service
   if (appointment.service) {
     servicesList.push(appointment.service.name);
   }
-  
+
   // Add additional services
   if (appointment.services_data) {
     try {
       // Handle different data types
       let serviceIds;
-      
+
       if (typeof appointment.services_data === 'string') {
         // Handle empty or invalid JSON strings
-        if (appointment.services_data.trim() === '' || 
-            appointment.services_data === '[]' || 
-            appointment.services_data === 'null' || 
-            appointment.services_data === 'undefined') {
+        if (appointment.services_data.trim() === '' ||
+          appointment.services_data === '[]' ||
+          appointment.services_data === 'null' ||
+          appointment.services_data === 'undefined') {
           return servicesList.join(', ');
         }
-        
+
         serviceIds = JSON.parse(appointment.services_data);
       } else if (Array.isArray(appointment.services_data)) {
         // Data is already an array
@@ -184,18 +184,18 @@ export const getServicesDisplay = (appointment, services = []) => {
         // Data is null, undefined, or other type
         return servicesList.join(', ');
       }
-      
+
       if (Array.isArray(serviceIds)) {
         // Skip the first one as it's already added as primary service
         const additionalServiceIds = serviceIds.slice(1);
-        
+
         additionalServiceIds.forEach(serviceId => {
           const service = services.find(s => s.id === serviceId);
           if (service) {
             servicesList.push(service.name);
           }
         });
-        
+
         // If we couldn't find service details, just show count
         if (additionalServiceIds.length > 0 && servicesList.length === 1) {
           servicesList.push(`+${additionalServiceIds.length} more services`);
@@ -206,7 +206,7 @@ export const getServicesDisplay = (appointment, services = []) => {
       // Return just the primary service if parsing fails
     }
   }
-  
+
   return servicesList.join(', ');
 };
 
@@ -226,12 +226,12 @@ export const getAddOnsDisplay = async (addOnsData) => {
  */
 export const calculateTotalPrice = (appointment) => {
   let total = appointment.total_price || appointment.service?.price || 0;
-  
+
   // Add urgent fee if applicable
   if (appointment.is_urgent) {
     total += QUEUE_SETTINGS.URGENT_FEE;
   }
-  
+
   return total;
 };
 
@@ -242,12 +242,12 @@ export const calculateTotalPrice = (appointment) => {
  */
 export const calculateTotalDuration = (appointment) => {
   let duration = appointment.total_duration || appointment.service?.duration || 0;
-  
+
   // If total_duration is not available, calculate from add-ons
   if (!appointment.total_duration && appointment.add_ons_data) {
     duration += calculateAddOnsDuration(appointment.add_ons_data);
   }
-  
+
   return duration;
 };
 
@@ -279,12 +279,12 @@ export const isBarberAtCapacity = (currentAppointments, maxCapacity = QUEUE_SETT
  */
 export const getNextQueueNumber = (queue) => {
   if (!queue || queue.length === 0) return 1;
-  
+
   const maxQueueNumber = Math.max(
     0,
     ...queue.map(apt => apt.queue_position || 0)
   );
-  
+
   return maxQueueNumber + 1;
 };
 
@@ -295,48 +295,48 @@ export const getNextQueueNumber = (queue) => {
  */
 export const validateBookingData = (bookingData) => {
   const errors = [];
-  
+
   // Required fields
   if (!bookingData.barber_id) {
     errors.push('Barber is required');
   }
-  
+
   if (!bookingData.services || bookingData.services.length === 0) {
     errors.push('At least one service is required');
   }
-  
+
   if (!bookingData.appointment_date) {
     errors.push('Appointment date is required');
   }
-  
+
   // Validate date is not in the past
   const appointmentDate = new Date(bookingData.appointment_date);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   if (appointmentDate < today) {
     errors.push('Appointment date cannot be in the past');
   }
-  
+
   // Validate advance booking limit
   const maxAdvanceDays = BOOKING_SETTINGS.ADVANCE_BOOKING_DAYS;
   const maxDate = new Date();
   maxDate.setDate(maxDate.getDate() + maxAdvanceDays);
-  
+
   if (appointmentDate > maxDate) {
     errors.push(`Cannot book more than ${maxAdvanceDays} days in advance`);
   }
-  
+
   // Validate service count
   if (bookingData.services && bookingData.services.length > BOOKING_SETTINGS.MAX_SERVICES_PER_BOOKING) {
     errors.push(`Maximum ${BOOKING_SETTINGS.MAX_SERVICES_PER_BOOKING} services allowed per booking`);
   }
-  
+
   // Validate add-ons count
   if (bookingData.addOns && bookingData.addOns.length > BOOKING_SETTINGS.MAX_ADDONS_PER_BOOKING) {
     errors.push(`Maximum ${BOOKING_SETTINGS.MAX_ADDONS_PER_BOOKING} add-ons allowed per booking`);
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors
@@ -350,10 +350,10 @@ export const validateBookingData = (bookingData) => {
  */
 export const formatQueueStatus = (queueInfo) => {
   if (!queueInfo) return 'Unknown';
-  
+
   const { current, queue, capacity } = queueInfo;
   const queueLength = queue?.length || 0;
-  
+
   if (current) {
     return `Serving customer • ${queueLength} waiting`;
   } else if (queueLength === 0) {
@@ -377,7 +377,7 @@ export const getBarberStatusColor = (status) => {
     'break': 'info',
     'offline': 'secondary'
   };
-  
+
   return statusMap[status?.toLowerCase()] || 'primary';
 };
 
@@ -388,17 +388,18 @@ export const getBarberStatusColor = (status) => {
  */
 export const getStatusColor = (status) => {
   const normalizedStatus = status?.toLowerCase();
-  const statusKey = normalizedStatus === 'scheduled' ? 'confirmed' : normalizedStatus;
+  const statusKey = normalizedStatus;
 
   const statusMap = {
-    'pending': 'warning',
+    'pending': 'warning text-dark',
     'confirmed': 'success',
     'ongoing': 'primary',
     'completed': 'success',
+    'done': 'success',
     'cancel': 'danger',
     'cancelled': 'danger'
   };
-  
+
   return statusMap[statusKey] || 'secondary';
 };
 
@@ -409,7 +410,7 @@ export const getStatusColor = (status) => {
  */
 export const getStatusIcon = (status) => {
   const normalizedStatus = status?.toLowerCase();
-  const statusKey = normalizedStatus === 'scheduled' ? 'confirmed' : normalizedStatus;
+  const statusKey = normalizedStatus;
 
   const iconMap = {
     'pending': 'bi-clock-fill',
@@ -419,7 +420,7 @@ export const getStatusIcon = (status) => {
     'cancel': 'bi-x-circle-fill',
     'cancelled': 'bi-x-circle-fill'
   };
-  
+
   return iconMap[statusKey] || 'bi-question-circle';
 };
 
@@ -433,7 +434,7 @@ export const truncateText = (text, maxLength = 100) => {
   if (!text || text.length <= maxLength) {
     return text;
   }
-  
+
   return `${text.substring(0, maxLength)}...`;
 };
 
@@ -444,7 +445,7 @@ export const truncateText = (text, maxLength = 100) => {
  */
 export const getInitials = (name) => {
   if (!name) return '';
-  
+
   return name
     .split(' ')
     .map(part => part.charAt(0))
@@ -461,7 +462,7 @@ export const getInitials = (name) => {
 export const isSameDay = (date1, date2) => {
   const d1 = new Date(date1);
   const d2 = new Date(date2);
-  
+
   return (
     d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
@@ -521,32 +522,32 @@ export const debounce = (func, wait) => {
  */
 export const downloadCSV = (data, filename = 'download.csv') => {
   if (!data || !data.length) return;
-  
+
   // Get headers from the first object
   const headers = Object.keys(data[0]);
-  
+
   // Convert data to CSV format
   const csvRows = [
     headers.join(','), // Header row
-    ...data.map(row => 
+    ...data.map(row =>
       headers.map(header => {
         const cell = row[header];
         // Handle commas and quotes in the data
         const cellStr = cell === null || cell === undefined ? '' : String(cell);
-        return cellStr.includes(',') || cellStr.includes('"') 
-          ? `"${cellStr.replace(/"/g, '""')}"` 
+        return cellStr.includes(',') || cellStr.includes('"')
+          ? `"${cellStr.replace(/"/g, '""')}"`
           : cellStr;
       }).join(',')
     )
   ];
-  
+
   // Create CSV content
   const csvContent = csvRows.join('\n');
-  
+
   // Create a blob and download link
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  
+
   // Create a temporary link and trigger download
   const link = document.createElement('a');
   link.setAttribute('href', url);
@@ -575,7 +576,7 @@ export const calculateAppointmentAnalytics = (appointments) => {
       completionRate: 0
     };
   }
-  
+
   const analytics = {
     total: appointments.length,
     completed: 0,
@@ -584,7 +585,7 @@ export const calculateAppointmentAnalytics = (appointments) => {
     revenue: 0,
     totalDuration: 0
   };
-  
+
   appointments.forEach(appointment => {
     switch (appointment.status) {
       case 'completed':
@@ -598,13 +599,13 @@ export const calculateAppointmentAnalytics = (appointments) => {
         analytics.pending++;
         break;
     }
-    
+
     analytics.totalDuration += calculateTotalDuration(appointment);
   });
-  
+
   analytics.averageDuration = Math.round(analytics.totalDuration / appointments.length);
   analytics.completionRate = analytics.total > 0 ? (analytics.completed / analytics.total) * 100 : 0;
-  
+
   return analytics;
 };
 
@@ -625,18 +626,18 @@ export const cleanJsonArray = (jsonString) => {
   try {
     // Handle double-encoded JSON like '"[\\"id1\\",\\"id2\\"]"'
     let cleaned = jsonString;
-    
+
     // Remove outer quotes if present
     if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
       cleaned = cleaned.slice(1, -1);
     }
-    
+
     // Fix escaped quotes
     cleaned = cleaned.replace(/\\"/g, '"');
-    
+
     // Parse the JSON
     const parsed = JSON.parse(cleaned);
-    
+
     // Ensure it's an array
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -671,23 +672,23 @@ export const cleanAppointmentData = (appointment) => {
     // Clean JSON arrays
     services: cleanJsonArray(appointment.services_data),
     addOns: cleanJsonArray(appointment.add_ons_data),
-    
+
     // Clean numeric fields
     totalDuration: appointment.total_duration ? parseInt(appointment.total_duration) : 0,
     totalPrice: appointment.total_price ? parseFloat(appointment.total_price) : 0,
     queueNumber: appointment.queue_position ? parseInt(appointment.queue_position) : null,
     rescheduleCount: appointment.reschedule_count ? parseInt(appointment.reschedule_count) : 0,
-    
+
     // Clean boolean fields
     isUrgent: parseBoolean(appointment.is_urgent),
     isRebooking: parseBoolean(appointment.is_rebooking),
     isWalkIn: parseBoolean(appointment.is_walk_in),
     isDoubleBooking: parseBoolean(appointment.is_double_booking),
     isReviewed: parseBoolean(appointment.is_reviewed),
-    
+
     // Clean rating
     customerRating: appointment.customer_rating ? parseInt(appointment.customer_rating) : null,
-    
+
     // Remove the messy fields
     services_data: undefined,
     add_ons_data: undefined,
@@ -724,7 +725,7 @@ export const validateAppointmentData = (appointmentData) => {
     const appointmentDate = new Date(appointmentData.appointmentDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     if (appointmentDate < today) {
       errors.push('Appointment date cannot be in the past');
     }
@@ -756,7 +757,7 @@ export const parseServicesData = (servicesData) => {
     if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
       cleaned = cleaned.slice(1, -1).replace(/\\"/g, '"');
     }
-    
+
     const parsed = JSON.parse(cleaned);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -791,7 +792,7 @@ export const parseAddOnsData = (addOnsData) => {
     if (typeof cleaned === 'string' && cleaned.startsWith('"') && cleaned.endsWith('"')) {
       cleaned = cleaned.slice(1, -1).replace(/\\"/g, '"');
     }
-    
+
     const parsed = JSON.parse(cleaned);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -861,7 +862,7 @@ export const calculateRebookingPrice = (selectedServices, selectedAddOns, servic
     const service = servicesList.find(s => s.id === serviceId);
     return total + (service?.price || 0);
   }, 0);
-  
+
   const addOnsTotal = selectedAddOns.reduce((total, addonId) => {
     const addon = addOnsList.find(a => a.id === addonId);
     return total + (addon?.price || 0);
@@ -887,7 +888,7 @@ export const calculateRebookingDuration = (selectedServices, selectedAddOns, ser
     const service = servicesList.find(s => s.id === serviceId);
     return total + (service?.duration || service?.duration_minutes || 30);
   }, 0);
-  
+
   const addOnsDuration = selectedAddOns.reduce((total, addonId) => {
     const addon = addOnsList.find(a => a.id === addonId);
     return total + (addon?.duration || 15);
@@ -932,7 +933,7 @@ export const validateRebookingData = (appointmentData, servicesList, addOnsList)
   });
 
   // Check for legacy add-on names
-  const legacyAddonNames = selectedAddOns.filter(id => 
+  const legacyAddonNames = selectedAddOns.filter(id =>
     typeof id === 'string' && id.startsWith('addon')
   );
   if (legacyAddonNames.length > 0) {
@@ -959,15 +960,15 @@ export const validateRebookingData = (appointmentData, servicesList, addOnsList)
 export const getRebookingSummary = (appointmentData, servicesList, addOnsList) => {
   const selectedServices = parseServicesData(appointmentData.services_data);
   const selectedAddOns = parseAddOnsData(appointmentData.add_ons_data);
-  
+
   const priceBreakdown = calculateRebookingPrice(selectedServices, selectedAddOns, servicesList, addOnsList);
   const totalDuration = calculateRebookingDuration(selectedServices, selectedAddOns, servicesList, addOnsList);
-  
-  const services = selectedServices.map(id => 
+
+  const services = selectedServices.map(id =>
     servicesList.find(s => s.id === id)
   ).filter(Boolean);
-  
-  const addOns = selectedAddOns.map(id => 
+
+  const addOns = selectedAddOns.map(id =>
     addOnsList.find(a => a.id === id)
   ).filter(Boolean);
 

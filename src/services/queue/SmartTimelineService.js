@@ -152,13 +152,15 @@ class SmartTimelineService {
 
         // Try to fill gap with queue appointments
         const queueFit = this.fillGapWithQueue(
-          queue.slice(queueIndex),
+          queue,
           gapDuration,
           previousEnd
         );
 
         queueFit.blocks.forEach(qb => filledBlocks.push(qb));
-        queueIndex += queueFit.used;
+
+        // Update main queue to only contain unused items
+        queue.splice(0, queue.length, ...queueFit.unusedQueue);
 
         // Add remaining gap if any
         if (queueFit.remaining > 0) {
@@ -179,8 +181,10 @@ class SmartTimelineService {
     }
 
     // Add remaining queue appointments at the end
-    while (queueIndex < queue.length && previousEnd < endTime) {
-      const apt = queue[queueIndex];
+    // Use queue from index 0 since we now modify it in place by filtering out used items
+    let queueIndexRemaining = 0;
+    while (queueIndexRemaining < queue.length && previousEnd < endTime) {
+      const apt = queue[queueIndexRemaining];
       const duration = apt.total_duration || apt.service?.duration || 30;
       const endApt = previousEnd + duration;
 
@@ -197,7 +201,7 @@ class SmartTimelineService {
           estimatedTime: this.minutesToTime(previousEnd)
         });
         previousEnd = endApt + this.BUFFER_TIME;
-        queueIndex++;
+        queueIndexRemaining++;
       } else {
         break;
       }
@@ -215,28 +219,43 @@ class SmartTimelineService {
     let used = 0;
     let currentTime = startMinutes;
 
-    for (const apt of queueAppointments) {
+    const queueCopy = [...queueAppointments];
+    const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
+    const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
+
+    // Look through queue to find appointments that fit in the gap
+    for (let i = 0; i < queueCopy.length; i++) {
+      const apt = queueCopy[i];
+      if (!apt) continue; // Skip if already used
+
       const duration = apt.total_duration || apt.service?.duration || 30;
       const needed = duration + this.BUFFER_TIME;
+
+      // Ensure the appointment doesn't overlap the lunch break.
+      let adjustedStartTime = currentTime;
+      if (adjustedStartTime < lunchStart && (adjustedStartTime + duration) > lunchStart) {
+        // Can't fit this specific appointment before lunch.
+        // It's too long to start before lunch, so skip it and keep looking for a shorter one.
+        continue;
+      }
 
       if (filled + needed <= gapDuration) {
         blocks.push({
           type: 'queue',
           appointment: apt,
-          startTime: this.minutesToTime(currentTime),
-          endTime: this.minutesToTime(currentTime + duration),
-          startMinutes: currentTime,
-          endMinutes: currentTime + duration,
+          startTime: this.minutesToTime(adjustedStartTime),
+          endTime: this.minutesToTime(adjustedStartTime + duration),
+          startMinutes: adjustedStartTime,
+          endMinutes: adjustedStartTime + duration,
           duration,
           queuePosition: apt.queue_position,
-          estimatedTime: this.minutesToTime(currentTime)
+          estimatedTime: this.minutesToTime(adjustedStartTime)
         });
 
-        currentTime += duration + this.BUFFER_TIME;
+        currentTime = adjustedStartTime + needed;
         filled += needed;
         used++;
-      } else {
-        break;
+        queueCopy[i] = null; // Mark as used so we don't process it later
       }
     }
 
@@ -244,7 +263,9 @@ class SmartTimelineService {
       blocks,
       filled,
       used,
-      remaining: gapDuration - filled
+      remaining: gapDuration - filled,
+      // Pass back unused queue items to be added at the end (could update outer loop to use this)
+      unusedQueue: queueCopy.filter(apt => apt !== null)
     };
   }
 
@@ -474,7 +495,19 @@ class SmartTimelineService {
 
     // Add after last queue appointment
     const lastQueue = queueBlocks[queueBlocks.length - 1];
-    return this.minutesToTime(lastQueue.endMinutes + this.BUFFER_TIME);
+    let nextStartMinutes = lastQueue.endMinutes + this.BUFFER_TIME;
+
+    // Check if the new estimated start time + duration would cross lunch break
+    const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
+    const lunchEnd = this.timeToMinutes(this.LUNCH_BREAK.end);
+
+    if (nextStartMinutes < lunchStart && (nextStartMinutes + serviceDuration) > lunchStart) {
+      nextStartMinutes = lunchEnd;
+    } else if (nextStartMinutes >= lunchStart && nextStartMinutes < lunchEnd) {
+      nextStartMinutes = lunchEnd;
+    }
+
+    return this.minutesToTime(nextStartMinutes);
   }
 }
 

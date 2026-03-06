@@ -59,7 +59,7 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
           .from('users')
           .select('id, full_name')
           .eq('role', 'barber');
-        
+
         config.barber = [{ value: '', label: 'All Barbers' }, ...barbers?.map(b => ({
           value: b.id,
           label: b.full_name
@@ -69,8 +69,9 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
         const { data: services } = await supabase
           .from('services')
           .select('id, name')
-          .eq('is_active', true);
-        
+          .eq('is_active', true)
+          .order('price', { ascending: true });
+
         config.service = [{ value: '', label: 'All Services' }, ...services?.map(s => ({
           value: s.id,
           label: s.name
@@ -80,8 +81,9 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
         const { data: addons } = await supabase
           .from('add_ons')
           .select('id, name')
-          .eq('is_active', true);
-        
+          .eq('is_active', true)
+          .order('price', { ascending: true });
+
         config.addon = [{ value: '', label: 'All Add-ons' }, ...addons?.map(a => ({
           value: a.id,
           label: a.name
@@ -120,7 +122,7 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
       // Apply date range filter
       if (filters.start_date && filters.end_date) {
         query = query.gte('appointment_date', filters.start_date)
-                     .lte('appointment_date', filters.end_date);
+          .lte('appointment_date', filters.end_date);
       } else if (filters.start_date) {
         query = query.gte('appointment_date', filters.start_date);
       } else if (filters.end_date) {
@@ -180,7 +182,7 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
       case 'products':
         return query.order('name');
       case 'services':
-        return query.order('name');
+        return query.order('price', { ascending: true });
       case 'users':
         return query.order('created_at', { ascending: false });
       default:
@@ -333,14 +335,14 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
                   cursor: 'pointer'
                 }}
               />
-              <i className="bi bi-calendar3 position-absolute" 
-                 style={{
-                   left: '0.75rem',
-                   top: '50%',
-                   transform: 'translateY(-50%)',
-                   color: '#6c757d',
-                   pointerEvents: 'none'
-                 }}></i>
+              <i className="bi bi-calendar3 position-absolute"
+                style={{
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#6c757d',
+                  pointerEvents: 'none'
+                }}></i>
             </div>
           </div>
 
@@ -363,14 +365,14 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
                   cursor: 'pointer'
                 }}
               />
-              <i className="bi bi-calendar3 position-absolute" 
-                 style={{
-                   left: '0.75rem',
-                   top: '50%',
-                   transform: 'translateY(-50%)',
-                   color: '#6c757d',
-                   pointerEvents: 'none'
-                 }}></i>
+              <i className="bi bi-calendar3 position-absolute"
+                style={{
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#6c757d',
+                  pointerEvents: 'none'
+                }}></i>
             </div>
           </div>
         </div>
@@ -383,7 +385,7 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
             </button>
           </div>
         </div>
-        
+
         {loading && (
           <div className="text-center mt-3">
             <div className="spinner-border spinner-border-sm" role="status">

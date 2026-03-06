@@ -64,36 +64,7 @@ const Settings = () => {
     return { checks, score, strength, color };
   };
 
-  const generateSuggestedPassword = () => {
-    const length = 12;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()+";
-    let retVal = "";
 
-    // Ensure we meet all requirements
-    retVal += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
-    retVal += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
-    retVal += "0123456789"[Math.floor(Math.random() * 10)];
-    retVal += "!@#$%^&*()"[Math.floor(Math.random() * 10)];
-
-    for (let i = 4, n = charset.length; i < length; ++i) {
-      retVal += charset.charAt(Math.floor(Math.random() * n));
-    }
-
-    // Shuffle the result
-    return retVal.split('').sort(() => 0.5 - Math.random()).join('');
-  };
-
-  const handleSuggestPassword = (e) => {
-    if (e) e.preventDefault();
-    const suggested = generateSuggestedPassword();
-    setPasswordData(prev => ({
-      ...prev,
-      newPassword: suggested,
-      confirmPassword: suggested
-    }));
-    setShowPassword(true);
-    setShowConfirmPassword(true);
-  };
 
   useEffect(() => {
     fetchUserData();
@@ -267,8 +238,8 @@ const Settings = () => {
 
       // Validate password strength
       const passwordStrength = checkPasswordStrength(passwordData.newPassword);
-      if (passwordStrength.score < 3) {
-        throw new Error('Password is too weak. Please include at least 3 requirements (uppercase, lowercase, number, or special character).');
+      if (passwordStrength.score < 6) {
+        throw new Error('Password must meet all 6 security requirements.');
       }
 
       if (!user?.email) {
@@ -645,14 +616,7 @@ const Settings = () => {
                                 >
                                   <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
                                 </button>
-                                <button
-                                  className="btn btn-outline-secondary"
-                                  type="button"
-                                  onClick={handleSuggestPassword}
-                                  title="Suggest a strong password"
-                                >
-                                  <i className="bi bi-magic"></i>
-                                </button>
+
                               </div>
 
                               {passwordData.newPassword && checkPasswordStrength(passwordData.newPassword).score < 3 && (
@@ -728,8 +692,9 @@ const Settings = () => {
                           {/* Password Requirements */}
                           {/* Password Requirements */}
                           <div className="password-requirements mb-3 p-3 rounded" style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                            backgroundColor: '#2c2c2c',
+                            border: '1px solid #d4b068',
+                            boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)'
                           }}>
                             <div className="requirements-title mb-2" style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F8A34A' }}>
                               Password Requirements:
@@ -743,13 +708,14 @@ const Settings = () => {
                                 { key: 'special', text: 'One special character (!@#$%^&*)' },
                                 { key: 'noSpaces', text: 'No spaces' }
                               ].map((req) => (
-                                <div key={req.key} className="col-6 mb-1">
+                                <div key={req.key} className="col-12 col-md-6 mb-1">
                                   <div className="requirement d-flex align-items-center gap-2" style={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: '500',
-                                    color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#28a745' : 'rgba(255, 255, 255, 0.6)'
+                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#28a745' : '#ffffff',
+                                    textShadow: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'none' : '0 0 2px rgba(0,0,0,0.5)'
                                   }}>
-                                    <i className={`bi ${checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`}></i>
+                                    <i className={`bi ${checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#28a745' : '#ffc107' }}></i>
                                     {req.text}
                                   </div>
                                 </div>
@@ -760,7 +726,7 @@ const Settings = () => {
                           <button
                             type="submit"
                             className="btn btn-primary"
-                            disabled={saving || !passwordData.newPassword || checkPasswordStrength(passwordData.newPassword).score < 3 || passwordData.newPassword !== passwordData.confirmPassword}
+                            disabled={saving || !passwordData.newPassword || checkPasswordStrength(passwordData.newPassword).score < 6 || passwordData.newPassword !== passwordData.confirmPassword}
                           >
                             {saving ? (
                               <>

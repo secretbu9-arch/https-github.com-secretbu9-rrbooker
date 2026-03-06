@@ -46,7 +46,9 @@ const OrderReports = ({ dateRange }) => {
 
       // Calculate order statistics
       const totalOrders = orders?.length || 0;
-      const totalRevenue = orders?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
+      // Only count 'picked_up' orders for total revenue
+      const totalRevenue = orders?.filter(order => order.status === 'picked_up')
+        .reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
       const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
       // Orders by status
@@ -68,7 +70,7 @@ const OrderReports = ({ dateRange }) => {
       orders?.forEach(order => {
         const customerId = order.customer_id;
         const customerName = order.customer?.full_name || 'Unknown Customer';
-        
+
         if (!ordersByCustomer[customerId]) {
           ordersByCustomer[customerId] = {
             name: customerName,
@@ -80,8 +82,12 @@ const OrderReports = ({ dateRange }) => {
           };
         }
         ordersByCustomer[customerId].orders += 1;
-        ordersByCustomer[customerId].revenue += order.total_amount || 0;
-        
+
+        // Only count revenue for 'picked_up' orders
+        if (order.status === 'picked_up') {
+          ordersByCustomer[customerId].revenue += order.total_amount || 0;
+        }
+
         // Update last order date if this is more recent
         if (new Date(order.created_at) > new Date(ordersByCustomer[customerId].lastOrder)) {
           ordersByCustomer[customerId].lastOrder = order.created_at;
@@ -95,7 +101,7 @@ const OrderReports = ({ dateRange }) => {
           const productId = item.product_id;
           const productName = item.product?.name || item.product_name || 'Unknown Product';
           const productCategory = item.product?.category || 'Uncategorized';
-          
+
           if (!productSales[productId]) {
             productSales[productId] = {
               name: productName,
@@ -105,8 +111,12 @@ const OrderReports = ({ dateRange }) => {
               orders: 0
             };
           }
-          productSales[productId].quantitySold += item.quantity || 0;
-          productSales[productId].revenue += item.total_price || 0;
+
+          // Only count quantity and revenue for 'picked_up' orders
+          if (order.status === 'picked_up') {
+            productSales[productId].quantitySold += item.quantity || 0;
+            productSales[productId].revenue += item.total_price || 0;
+          }
           productSales[productId].orders += 1;
         });
       });
@@ -123,7 +133,11 @@ const OrderReports = ({ dateRange }) => {
             };
           }
           dailyRevenue[date].orders += 1;
-          dailyRevenue[date].revenue += order.total_amount || 0;
+
+          // Only count revenue for 'picked_up' orders
+          if (order.status === 'picked_up') {
+            dailyRevenue[date].revenue += order.total_amount || 0;
+          }
         }
       });
 
@@ -134,15 +148,19 @@ const OrderReports = ({ dateRange }) => {
       };
 
       orders?.forEach(order => {
-        const isWalkIn = order.notes?.toLowerCase().includes('walk-in') || 
-                        order.pickup_location?.toLowerCase().includes('immediate');
-        
+        const isWalkIn = order.notes?.toLowerCase().includes('walk-in') ||
+          order.pickup_location?.toLowerCase().includes('immediate');
+
         if (isWalkIn) {
           orderTypes.walkIn.count += 1;
-          orderTypes.walkIn.revenue += order.total_amount || 0;
+          if (order.status === 'picked_up') {
+            orderTypes.walkIn.revenue += order.total_amount || 0;
+          }
         } else {
           orderTypes.online.count += 1;
-          orderTypes.online.revenue += order.total_amount || 0;
+          if (order.status === 'picked_up') {
+            orderTypes.online.revenue += order.total_amount || 0;
+          }
         }
       });
 

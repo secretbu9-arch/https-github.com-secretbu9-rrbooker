@@ -64,7 +64,7 @@ class ComprehensiveQueueManager {
         .eq('barber_id', barberId)
         .eq('appointment_date', appointment.appointment_date)
         .eq('appointment_type', 'queue')
-        .in('status', ['pending', 'scheduled', 'confirmed'])
+        .in('status', ['pending', 'confirmed'])
         .order('queue_position', { ascending: true });
 
       if (queueError) {
@@ -257,7 +257,7 @@ class ComprehensiveQueueManager {
         .eq('barber_id', appointment.barber_id)
         .eq('appointment_date', appointment.appointment_date)
         .eq('appointment_type', 'queue')
-        .in('status', ['pending', 'scheduled', 'confirmed'])
+        .in('status', ['pending', 'confirmed'])
         .order('queue_position', { ascending: true });
 
       if (queueError) {
@@ -372,7 +372,7 @@ class ComprehensiveQueueManager {
         .from('appointments')
         .select('*')
         .eq('barber_id', barberId)
-        .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
+        .in('status', ['pending', 'confirmed', 'ongoing']);
 
       if (date) {
         query = query.eq('appointment_date', date);
@@ -492,7 +492,7 @@ class ComprehensiveQueueManager {
         .eq('barber_id', appointment.barber_id)
         .eq('appointment_date', appointment.appointment_date)
         .eq('appointment_type', 'queue')
-        .in('status', ['pending', 'scheduled', 'confirmed'])
+        .in('status', ['pending', 'confirmed'])
         .gt('queue_position', removedPosition)
         .order('queue_position', { ascending: true });
 
@@ -543,6 +543,62 @@ class ComprehensiveQueueManager {
         success: false,
         message: error.message || 'Failed to remove appointment from queue'
       };
+    }
+  }
+
+  /**
+   * Collapse queue positions after a cancellation
+   * @param {string} barberId - Barber ID
+   * @param {string} date - Appointment date
+   * @param {number} cancelledPosition - Position of the cancelled appointment
+   * @returns {Promise<Object>} Result status
+   */
+  async collapseQueuePositions(barberId, date, cancelledPosition) {
+    if (cancelledPosition == null) return { success: true };
+
+    try {
+      console.log(`🔄 Centralized queue collapse for barber ${barberId} on ${date} starting at position ${cancelledPosition}`);
+
+      // 1. Fetch appointments that need their positions decremented
+      const { data: affected, error: fetchErr } = await supabase
+        .from('appointments')
+        .select('id, queue_position')
+        .eq('barber_id', barberId)
+        .eq('appointment_date', date)
+        .gt('queue_position', cancelledPosition)
+        .in('status', ['pending', 'confirmed', 'ongoing', 'scheduled'])
+        .order('queue_position', { ascending: true });
+
+      if (fetchErr) throw fetchErr;
+
+      if (!affected || affected.length === 0) {
+        console.log('ℹ️ No items to collapse');
+        return { success: true };
+      }
+
+      console.log(`📝 Decrementing ${affected.length} queue positions`);
+
+      // 2. Perform updates sequentially to maintain order and avoid race conditions
+      for (const apt of affected) {
+        const { error: updErr } = await supabase
+          .from('appointments')
+          .update({
+            queue_position: Math.max(1, (apt.queue_position || 1) - 1),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', apt.id);
+
+        if (updErr) {
+          console.error(`Failed to collapse position for ${apt.id}:`, updErr);
+        }
+      }
+
+      console.log('✅ Queue collapse completed successfully');
+      return { success: true };
+
+    } catch (error) {
+      console.error('❌ Queue collapse failed:', error);
+      return { success: false, message: error.message };
     }
   }
 }

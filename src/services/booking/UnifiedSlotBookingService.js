@@ -113,7 +113,7 @@ class UnifiedSlotBookingService {
 
       const startTime = this.timeToMinutes(appointment.appointment_time);
       const endTime = startTime + (appointment.total_duration || serviceDuration);
-      
+
       // Mark all slots covered by this appointment
       for (const [time, slot] of slotMap) {
         const slotTime = this.timeToMinutes(time);
@@ -132,27 +132,27 @@ class UnifiedSlotBookingService {
   static processQueueAppointments(slotMap, appointments, serviceDuration) {
     // Sort queue appointments by queue number
     const sortedQueue = appointments.sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
-    
+
     let currentTime = this.timeToMinutes(this.CONFIG.BUSINESS_HOURS.start);
     let queuePosition = 1;
 
     sortedQueue.forEach(appointment => {
       const appointmentDuration = appointment.total_duration || serviceDuration;
-      
+
       // Check if this appointment can fit within working hours
       const endTime = currentTime + appointmentDuration;
       const businessEnd = this.timeToMinutes(this.CONFIG.BUSINESS_HOURS.end);
-      
+
       if (endTime <= businessEnd) {
         // Check if this appointment would cross lunch break
         const lunchStart = this.timeToMinutes(this.CONFIG.LUNCH_BREAK.start);
         const lunchEnd = this.timeToMinutes(this.CONFIG.LUNCH_BREAK.end);
-        
+
         // If appointment crosses lunch break, move it to after lunch
         if (currentTime < lunchEnd && endTime > lunchStart) {
           console.log(`🕐 Queue appointment ${appointment.id} would cross lunch break, moving to after lunch`);
           currentTime = lunchEnd; // Move to after lunch break
-          
+
           // Recalculate end time after lunch
           const newEndTime = currentTime + appointmentDuration;
           if (newEndTime > businessEnd) {
@@ -160,16 +160,16 @@ class UnifiedSlotBookingService {
             return; // Skip this appointment
           }
         }
-        
+
         // Find the slot that corresponds to currentTime
         const assignedSlot = this.minutesToTime(currentTime);
         const slot = slotMap.get(assignedSlot);
-        
+
         if (slot) {
           slot.queueAppointments.push(appointment);
           slot.queuePosition = queuePosition;
           slot.estimatedWaitTime = (queuePosition - 1) * serviceDuration;
-          
+
           // Mark all slots from currentTime to endTime as occupied by this queue appointment
           for (const [time, slot] of slotMap) {
             const slotTime = this.timeToMinutes(time);
@@ -182,7 +182,7 @@ class UnifiedSlotBookingService {
               }
             }
           }
-          
+
           // Update currentTime to the end of this appointment
           currentTime = endTime;
           queuePosition++;
@@ -196,7 +196,7 @@ class UnifiedSlotBookingService {
   // Calculate slot availability and recommendations
   static calculateSlotAvailability(slotMap, serviceDuration) {
     const slots = Array.from(slotMap.values());
-    
+
     // Add recommendations for each slot
     slots.forEach(slot => {
       if (slot.type === this.CONFIG.SLOT_TYPES.AVAILABLE) {
@@ -214,7 +214,7 @@ class UnifiedSlotBookingService {
   static canAccommodateService(slotMap, startTime, serviceDuration) {
     const startMinutes = this.timeToMinutes(startTime);
     const endMinutes = startMinutes + serviceDuration;
-    
+
     // Check if service would extend beyond business hours
     const businessEnd = this.timeToMinutes(this.CONFIG.BUSINESS_HOURS.end);
     if (endMinutes > businessEnd) {
@@ -233,7 +233,7 @@ class UnifiedSlotBookingService {
     for (let i = 0; i < requiredSlots; i++) {
       const slotTime = this.minutesToTime(startMinutes + (i * this.CONFIG.SLOT_DURATION));
       const slot = slotMap.get(slotTime);
-      
+
       if (!slot || !slot.available) {
         return false;
       }
@@ -251,14 +251,15 @@ class UnifiedSlotBookingService {
 
       for (const barber of allBarbers) {
         if (barber.id === excludeBarberId) continue;
+        if (barber.barber_status === 'day_off' || barber.barber_status === 'offline' || barber.archived) continue;
 
         const slots = await this.getUnifiedSlots(barber.id, date, serviceDuration);
         const availableSlots = slots.filter(slot => slot.canBook);
-        
+
         if (availableSlots.length > 0) {
           const nextAvailableSlot = availableSlots[0];
           const queueSlots = slots.filter(slot => slot.type === this.CONFIG.SLOT_TYPES.QUEUE);
-          
+
           alternatives.push({
             barber: barber,
             availableSlots: availableSlots.length,
@@ -302,16 +303,16 @@ class UnifiedSlotBookingService {
   // Calculate recommendation score
   static calculateRecommendationScore(barber) {
     let score = 0;
-    
+
     // Available slots score (higher is better)
     score += barber.availableSlots * 10;
-    
+
     // Queue length score (lower is better)
     score += Math.max(0, 10 - barber.queueLength);
-    
+
     // Rating score
     score += (barber.rating || 0) * 2;
-    
+
     return score;
   }
 
@@ -332,7 +333,7 @@ class UnifiedSlotBookingService {
 
       // Determine booking type based on slot availability
       const isScheduled = targetSlot.type === this.CONFIG.SLOT_TYPES.AVAILABLE;
-      
+
       const appointmentData = {
         customer_id: customerId,
         barber_id: barberId,
@@ -341,7 +342,7 @@ class UnifiedSlotBookingService {
         add_ons_data: JSON.stringify(addOns),
         appointment_date: date,
         appointment_time: isScheduled ? timeSlot : null,
-        status: isScheduled ? 'confirmed' : 'pending',
+        status: 'pending',
         appointment_type: isScheduled ? 'scheduled' : 'queue',
         priority_level: 'normal',
         total_price: this.calculateTotalPrice(services, addOns),
@@ -377,7 +378,7 @@ class UnifiedSlotBookingService {
         success: true,
         appointment: appointment,
         bookingType: isScheduled ? 'scheduled' : 'queue',
-        message: isScheduled 
+        message: isScheduled
           ? `Appointment scheduled for ${this.convertTo12Hour(timeSlot)}`
           : `Added to queue at position ${appointmentData.queue_position}`
       };

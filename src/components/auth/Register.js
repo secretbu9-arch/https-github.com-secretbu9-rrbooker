@@ -33,13 +33,23 @@ const Register = () => {
       // Remove all non-digit characters
       let digits = value.replace(/\D/g, '');
 
-      // If user is typing, extract only digits after +63
+      // If user is typing, extract only digits after +63, 63, or initial 0
       if (value.startsWith('+63')) {
         // Get digits after +63
         digits = value.substring(3).replace(/\D/g, '');
       } else if (digits.startsWith('63')) {
         // If user typed 63 first, remove it and get remaining digits
         digits = digits.substring(2);
+      }
+
+      // Strip leading 0 if it exists
+      if (digits.startsWith('0')) {
+        digits = digits.substring(1);
+      }
+
+      // Enforce that it must start with 9
+      if (digits.length > 0 && digits[0] !== '9') {
+        digits = '';
       }
 
       // Limit to 10 digits
@@ -89,35 +99,7 @@ const Register = () => {
     return { checks, score, strength, color };
   };
 
-  const generateSuggestedPassword = () => {
-    const length = 12;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()+";
-    let retVal = "";
 
-    // Ensure we meet all requirements
-    retVal += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
-    retVal += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
-    retVal += "0123456789"[Math.floor(Math.random() * 10)];
-    retVal += "!@#$%^&*()"[Math.floor(Math.random() * 10)];
-
-    for (let i = 4, n = charset.length; i < length; ++i) {
-      retVal += charset.charAt(Math.floor(Math.random() * n));
-    }
-
-    // Shuffle the result
-    return retVal.split('').sort(() => 0.5 - Math.random()).join('');
-  };
-
-  const handleSuggestPassword = () => {
-    const suggested = generateSuggestedPassword();
-    setFormData(prev => ({
-      ...prev,
-      password: suggested,
-      confirmPassword: suggested
-    }));
-    setShowPassword(true);
-    setShowConfirmPassword(true);
-  };
 
   // Validation functions
   const validateForm = () => {
@@ -135,8 +117,8 @@ const Register = () => {
 
     // Check password strength
     const passwordStrength = checkPasswordStrength(formData.password);
-    if (passwordStrength.score < 3) {
-      errors.push('Password is too weak. Please use a stronger password.');
+    if (passwordStrength.score < 6) {
+      errors.push('Password must meet all security requirements (8+ chars, uppercase, lowercase, number, special char, no spaces).');
     }
 
     // Check if full name is provided
@@ -214,34 +196,12 @@ const Register = () => {
       if (authError) throw authError;
 
       console.log('Auth user created:', authData.user?.id);
-      console.log('User metadata:', authData.user?.user_metadata);
-
-      // Check if email verification is required
-      if (authData.user && !authData.user.email_confirmed_at) {
-        setSuccess('Registration successful! Please check your email and click the verification link to activate your account. You will be redirected to login after verification.');
-
-        // Log successful registration
-        await supabase.from('system_logs').insert({
-          user_id: authData.user.id,
-          action: 'user_register_with_verification',
-          details: {
-            email: formData.email,
-            role: formData.role
-          }
-        });
-
-        setLoading(false);
-        return;
-      }
-
-      // Wait for auth to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       if (!authData.user) {
-        throw new Error('User creation failed or confirmation required');
+        throw new Error('User creation failed');
       }
 
-      // Create user profile using upsert to handle duplicates
+      // Create user profile using upsert immediately after auth creation
+      // This ensures the user appears in the database even before email verification
       const { error: profileError } = await supabase
         .from('users')
         .upsert([{
@@ -249,7 +209,7 @@ const Register = () => {
           email: formData.email,
           full_name: formData.fullName,
           phone: formData.phone,
-          role: formData.role // Make sure to use the role from the form
+          role: formData.role
         }], {
           onConflict: 'id'
         });
@@ -259,6 +219,24 @@ const Register = () => {
         // Don't throw - the auth user was created successfully
       } else {
         console.log('User profile created with role:', formData.role);
+      }
+
+      // Check if email verification is required
+      if (!authData.user.email_confirmed_at) {
+        setSuccess('Registration successful! Please check your email and click the verification link to activate your account.');
+
+        // Log successful registration (with verification pending)
+        await supabase.from('system_logs').insert({
+          user_id: authData.user.id,
+          action: 'user_register_pending_verification',
+          details: {
+            email: formData.email,
+            role: formData.role
+          }
+        });
+
+        setLoading(false);
+        return;
       }
 
       // Log successful registration
@@ -445,22 +423,13 @@ const Register = () => {
               >
                 <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
               </button>
-              <button
-                type="button"
-                className="password-toggle-btn suggestion-btn"
-                onClick={handleSuggestPassword}
-                tabIndex="-1"
-                title="Suggest a strong password"
-                style={{ right: '40px' }}
-              >
-                <i className="bi bi-magic"></i>
-              </button>
+
             </div>
 
-            {formData.password && checkPasswordStrength(formData.password).score < 3 && (
+            {formData.password && checkPasswordStrength(formData.password).score < 6 && (
               <div className="form-error" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                 <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                Password is too weak
+                Password does not meet all requirements
               </div>
             )}
 
@@ -602,7 +571,7 @@ const Register = () => {
           <button
             type="submit"
             className="action-button"
-            disabled={loading || !formData.password || checkPasswordStrength(formData.password).score < 3 || formData.password !== formData.confirmPassword}
+            disabled={loading || !formData.password || checkPasswordStrength(formData.password).score < 6 || formData.password !== formData.confirmPassword}
           >
             {loading ? (
               <span className="spinner" role="status" aria-hidden="true"></span>

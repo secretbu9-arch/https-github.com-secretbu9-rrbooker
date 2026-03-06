@@ -706,7 +706,7 @@ const ManagerDashboard = () => {
 
       {/* Secondary Metrics */}
       <div className="row g-3 mb-4">
-        <div className="col-md-4">
+        <div className="col-md-6">
           <div
             className="card border-0 shadow-sm h-100 cursor-pointer"
             onClick={() => navigate('/manage/users')}
@@ -726,7 +726,7 @@ const ManagerDashboard = () => {
             </div>
           </div>
         </div>
-        <div className="col-md-4">
+        <div className="col-md-6">
           <div
             className="card border-0 shadow-sm h-100 cursor-pointer"
             onClick={() => navigate('/manage/barbers')}
@@ -741,26 +741,6 @@ const ManagerDashboard = () => {
                 </div>
                 <div className="text-success" style={{ fontSize: '2rem', opacity: 0.6 }}>
                   <i className="bi bi-scissors"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div
-            className="card border-0 shadow-sm h-100 cursor-pointer"
-            onClick={() => navigate('/manage/appointments')}
-            style={{ background: 'linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)', cursor: 'pointer' }}
-          >
-            <div className="card-body">
-              <div className="d-flex align-items-center">
-                <div className="flex-grow-1">
-                  <div className="text-muted small mb-1">Wait Time (Avg)</div>
-                  <div className="h4 mb-0 fw-bold">{stats.averageWaitTime} min</div>
-                  <small className="text-info">Queue Analytics <i className="bi bi-arrow-right"></i></small>
-                </div>
-                <div className="text-info" style={{ fontSize: '2rem', opacity: 0.6 }}>
-                  <i className="bi bi-clock-history"></i>
                 </div>
               </div>
             </div>
@@ -854,9 +834,9 @@ const ManagerDashboard = () => {
                           </td>
                           <td>
                             <span className={`badge bg-${appointment.status === 'completed' ? 'success' :
-                                appointment.status === 'ongoing' ? 'primary' :
-                                  appointment.status === 'scheduled' ? 'info' :
-                                    appointment.status === 'cancelled' ? 'danger' : 'secondary'
+                              appointment.status === 'ongoing' ? 'primary' :
+                                appointment.status === 'scheduled' ? 'info' :
+                                  appointment.status === 'cancelled' ? 'danger' : 'secondary'
                               }`}>
                               {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                             </span>
@@ -1029,10 +1009,10 @@ const ManagerDashboard = () => {
                           </td>
                           <td>
                             <span className={`badge bg-${order.status === 'picked_up' || order.status === 'completed' ? 'success' :
-                                order.status === 'ready_for_pickup' ? 'info' :
-                                  order.status === 'preparing' ? 'primary' :
-                                    order.status === 'confirmed' ? 'warning' :
-                                      order.status === 'pending' ? 'secondary' : 'danger'
+                              order.status === 'ready_for_pickup' ? 'info' :
+                                order.status === 'preparing' ? 'primary' :
+                                  order.status === 'confirmed' ? 'warning' :
+                                    order.status === 'pending' ? 'secondary' : 'danger'
                               }`}>
                               {order.status.replace('_', ' ').toUpperCase()}
                             </span>
@@ -1081,7 +1061,7 @@ const ManagerDashboard = () => {
                           <div>
                             <div className="fw-bold small">{barber.full_name}</div>
                             <span className={`badge bg-${barber.barber_status === 'available' ? 'success' :
-                                barber.barber_status === 'busy' ? 'warning' : 'secondary'
+                              barber.barber_status === 'busy' ? 'warning' : 'secondary'
                               } small`}>
                               {barber.barber_status}
                             </span>

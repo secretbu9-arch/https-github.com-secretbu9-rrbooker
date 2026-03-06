@@ -17,6 +17,9 @@ const ManageUsers = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showArchiveModal, setShowArchiveModal] = useState(false);
     const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
     const [saving, setSaving] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -82,14 +85,53 @@ const ManageUsers = () => {
         setShowEditModal(true);
     };
 
+    const handlePhoneFormatting = (value) => {
+        // Remove all non-digit characters
+        let digits = value.replace(/\D/g, '');
+
+        // If user is typing, extract only digits after +63, 63, or initial 0
+        if (value.startsWith('+63')) {
+            digits = value.substring(3).replace(/\D/g, '');
+        } else if (digits.startsWith('63')) {
+            digits = digits.substring(2);
+        }
+
+        // Strip leading 0 if it exists (extra check for numbers like +6309...)
+        if (digits.startsWith('0')) {
+            digits = digits.substring(1);
+        }
+
+        // Enforce that it must start with 9
+        if (digits.length > 0 && digits[0] !== '9') {
+            // If the first digit entered isn't 9, we reject it
+            return '';
+        }
+
+        // Limit to 10 digits (the part after +63)
+        if (digits.length > 10) {
+            digits = digits.substring(0, 10);
+        }
+
+        // Add +63 prefix if we have digits
+        return digits.length > 0 ? `+63${digits}` : '';
+    };
+
     const handleFormChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'phone') {
+            setFormData(prev => ({ ...prev, [name]: handlePhoneFormatting(value) }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleAddFormChange = (e) => {
         const { name, value } = e.target;
-        setAddFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'phone') {
+            setAddFormData(prev => ({ ...prev, [name]: handlePhoneFormatting(value) }));
+        } else {
+            setAddFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleCreateUser = async (e) => {
@@ -130,10 +172,12 @@ const ManageUsers = () => {
                     }]);
 
                 if (dbError) {
-                    console.warn('Profile creation error (might already exist):', dbError);
+                    console.error('Profile creation error:', dbError);
+                    throw new Error('User account created but profile setup failed: ' + dbError.message);
                 }
 
-                alert(`User created successfully! An authentication email has been sent to ${addFormData.email}.`);
+                setSuccessMessage(`User created successfully! An authentication email has been sent to ${addFormData.email}. The user will appear in the list once they verify their email or when the system syncs.`);
+                setShowSuccessModal(true);
                 setShowAddModal(false);
                 setAddFormData({
                     full_name: '',
@@ -197,6 +241,11 @@ const ManageUsers = () => {
         setShowUnarchiveModal(true);
     };
 
+    const handleDeleteClick = (user) => {
+        setSelectedUser(user);
+        setShowDeleteModal(true);
+    };
+
     const handleArchiveConfirm = async () => {
         if (!selectedUser) return;
 
@@ -243,6 +292,42 @@ const ManageUsers = () => {
         }
     };
 
+    const handleDeleteConfirm = async () => {
+        if (!selectedUser) return;
+
+        try {
+            setSaving(true);
+            setError(null);
+
+            // Attempt to delete from the public users table
+            const { error } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', selectedUser.id);
+
+            if (error) {
+                // Check if it's a foreign key constraint error
+                if (error.code === '23503') {
+                    throw new Error('Cannot delete user: They have associated records (appointments, orders, etc.). Please archive them instead.');
+                }
+                throw error;
+            }
+
+            setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
+            setShowDeleteModal(false);
+            setSelectedUser(null);
+
+            setSuccessMessage('User deleted successfully from the database.');
+            setShowSuccessModal(true);
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            setError(error.message || 'Failed to delete user. They might have related records in other tables.');
+            setShowDeleteModal(false);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const filteredUsers = users.filter(user =>
         user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -275,6 +360,29 @@ const ManageUsers = () => {
                     </button>
                 </div>
             </div>
+
+            {error && (
+                <div className="alert alert-danger alert-dismissible fade show shadow-sm mb-4" role="alert">
+                    <div className="d-flex align-items-center justify-content-between">
+                        <div>
+                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                            {error}
+                        </div>
+                        {error.includes('archive them instead') && selectedUser && (
+                            <button
+                                className="btn btn-sm btn-outline-danger ms-3 fw-bold"
+                                onClick={() => {
+                                    setShowArchiveModal(true);
+                                    setError(null);
+                                }}
+                            >
+                                Archive this User Instead
+                            </button>
+                        )}
+                    </div>
+                    <button type="button" className="btn-close" onClick={() => setError(null)}></button>
+                </div>
+            )}
 
             <div className="card shadow-sm border-0 mb-4">
                 <div className="card-body">
@@ -434,6 +542,15 @@ const ManageUsers = () => {
                                                                 </button>
                                                             </li>
                                                         )}
+                                                        <li><hr className="dropdown-divider" /></li>
+                                                        <li>
+                                                            <button
+                                                                className="dropdown-item text-danger"
+                                                                onClick={() => handleDeleteClick(user)}
+                                                            >
+                                                                <i className="bi bi-trash me-2"></i> Delete Permanently
+                                                            </button>
+                                                        </li>
                                                     </ul>
                                                 </div>
                                             </td>
@@ -620,6 +737,29 @@ const ManageUsers = () => {
                 </div>
             )}
 
+            {/* Success Modal */}
+            {showSuccessModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-body text-center p-5">
+                                <div className="mb-4">
+                                    <i className="bi bi-check-circle-fill text-success" style={{ fontSize: '4rem' }}></i>
+                                </div>
+                                <h3 className="fw-bold mb-3">User Registered!</h3>
+                                <p className="text-muted mb-4">{successMessage}</p>
+                                <button
+                                    className="btn btn-success px-5 py-2 rounded-pill fw-bold"
+                                    onClick={() => setShowSuccessModal(false)}
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Archive Modal */}
             {showArchiveModal && (
@@ -691,6 +831,52 @@ const ManageUsers = () => {
                                     disabled={saving}
                                 >
                                     {saving ? 'Unarchiving...' : 'Unarchive User'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Modal */}
+            {showDeleteModal && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow">
+                            <div className="modal-header bg-danger text-white">
+                                <h5 className="modal-title">Delete User Permanently</h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={() => setShowDeleteModal(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="text-center mb-4">
+                                    <i className="bi bi-exclamation-octagon text-danger" style={{ fontSize: '3rem' }}></i>
+                                </div>
+                                <p className="text-center fw-bold">Warning: This action is irreversible.</p>
+                                <p>Are you sure you want to permanently delete <strong>{selectedUser?.full_name || selectedUser?.email}</strong> from the database?</p>
+                                <p className="small text-danger">
+                                    <i className="bi bi-info-circle me-1"></i>
+                                    Note: Deletion will fail if the user has active appointments or other related records. In that case, use <strong>Archive</strong> instead.
+                                </p>
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-light"
+                                    onClick={() => setShowDeleteModal(false)}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-danger px-4"
+                                    onClick={handleDeleteConfirm}
+                                    disabled={saving}
+                                >
+                                    {saving ? 'Deleting...' : 'Permanently Delete'}
                                 </button>
                             </div>
                         </div>

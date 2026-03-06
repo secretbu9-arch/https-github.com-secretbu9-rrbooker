@@ -45,7 +45,8 @@
   border-radius: 12px;
   transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  /* Changed from hidden to allow dropdowns to show */
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
@@ -56,6 +57,8 @@
   left: 0;
   right: 0;
   bottom: 0;
+  border-radius: inherit;
+  /* Add border-radius to match parent */
   background: radial-gradient(circle at top right, rgba(212, 176, 104, 0.1), transparent 60%);
   pointer-events: none;
 }
@@ -95,6 +98,24 @@
 .stats-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.rotate-animation {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.transition-all {
+  transition: all 0.3s ease;
 }
 
 .card-icon {

@@ -62,6 +62,7 @@ import Profile from './components/pages/Profile';
 import Settings from './components/pages/Settings';
 import { PushService } from './services/notifications/PushService';
 import AutoCancelNoShowService from './services/automation/AutoCancelNoShowService';
+import AutoCancelService from './services/automation/AutoCancelService';
 
 // Styles
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -90,7 +91,11 @@ function App() {
         // Only run if user is logged in
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession?.user) {
-          await AutoCancelNoShowService.cancelAllNoShowAppointments();
+          // Both services run in parallel
+          await Promise.all([
+            AutoCancelNoShowService.cancelAllNoShowAppointments(),
+            AutoCancelService.cancelUnconfirmedItems()
+          ]);
         }
       } catch (error) {
         console.error('Error in auto-cancel no-show check:', error);
@@ -102,7 +107,10 @@ function App() {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession?.user) {
-          await AutoCancelNoShowService.cancelAllNoShowAppointments();
+          await Promise.all([
+            AutoCancelNoShowService.cancelAllNoShowAppointments(),
+            AutoCancelService.cancelUnconfirmedItems()
+          ]);
         }
       } catch (error) {
         console.error('Error in initial auto-cancel no-show check:', error);

@@ -386,7 +386,7 @@ const CustomerDashboard = () => {
         .from('appointments')
         .select('barber_id, barber:barber_id(id, full_name)')
         .eq('customer_id', user.id)
-        .in('status', ['scheduled', 'pending', 'ongoing'])
+        .in('status', ['scheduled', 'pending', 'ongoing', 'confirmed'])
         .gte('appointment_date', new Date().toISOString().split('T')[0]);
 
       if (barberError) throw barberError;
@@ -403,24 +403,28 @@ const CustomerDashboard = () => {
           const queueData = await AdvancedHybridQueueService.getUnifiedQueue(barber.id, today);
 
           if (queueData && queueData.timeline) {
-            // Filter out customer names for privacy
-            const sanitizedTimeline = queueData.timeline.map(apt => ({
-              id: apt.id,
-              appointment_type: apt.appointment_type,
-              appointment_time: apt.appointment_time,
-              estimated_time: apt.estimated_time,
-              estimated_end: apt.estimated_end,
-              status: apt.status,
-              queue_position: apt.queue_position,
-              timeline_position: apt.timeline_position,
-              wait_time: apt.wait_time,
-              estimated_arrival: apt.estimated_arrival,
-              total_duration: apt.total_duration,
-              is_urgent: apt.is_urgent,
-              priority_level: apt.priority_level,
-              // Remove customer name for privacy
-              customer_name: apt.appointment_type === 'queue' ? `Customer #${apt.queue_position || apt.timeline_position}` : 'Scheduled Customer'
-            }));
+            // Filter out COMPLETED/CANCELLED and customer names for privacy
+            const sanitizedTimeline = queueData.timeline
+              .filter(apt => !['completed', 'cancelled', 'cancel'].includes(apt.status))
+              .map(apt => ({
+                id: apt.id,
+                appointment_type: apt.appointment_type,
+                appointment_time: apt.appointment_time,
+                estimated_time: apt.estimated_time,
+                estimated_end: apt.estimated_end,
+                status: apt.status,
+                queue_position: apt.queue_position,
+                timeline_position: apt.timeline_position,
+                wait_time: apt.wait_time,
+                estimated_arrival: apt.estimated_arrival,
+                total_duration: apt.total_duration,
+                is_urgent: apt.is_urgent,
+                priority_level: apt.priority_level,
+                // Remove customer name for privacy
+                customer_name: apt.appointment_type === 'queue' ? `Customer #${apt.queue_position || apt.timeline_position}` : 'Scheduled Customer'
+              }));
+
+            if (sanitizedTimeline.length === 0) return null;
 
             return {
               barberId: barber.id,
@@ -429,7 +433,7 @@ const CustomerDashboard = () => {
                 timeline: sanitizedTimeline,
                 stats: queueData.stats,
                 current: queueData.current,
-                total: queueData.total
+                total: sanitizedTimeline.length
               }
             };
           }
@@ -555,37 +559,12 @@ const CustomerDashboard = () => {
       // Collapse queue positions if needed
       if (appointment && originalQueuePosition != null) {
         try {
-          console.log(`🔄 Collapsing queue positions after cancelling position ${originalQueuePosition}`);
-
-          const { data: affected, error: fetchErr } = await supabase
-            .from('appointments')
-            .select('id, queue_position')
-            .eq('barber_id', appointment.barber_id)
-            .eq('appointment_date', appointment.appointment_date)
-            .in('status', ['scheduled', 'pending', 'confirmed', 'ongoing'])
-            .gt('queue_position', originalQueuePosition)
-            .order('queue_position', { ascending: true });
-
-          if (!fetchErr && Array.isArray(affected) && affected.length) {
-            console.log(`📝 Found ${affected.length} appointments to update positions`);
-
-            for (const apt of affected) {
-              const newPosition = apt.queue_position - 1;
-              console.log(`📝 Updating appointment ${apt.id} from position ${apt.queue_position} to ${newPosition}`);
-
-              await supabase
-                .from('appointments')
-                .update({
-                  queue_position: newPosition,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', apt.id);
-            }
-
-            console.log('✅ Queue positions collapsed successfully');
-          } else {
-            console.log('ℹ️ No appointments found to collapse positions');
-          }
+          const { default: ComprehensiveQueueManager } = await import('../../services/queue/ComprehensiveQueueManager');
+          await ComprehensiveQueueManager.collapseQueuePositions(
+            appointment.barber_id,
+            appointment.appointment_date,
+            originalQueuePosition
+          );
         } catch (collapseErr) {
           console.warn('Queue collapse warning:', collapseErr);
         }
@@ -941,7 +920,7 @@ const CustomerDashboard = () => {
                 <div className="row">
                   {upcomingAppointments.map((appointment) => (
                     <div key={appointment.id} className="col-md-6 mb-3">
-                      <div className={`card appointment-card h-100 ${appointment.status === 'ongoing' ? 'border-success' : 'border-primary'}`}>
+                      <div className={`card appointment-card h-100 ${appointment.status === 'ongoing' ? 'border-success border-2 shadow' : 'border-primary'}`}>
                         <div className="card-body">
                           <div className="d-flex justify-content-between align-items-start mb-2">
                             <div>
@@ -977,22 +956,23 @@ const CustomerDashboard = () => {
                           </div>
 
                           {appointment.status === 'ongoing' && (
-                            <div className="alert alert-success py-2 mb-2">
-                              <small>
-                                <i className="bi bi-scissors me-1"></i>
-                                Your appointment is in progress!
-                              </small>
+                            <div className="alert alert-success py-2 mb-2 border-0 bg-success bg-opacity-10 text-success fw-bold d-flex align-items-center">
+                              <div className="spinner-grow spinner-grow-sm me-2" role="status"></div>
+                              <span>Your appointment is in progress!</span>
                             </div>
                           )}
 
-                          {appointment.status === 'scheduled' && queuePositions[appointment.id] && (
-                            <div className="alert alert-info py-2 mb-2">
+                          {['scheduled', 'confirmed'].includes(appointment.status) && queuePositions[appointment.id] && (
+                            <div className="alert alert-info py-2 mb-2 border-0 bg-info bg-opacity-10 text-info fw-bold">
                               <small>
-                                <i className="bi bi-people me-1"></i>
-                                Queue position: #{queuePositions[appointment.id].position} of {queuePositions[appointment.id].totalInQueue}
-                                <br />
-                                <i className="bi bi-clock me-1"></i>
-                                Est. wait: {queuePositions[appointment.id].estimatedWait}
+                                <div className="d-flex align-items-center mb-1">
+                                  <i className="bi bi-people me-2"></i>
+                                  <span>Queue position: #{queuePositions[appointment.id].position} of {queuePositions[appointment.id].totalInQueue}</span>
+                                </div>
+                                <div className="d-flex align-items-center">
+                                  <i className="bi bi-clock me-2"></i>
+                                  <span>Est. wait: {queuePositions[appointment.id].estimatedWait}</span>
+                                </div>
                               </small>
                             </div>
                           )}
@@ -1023,17 +1003,7 @@ const CustomerDashboard = () => {
                             </div>
                           )}
 
-                          {/* Debug info - remove after testing */}
-                          {process.env.NODE_ENV === 'development' && (
-                            <div className="alert alert-light py-1 mb-2" style={{ fontSize: '0.7rem' }}>
-                              <small>
-                                Debug: status={appointment.status},
-                                is_urgent={String(appointment.is_urgent)},
-                                priority_request_status={appointment.priority_request_status || 'null'},
-                                queue_position={appointment.queue_position}
-                              </small>
-                            </div>
-                          )}
+
 
                           {/* Action Buttons */}
                           <div className="d-flex gap-2">
@@ -1096,28 +1066,54 @@ const CustomerDashboard = () => {
                     </div>
 
                     <div className="queue-simple">
-                      {queueData.timeline.map((appointment, index) => (
-                        <div key={appointment.id} className={`d-flex align-items-center justify-content-between p-2 mb-2 rounded ${appointment.status === 'ongoing' ? 'bg-success text-white' :
-                          appointment.status === 'scheduled' ? 'bg-primary text-white' :
-                            'bg-light'
-                          }`}>
-                          <div className="d-flex align-items-center">
-                            <span className="fw-bold me-2">
-                              {appointment.appointment_type === 'queue'
-                                ? `#${appointment.queue_position || appointment.timeline_position}`
-                                : 'Scheduled'
-                              }
-                            </span>
-                            {appointment.is_urgent && (
-                              <i className="bi bi-lightning-fill text-warning"></i>
-                            )}
+                      {queueData.timeline.map((appointment, index) => {
+                        // Calculate a fallback time if estimated_time is TBD
+                        let displayTime = 'TBD';
+                        if (appointment.status === 'ongoing') {
+                          displayTime = 'Now';
+                        } else if (appointment.status === 'pending') {
+                          displayTime = 'Review';
+                        } else if (appointment.estimated_time) {
+                          displayTime = convertTo12Hour(appointment.estimated_time);
+                        } else if (appointment.appointment_time) {
+                          displayTime = convertTo12Hour(appointment.appointment_time);
+                        } else {
+                          // Naive estimation: last known time + 35 mins
+                          displayTime = 'Soon';
+                        }
+
+                        return (
+                          <div key={appointment.id} className={`d-flex align-items-center justify-content-between p-2 mb-2 rounded ${appointment.status === 'ongoing' ? 'bg-success text-white shadow-sm fw-bold border-start border-4 border-light' :
+                            ['scheduled', 'confirmed'].includes(appointment.status) ? 'bg-primary text-white' :
+                              'bg-light'
+                            }`}>
+                            <div className="d-flex align-items-center">
+                              <span className="fw-bold me-2">
+                                {upcomingAppointments.some(userApt => userApt.id === appointment.id) ? (
+                                  <span className="badge bg-warning text-dark border border-white shadow-sm pulse-badge me-1" style={{ fontSize: '0.75rem' }}>
+                                    YOU
+                                  </span>
+                                ) : (
+                                  appointment.appointment_type === 'queue'
+                                    ? `#${appointment.queue_position || appointment.timeline_position}`
+                                    : 'Sched'
+                                )}
+                              </span>
+                              {appointment.is_urgent && (
+                                <i className="bi bi-lightning-fill text-warning me-1"></i>
+                              )}
+                              {appointment.status === 'ongoing' && (
+                                <span className="badge bg-white text-success p-1 rounded-circle me-1" style={{ width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <i className="bi bi-scissors" style={{ fontSize: '0.6rem' }}></i>
+                                </span>
+                              )}
+                            </div>
+                            <small className={appointment.status === 'ongoing' ? 'text-white' : ''}>
+                              {displayTime}
+                            </small>
                           </div>
-                          <small>
-                            {appointment.status === 'ongoing' ? 'Now' :
-                              appointment.estimated_time ? convertTo12Hour(appointment.estimated_time) : 'TBD'}
-                          </small>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))
@@ -1236,6 +1232,15 @@ const CustomerDashboard = () => {
           </div>
         </div>
       )}
+      <style>{`
+        .pulse-badge {
+          animation: pulse-animation 2s infinite;
+        }
+        @keyframes pulse-animation {
+          0% { box-shadow: 0 0 0 0px rgba(255, 193, 7, 0.4); }
+          100% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+        }
+      `}</style>
     </div>
   );
 };

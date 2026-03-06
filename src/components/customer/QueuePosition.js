@@ -124,10 +124,20 @@ const QueuePosition = ({ appointmentId }) => {
   const getPriorityBadge = () => {
     if (!appointment?.priority_level || appointment.priority_level === 'normal') return null;
 
+    if (appointment.priority_level === '1' || appointment.priority_level === 'urgent') {
+      const isLevelOne = appointment.priority_level === '1';
+      return (
+        <span className={`badge bg-danger ${isLevelOne ? 'pulse-ring' : ''} ms-2`}>
+          <i className={`bi bi-${isLevelOne ? 'lightning-charge-fill' : 'exclamation-triangle-fill'} me-1`}></i>
+          URGENT
+        </span>
+      );
+    }
+
     const badgeClass = {
-      'urgent': 'bg-danger',
       'high': 'bg-warning',
-      'low': 'bg-secondary'
+      'low': 'bg-secondary',
+      'vip': 'bg-primary'
     }[appointment.priority_level];
 
     return (
@@ -135,6 +145,34 @@ const QueuePosition = ({ appointmentId }) => {
         {appointment.priority_level.toUpperCase()}
       </span>
     );
+  };
+
+  const getEstimatedStartTime = () => {
+    if (!appointment) return null;
+
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const isToday = appointment.appointment_date === today;
+
+    // Start from 8:00 AM (480 mins)
+    const openingTime = 8 * 60;
+    let baselineTime = openingTime;
+
+    if (isToday) {
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      baselineTime = Math.max(openingTime, currentMinutes);
+    }
+
+    if (appointment.estimated_wait_time !== null && appointment.estimated_wait_time !== undefined) {
+      const totalMinutes = baselineTime + appointment.estimated_wait_time;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHour = hours % 12 || 12;
+      return `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+    }
+
+    return null;
   };
 
   // Handle queue position changes and send notifications
@@ -406,21 +444,25 @@ const QueuePosition = ({ appointmentId }) => {
           </div>
           {getPriorityBadge() && (
             <div className="ms-auto">
-              <span className={`badge ${appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-warning'} rounded-pill`}>
-                {appointment.priority_level.toUpperCase()}
-              </span>
+              {getPriorityBadge()}
             </div>
           )}
         </div>
 
-        {estimatedWaitTime && (
+        {estimatedWaitTime !== null && (
           <div className="alert border-0 bg-light rounded-4 d-flex align-items-center mb-4 text-start p-3">
             <div className="bg-white p-2 rounded-3 me-3 shadow-sm text-primary">
               <i className="bi bi-hourglass-split fs-4"></i>
             </div>
-            <div>
-              <p className="mb-0 text-muted extra-small text-uppercase fw-bold">Estimated Wait</p>
-              <h5 className="mb-0 fw-bold text-dark">{getWaitTimeMessage()}</h5>
+            <div className="flex-grow-1">
+              <p className="mb-0 text-muted extra-small text-uppercase fw-bold">Appointment Estimate</p>
+              <div className="d-flex justify-content-between align-items-center">
+                <h5 className="mb-0 fw-bold text-dark">{getWaitTimeMessage()}</h5>
+                <div className="text-primary fw-bold" style={{ fontSize: '1.1rem' }}>
+                  <i className="bi bi-clock me-1"></i>
+                  {getEstimatedStartTime()}
+                </div>
+              </div>
             </div>
           </div>
         )}

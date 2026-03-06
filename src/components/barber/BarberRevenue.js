@@ -76,24 +76,26 @@ const BarberRevenue = () => {
         setError('');
 
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split('T')[0];
+        const getLocalDateString = (d) => {
+          return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        };
+        const todayStr = getLocalDateString(today);
 
         // Calculate date ranges
         const startOfWeek = new Date(today);
         startOfWeek.setDate(today.getDate() - today.getDay());
-        const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
+        const startOfWeekStr = getLocalDateString(startOfWeek);
 
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        const startOfMonthStr = startOfMonth.toISOString().split('T')[0];
+        const startOfMonthStr = getLocalDateString(startOfMonth);
 
         const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const startOfLastMonthStr = startOfLastMonth.toISOString().split('T')[0];
+        const startOfLastMonthStr = getLocalDateString(startOfLastMonth);
         const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-        const endOfLastMonthStr = endOfLastMonth.toISOString().split('T')[0];
+        const endOfLastMonthStr = getLocalDateString(endOfLastMonth);
 
         const startOfYear = new Date(today.getFullYear(), 0, 1);
-        const startOfYearStr = startOfYear.toISOString().split('T')[0];
+        const startOfYearStr = getLocalDateString(startOfYear);
 
         console.log('📊 Fetching revenue data...');
 
@@ -143,11 +145,16 @@ const BarberRevenue = () => {
         if (lastMonthResult.error) throw lastMonthResult.error;
         if (yearResult.error) throw yearResult.error;
 
-        // Calculate revenue helper function
         const calculateRevenue = (appointments) => {
           if (!Array.isArray(appointments)) return 0;
           return appointments.reduce((sum, apt) => {
-            const price = Number(apt.total_price) || Number(apt.service?.price) || 0;
+            // First source of truth: total_price from database (already includes services + add-ons + urgent fee)
+            if (apt.total_price !== null && apt.total_price !== undefined && Number(apt.total_price) > 0) {
+              return sum + Number(apt.total_price);
+            }
+
+            // Fallback for older appointments without total_price: service price + urgent fee
+            const price = Number(apt.service?.price) || 0;
             const urgentFee = apt.is_urgent ? 100 : 0;
             return sum + price + urgentFee;
           }, 0);
@@ -216,23 +223,25 @@ const BarberRevenue = () => {
           setError('');
 
           const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const todayStr = today.toISOString().split('T')[0];
+          const getLocalDateString = (d) => {
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          };
+          const todayStr = getLocalDateString(today);
 
           const startOfWeek = new Date(today);
           startOfWeek.setDate(today.getDate() - today.getDay());
-          const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
+          const startOfWeekStr = getLocalDateString(startOfWeek);
 
           const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          const startOfMonthStr = startOfMonth.toISOString().split('T')[0];
+          const startOfMonthStr = getLocalDateString(startOfMonth);
 
           const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-          const startOfLastMonthStr = startOfLastMonth.toISOString().split('T')[0];
+          const startOfLastMonthStr = getLocalDateString(startOfLastMonth);
           const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-          const endOfLastMonthStr = endOfLastMonth.toISOString().split('T')[0];
+          const endOfLastMonthStr = getLocalDateString(endOfLastMonth);
 
           const startOfYear = new Date(today.getFullYear(), 0, 1);
-          const startOfYearStr = startOfYear.toISOString().split('T')[0];
+          const startOfYearStr = getLocalDateString(startOfYear);
 
           const [todayResult, weekResult, monthResult, lastMonthResult, yearResult] = await Promise.all([
             supabase
@@ -280,7 +289,10 @@ const BarberRevenue = () => {
           const calculateRevenue = (appointments) => {
             if (!Array.isArray(appointments)) return 0;
             return appointments.reduce((sum, apt) => {
-              const price = Number(apt.total_price) || Number(apt.service?.price) || 0;
+              if (apt.total_price !== null && apt.total_price !== undefined && Number(apt.total_price) > 0) {
+                return sum + Number(apt.total_price);
+              }
+              const price = Number(apt.service?.price) || 0;
               const urgentFee = apt.is_urgent ? 100 : 0;
               return sum + price + urgentFee;
             }, 0);

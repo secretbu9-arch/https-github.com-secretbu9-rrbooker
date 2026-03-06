@@ -214,7 +214,8 @@ const BarberDashboard = () => {
       }
 
       setError('');
-      const today = new Date().toISOString().split('T')[0];
+      const todayObj = new Date();
+      const today = todayObj.getFullYear() + '-' + String(todayObj.getMonth() + 1).padStart(2, '0') + '-' + String(todayObj.getDate()).padStart(2, '0');
 
       console.log('Fetching barber data for:', user.id, 'on:', today);
 
@@ -308,28 +309,29 @@ const BarberDashboard = () => {
       let revenueToday = 0;
       try {
         revenueToday = completed.reduce((sum, apt) => {
-          try {
-            // Calculate total price: base price + urgent fee
-            const basePrice = Number(apt.total_price) || Number(apt.service?.price) || 0;
-            const urgentFee = apt.is_urgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0;
-            const total = basePrice + urgentFee;
+          // First source of truth: total_price from database (already includes services + add-ons + urgent fee)
+          if (apt.total_price !== null && apt.total_price !== undefined && Number(apt.total_price) > 0) {
+            return sum + Number(apt.total_price);
+          }
 
-            // Ensure it's a valid number
-            const revenue = Number(total);
-            if (isNaN(revenue) || revenue < 0) {
-              console.warn('Invalid revenue value for appointment:', apt.id, {
-                total_price: apt.total_price,
-                service_price: apt.service?.price,
-                is_urgent: apt.is_urgent,
-                calculated: total
-              });
-              return sum;
-            }
-            return sum + revenue;
-          } catch (error) {
-            console.error('Error calculating revenue for appointment:', apt.id, error);
+          // Fallback for older appointments without total_price: service price + urgent fee
+          const basePrice = Number(apt.service?.price) || 0;
+          const urgentFee = apt.is_urgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0;
+
+          const total = basePrice + urgentFee;
+
+          // Ensure it's a valid number
+          const revenue = Number(total);
+          if (isNaN(revenue) || revenue < 0) {
+            console.warn('Invalid revenue value for appointment:', apt.id, {
+              total_price: apt.total_price,
+              service_price: apt.service?.price,
+              is_urgent: apt.is_urgent,
+              calculated: total
+            });
             return sum;
           }
+          return sum + revenue;
         }, 0);
       } catch (error) {
         console.error('Error in revenue calculation:', error);
@@ -560,7 +562,13 @@ const BarberDashboard = () => {
   };
 
   const getTotalPrice = (appointment) => {
-    let total = appointment.total_price || appointment.service?.price || 0;
+    // If total_price exists and is > 0, use it as is (it includes service + add-ons + urgent fee)
+    if (appointment.total_price !== null && appointment.total_price !== undefined && Number(appointment.total_price) > 0) {
+      return Number(appointment.total_price);
+    }
+
+    // Fallback for older appointments: service price + urgent fee
+    let total = Number(appointment.service?.price) || 0;
     if (appointment.is_urgent) {
       total += (QUEUE_SETTINGS.URGENT_FEE || 100);
     }
@@ -591,9 +599,12 @@ const BarberDashboard = () => {
     if (!appointment.queue_position) return '';
 
     // Get current time safely
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const targetIsToday = appointment.appointment_date === today;
+    const today = new Date();
+    const getLocalDateString = (d) => {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    };
+    const todayStr = getLocalDateString(today);
+    const targetIsToday = appointment.appointment_date === todayStr;
 
     // Start time is 8:00 AM (480 minutes from midnight)
     const openingTime = 8 * 60;
@@ -601,7 +612,7 @@ const BarberDashboard = () => {
     // For today, the 'baseline' is the current time or opening time, whichever is later
     let baselineTime = openingTime;
     if (targetIsToday) {
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const currentMinutes = today.getHours() * 60 + today.getMinutes();
       baselineTime = Math.max(openingTime, currentMinutes);
     }
 
@@ -1491,10 +1502,7 @@ const BarberDashboard = () => {
                     .slice(0, 10)
                     .map((appointment) => (
                       <div key={appointment.id} className={`list-group-item border-0 border-bottom-light px-4 py-3 mb-2 rounded-3 shadow-sm position-relative ${appointment.status === 'ongoing' ? 'bg-primary bg-opacity-10' : (appointment.status === 'cancelled' || appointment.status === 'cancel' ? 'bg-danger bg-opacity-10' : 'bg-white')}`}>
-                        {/* Price - Upper Right */}
-                        <div className="position-absolute top-0 end-0 p-3 pt-4 text-end">
-                          <div className="fw-bold text-success" style={{ fontSize: '1rem' }}>₱{Number(getTotalPrice(appointment)).toLocaleString()}</div>
-                        </div>
+
 
                         <div className="d-flex justify-content-between align-items-center gap-3 pe-5">
                           <div className="d-flex align-items-center flex-grow-1 min-w-0">

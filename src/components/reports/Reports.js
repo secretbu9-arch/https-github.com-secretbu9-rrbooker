@@ -6,10 +6,14 @@ import jsPDF from 'jspdf';
 import OrderReports from './OrderReports';
 
 const Reports = () => {
+  const getLocalDateString = (d) => {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+
   const [reportType, setReportType] = useState('revenue');
   const [dateRange, setDateRange] = useState({
-    start: new Date().toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+    start: getLocalDateString(new Date()),
+    end: getLocalDateString(new Date())
   });
 
   const [reportData, setReportData] = useState(null);
@@ -242,10 +246,9 @@ const Reports = () => {
     let completedAppointmentsCount = 0;
     let completedOrdersCount = 0;
 
-    // Process Appointments
     appointments?.forEach(apt => {
       if (apt.status === 'completed') {
-        const amount = apt.total_price || apt.service?.price || 0;
+        const amount = Number(apt.total_price) || (Number(apt.service?.price) || 0) + (apt.is_urgent ? 100 : 0);
         const date = apt.appointment_date;
 
         dailyRevenueMap[date] = (dailyRevenueMap[date] || 0) + amount;
@@ -271,7 +274,10 @@ const Reports = () => {
             revenueByService[sId] = { name: svc.name || 'Unknown', revenue: 0, count: 0 };
           }
           revenueByService[sId].count += 1;
-          revenueByService[sId].revenue += (svc.price || (amount / services.length));
+
+          // Use individual service price if available, otherwise distribute the total amount
+          const svcPrice = Number(svc.price);
+          revenueByService[sId].revenue += (!isNaN(svcPrice) && svcPrice > 0) ? svcPrice : (amount / services.length);
         });
       }
     });
@@ -290,7 +296,7 @@ const Reports = () => {
       }
     });
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString(new Date());
 
     return {
       summary: {

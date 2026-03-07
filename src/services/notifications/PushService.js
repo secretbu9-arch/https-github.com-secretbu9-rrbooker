@@ -44,10 +44,7 @@ class PushServiceImpl {
 
   async initializePushNotifications() {
     try {
-      // Register with APNS/FCM
-      await PushNotifications.register();
-
-      // Listeners
+      // Add Listeners FIRST
       PushNotifications.addListener('registration', async (token) => {
         console.log('Push token received:', token.value);
         this.deviceToken = token.value;
@@ -85,6 +82,9 @@ class PushServiceImpl {
         console.log('Push action performed:', action);
         this.handleNotificationAction(action);
       });
+
+      // Register with APNS/FCM AFTER listeners are added
+      await PushNotifications.register();
 
     } catch (error) {
       console.error('Failed to initialize push notifications:', error);

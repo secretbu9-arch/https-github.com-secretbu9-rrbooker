@@ -261,7 +261,7 @@ class QueueOnlyService {
         services_data: appointmentData[APPOINTMENT_FIELDS.SERVICES_DATA] || appointmentData.services_data || [],
         add_ons_data: appointmentData[APPOINTMENT_FIELDS.ADD_ONS_DATA] || appointmentData.add_ons_data || [],
         appointment_date: appointmentDate,
-        appointment_time: null,
+        appointment_time: appointmentData[APPOINTMENT_FIELDS.APPOINTMENT_TIME] || appointmentData.appointment_time || null,
         appointment_type: BOOKING_TYPES.QUEUE,
         priority_level: appointmentData[APPOINTMENT_FIELDS.PRIORITY_LEVEL] || appointmentData.priority_level || 'normal',
         status: appointmentData[APPOINTMENT_FIELDS.STATUS] || BOOKING_STATUS.PENDING,

@@ -1588,7 +1588,6 @@ const BookAppointment = () => {
       const queueAppointments = appointments?.filter(apt =>
         apt.appointment_type === 'queue' &&
         apt.status === 'pending' &&
-        !apt.appointment_time &&
         (!queuePosition || apt.queue_position < queuePosition)
       ) || [];
 
@@ -2486,6 +2485,49 @@ const BookAppointment = () => {
       const urgentDbFee = bookingData.isUrgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0;
       const finalDbTotalPrice = servicesDbTotal + addOnsDbTotal + urgentDbFee;
 
+      // Calculate the estimated 24-hour time for the queue appointment
+      let calculatedTime = bookingData.selectedTimeSlot || null;
+      if (appointmentType === 'queue') {
+        try {
+          const { data: qAppointments } = await supabase
+            .from('appointments')
+            .select('*')
+            .eq('barber_id', bookingData.selectedBarber)
+            .eq('appointment_date', bookingData.selectedDate)
+            .in('status', ['confirmed', 'ongoing', 'pending', 'scheduled']);
+
+          const now = new Date();
+
+          let baseMinutes = 8 * 60; // Default to 8:00 AM
+          if (bookingData.selectedDate) {
+            const dateToBook = new Date(bookingData.selectedDate);
+            const isToday = dateToBook.toDateString() === now.toDateString();
+            if (isToday) {
+              const currentTime = now.getHours() * 60 + now.getMinutes();
+              baseMinutes = Math.max(8 * 60, currentTime); // Don't go earlier than 8:00 AM
+            }
+          }
+          let latestEnd = baseMinutes;
+
+          for (const apt of qAppointments || []) {
+            if (apt.appointment_time) {
+              const [h, m] = apt.appointment_time.split(':').map(Number);
+              const endM = h * 60 + m + (apt.total_duration || 30);
+              if (endM > latestEnd) {
+                latestEnd = endM;
+              }
+            }
+          }
+
+          // Format to HH:MM format
+          const hours = Math.floor(latestEnd / 60);
+          const mins = latestEnd % 60;
+          calculatedTime = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+        } catch (e) {
+          console.error('Error computing calculated time', e);
+        }
+      }
+
       // Prepare appointment data using standardized field names
       const appointmentData = {
         [APPOINTMENT_FIELDS.CUSTOMER_ID]: user.id,
@@ -2533,7 +2575,7 @@ const BookAppointment = () => {
           return addonId;
         }).filter(Boolean),
         [APPOINTMENT_FIELDS.APPOINTMENT_DATE]: bookingData.selectedDate,
-        [APPOINTMENT_FIELDS.APPOINTMENT_TIME]: null, // Queue appointments don't have time slots
+        [APPOINTMENT_FIELDS.APPOINTMENT_TIME]: calculatedTime, // Setting calculated estimated start time for queue
         [APPOINTMENT_FIELDS.APPOINTMENT_TYPE]: appointmentType,
         [APPOINTMENT_FIELDS.PRIORITY_LEVEL]: bookingData.isUrgent ? PRIORITY_LEVELS.URGENT : PRIORITY_LEVELS.NORMAL,
         [APPOINTMENT_FIELDS.STATUS]: BOOKING_STATUS.PENDING, // ALL appointments start as pending and require manager/barber confirmation

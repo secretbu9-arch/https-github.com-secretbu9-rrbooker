@@ -1799,7 +1799,7 @@ const BarberDashboard = () => {
         isOpen={rescheduleModal.isOpen}
         onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
         appointment={rescheduleModal.appointment}
-        onRescheduleSuccess={fetchBarberData}
+        onSuccess={fetchBarberData}
       />
 
       {/* Customer Details Modal */}

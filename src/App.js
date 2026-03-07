@@ -20,7 +20,6 @@ import CustomerDashboard from './components/dashboards/CustomerDashboard';
 import Navigation from './components/common/Navigation';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import { Toaster } from 'react-hot-toast';
 
 // Debug components
 import AuthDebug from './components/debug/AuthDebug';
@@ -376,20 +375,6 @@ function App() {
   return (
     <div className="App">
       {session && userRole && <Navigation userRole={userRole} />}
-
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#333',
-            color: '#fff',
-            borderRadius: '10px',
-            padding: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          },
-        }}
-      />
 
       <ErrorBoundary>
         <Routes>

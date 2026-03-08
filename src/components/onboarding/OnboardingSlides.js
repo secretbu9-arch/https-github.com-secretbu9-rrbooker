@@ -74,9 +74,9 @@ const BookingIllustration = () => (
 const BarberShopLogo = () => (
   <div className="barber-logo">
     <div className="logo-image-container">
-      <img 
-        src="/rrbooker-logo-3.png" 
-        alt="R&R Booker Logo" 
+      <img
+        src="/rrbooker-logo-3.png"
+        alt="R&R Booker Logo"
         className="logo-image"
         onError={(e) => {
           e.target.style.display = 'none';
@@ -104,7 +104,7 @@ const OnboardingSlides = ({ onComplete }) => {
 
   const handleComplete = () => {
     localStorage.setItem('hasSeenOnboarding', 'true');
-    
+
     if (onComplete) {
       onComplete();
     }
@@ -112,7 +112,7 @@ const OnboardingSlides = ({ onComplete }) => {
 
   const handleSkip = () => {
     localStorage.setItem('hasSeenOnboarding', 'true');
-    
+
     if (onComplete) {
       onComplete();
     }
@@ -129,7 +129,9 @@ const OnboardingSlides = ({ onComplete }) => {
   const handleRequestNotificationPermission = async () => {
     setIsRequestingPermission(true);
     try {
-      await PushService.initialize();
+      await PushService.initialize(true);
+      // Wait a moment for registration to complete
+      await new Promise(resolve => setTimeout(resolve, 1500));
       setNotificationPermission('granted');
     } catch (error) {
       console.error('Error requesting notification permission:', error);
@@ -205,8 +207,8 @@ const OnboardingSlides = ({ onComplete }) => {
         {/* Indicators */}
         <div className="slide-indicators">
           {slides.map((_, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className={`indicator ${currentSlide === index ? 'active' : ''}`}
               onClick={() => setCurrentSlide(index)}
             />
@@ -228,8 +230,8 @@ const OnboardingSlides = ({ onComplete }) => {
               </div>
             ) : (
               <div className="d-flex flex-column gap-2">
-                <button 
-                  className="action-button" 
+                <button
+                  className="action-button"
                   onClick={handleRequestNotificationPermission}
                   disabled={isRequestingPermission}
                 >
@@ -245,8 +247,8 @@ const OnboardingSlides = ({ onComplete }) => {
                     </>
                   )}
                 </button>
-                <button 
-                  className="btn btn-outline-secondary" 
+                <button
+                  className="btn btn-outline-secondary"
                   onClick={handleSkipNotification}
                 >
                   Skip for now

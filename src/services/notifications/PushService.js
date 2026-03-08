@@ -53,17 +53,21 @@ class PushServiceImpl {
           const isAuthenticated = await this.isUserAuthenticated();
           if (isAuthenticated) {
             await this.saveDeviceToken(token.value);
+            // Optionally alert on initial debugging so they know
+            // alert('Token registered: ' + token.value.substring(0, 10) + '...');
           } else {
             console.log('🔄 User not authenticated, storing token for later');
             this.pendingToken = token.value;
           }
         } catch (e) {
           console.error('Error saving device token:', e);
+          alert('Error saving device token: ' + e.message);
         }
       });
 
       PushNotifications.addListener('registrationError', (error) => {
         console.error('Push registration error:', error);
+        alert('Push registration error: ' + JSON.stringify(error));
       });
 
       // Foreground notifications
@@ -177,9 +181,11 @@ class PushServiceImpl {
               });
             } else {
               console.warn('Failed to get FCM token for web notifications');
+              alert('Failed to get FCM token for Web Push.');
             }
           } catch (fcmError) {
             console.error('Error getting FCM token:', fcmError);
+            alert('Error getting FCM token: ' + fcmError.message);
             // Continue without FCM token - we can still use browser notifications
           }
         } else if (permission === 'denied') {

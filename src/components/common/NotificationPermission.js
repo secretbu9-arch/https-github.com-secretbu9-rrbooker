@@ -37,8 +37,8 @@ const NotificationPermission = ({ onPermissionGranted }) => {
   const requestPermission = async () => {
     setIsRequesting(true);
     try {
-      // Initialize push service which will request permissions
-      await PushService.initialize();
+      // Initialize push service which will request permissions natively or web
+      await PushService.initialize(true);
 
       // Check status after initialization
       await checkPermissionStatus();

@@ -50,7 +50,8 @@ const Profile = () => {
           full_name: profileData.full_name || '',
           phone: profileData.phone || '',
           email: profileData.email || '',
-          barber_status: profileData.barber_status || 'available'
+          barber_status: profileData.barber_status || 'available',
+          skills: profileData.skills || ''
         });
 
         // Set profile picture URL if exists
@@ -242,7 +243,7 @@ const Profile = () => {
 
     try {
       // Validate required fields
-      if (!formData.full_name.trim()) {
+      if (!(formData.full_name || '').trim()) {
         throw new Error('Full name is required');
       }
 
@@ -250,10 +251,10 @@ const Profile = () => {
       const { error } = await supabase
         .from('users')
         .update({
-          full_name: formData.full_name.trim(),
-          phone: formData.phone.trim(),
+          full_name: (formData.full_name || '').trim(),
+          phone: (formData.phone || '').trim(),
           barber_status: formData.barber_status,
-          skills: formData.skills.trim(),
+          skills: (formData.skills || '').trim(),
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id);

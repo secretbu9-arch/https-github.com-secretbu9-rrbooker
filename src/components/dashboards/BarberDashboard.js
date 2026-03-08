@@ -7,6 +7,7 @@ import { ROUTES, QUEUE_SETTINGS } from '../utils/constants';
 import RescheduleModal from '../barber/RescheduleModal';
 import addOnsService from '../../services/booking/AddOnsService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
+import NotificationPermission from '../common/NotificationPermission';
 
 const BarberDashboard = () => {
   const [todaySchedule, setTodaySchedule] = useState([]);
@@ -1003,6 +1004,12 @@ const BarberDashboard = () => {
 
   return (
     <div className="container-fluid py-4 dashboard-container">
+      {/* Notification Permission Banner */}
+      <div className="row mb-3 mt-2">
+        <div className="col">
+          <NotificationPermission />
+        </div>
+      </div>
       {/* Barber Welcome Header */}
       <div className="row mb-1">
         <div className="col">
@@ -1011,7 +1018,7 @@ const BarberDashboard = () => {
               <div className="d-flex align-items-center mb-2">
                 <img
                   src={logoImage}
-                  alt="Raf & Rok"
+                  alt="RAF & ROX"
                   className="dashboard-logo me-3"
                   style={{
                     height: 'clamp(30px, 5vw, 40px)',
@@ -1501,13 +1508,13 @@ const BarberDashboard = () => {
                     })
                     .slice(0, 10)
                     .map((appointment) => (
-                      <div key={appointment.id} className={`list-group-item border-0 border-bottom-light px-4 py-3 mb-2 rounded-3 shadow-sm position-relative ${appointment.status === 'ongoing' ? 'bg-primary bg-opacity-10' : (appointment.status === 'cancelled' || appointment.status === 'cancel' ? 'bg-danger bg-opacity-10' : 'bg-white')}`}>
+                      <div key={appointment.id} className={`list-group-item border-0 border-bottom-light px-4 py-3 mb-2 rounded-3 shadow-sm position-relative ${appointment.status === 'ongoing' ? 'bg-warning bg-opacity-10' : (appointment.status === 'cancelled' || appointment.status === 'cancel' ? 'bg-danger bg-opacity-10' : 'bg-white')}`}>
 
 
                         <div className="d-flex justify-content-between align-items-center gap-3 pe-5">
                           <div className="d-flex align-items-center flex-grow-1 min-w-0">
                             <div className="me-3 text-center" style={{ width: '40px' }}>
-                              <div className={`fw-bold ${appointment.status === 'ongoing' ? 'text-primary' : (appointment.queue_position === 1 ? 'text-success' : 'text-dark')}`} style={{ lineHeight: '1', fontSize: '1.1rem' }}>
+                              <div className={`fw-bold ${appointment.status === 'ongoing' ? 'text-warning' : (appointment.queue_position === 1 ? 'text-success' : 'text-dark')}`} style={{ lineHeight: '1', fontSize: '1.1rem' }}>
                                 {(appointment.status === 'cancelled' || appointment.status === 'cancel') ? 'X' : (appointment.queue_position ? `#${appointment.queue_position}` : '-')}
                               </div>
                               <small className="text-muted" style={{ fontSize: '0.6rem', textTransform: 'uppercase' }}>{(appointment.status === 'cancelled' || appointment.status === 'cancel') ? 'Void' : 'Pos'}</small>
@@ -1516,7 +1523,7 @@ const BarberDashboard = () => {
                               <div className="d-flex align-items-center gap-2">
                                 <h6 className="mb-0 text-dark fw-bold truncate">{appointment.customer?.full_name}</h6>
                                 <div className="d-flex align-items-center gap-2 mt-1">
-                                  {appointment.status === 'ongoing' && <span className="badge bg-primary animate-pulse py-1" style={{ fontSize: '0.6rem' }}>ONGOING</span>}
+                                  {appointment.status === 'ongoing' && <span className="badge bg-warning animate-pulse py-1" style={{ fontSize: '0.6rem' }}>ONGOING</span>}
                                   {(appointment.status === 'cancelled' || appointment.status === 'cancel') && <span className="badge bg-danger py-1" style={{ fontSize: '0.6rem' }}>CANCELLED</span>}
                                   {appointment.is_urgent && <span className="badge bg-danger py-1" style={{ fontSize: '0.6rem' }}>URGENT</span>}
                                   <span className="text-primary fw-bold" style={{ fontSize: '0.75rem' }}>

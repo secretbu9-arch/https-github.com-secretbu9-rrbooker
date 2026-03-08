@@ -328,7 +328,7 @@ const Settings = () => {
               <div className="d-flex align-items-center">
                 <img
                   src={logoImage}
-                  alt="RAF & ROK"
+                  alt="RAF & ROX"
                   height="40"
                   className="me-3"
                   style={{
@@ -544,7 +544,7 @@ const Settings = () => {
                     <div className="card-body">
                       <h6 className="card-title">Data Sharing</h6>
                       <p className="card-text text-muted">
-                        Control how your data is used and shared within the RAF & ROK system.
+                        Control how your data is used and shared within the RAF & ROX system.
                       </p>
                       <div className="form-check form-switch mb-3">
                         <input className="form-check-input" type="checkbox" id="shareAnalytics" defaultChecked />

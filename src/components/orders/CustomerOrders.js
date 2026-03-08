@@ -62,10 +62,10 @@ const CustomerOrders = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
+
       // Auto-cancel orders that are past pickup date/time
       await autoCancelExpiredOrders(data || []);
-      
+
       // Fetch orders again after auto-cancellation to get updated status
       const { data: updatedData, error: refreshError } = await supabase
         .from('orders')
@@ -110,15 +110,15 @@ const CustomerOrders = () => {
       const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
-      
+
       // Only auto-cancel if current time is after 5:00 PM (17:00)
       if (currentHour < 17) {
         console.log('⏰ Auto-cancel skipped: Current time is before 5:00 PM');
         return;
       }
-      
+
       console.log('🔍 Checking for expired orders to auto-cancel...', { today, currentTime });
-      
+
       const ordersToCancel = orders.filter(order => {
         // Skip if already cancelled or picked up
         if (order.status === 'cancelled' || order.status === 'picked_up') {
@@ -135,7 +135,7 @@ const CustomerOrders = () => {
         const todayDate = new Date(today);
         pickupDate.setHours(0, 0, 0, 0);
         todayDate.setHours(0, 0, 0, 0);
-        
+
         if (pickupDate < todayDate) {
           console.log(`📅 Order ${order.id} has past pickup date: ${order.pickup_date}`);
           return true;
@@ -147,7 +147,7 @@ const CustomerOrders = () => {
           const [pickupHour, pickupMinute] = order.pickup_time.split(':').map(Number);
           const pickupTimeMinutes = pickupHour * 60 + pickupMinute;
           const currentTimeMinutes = currentHour * 60 + currentMinute;
-          
+
           if (currentTimeMinutes >= pickupTimeMinutes) {
             console.log(`⏰ Order ${order.id} has passed pickup time: ${order.pickup_time} (current: ${currentTime})`);
             return true;
@@ -162,17 +162,17 @@ const CustomerOrders = () => {
       // Cancel expired orders
       if (ordersToCancel.length > 0) {
         const { default: ordersService } = await import('../../services/booking/OrdersService');
-        
+
         for (const order of ordersToCancel) {
           try {
             let reason;
-            
+
             // Determine cancellation reason based on status and date
             const pickupDate = new Date(order.pickup_date);
             const todayDate = new Date(today);
             pickupDate.setHours(0, 0, 0, 0);
             todayDate.setHours(0, 0, 0, 0);
-            
+
             if (order.status === 'pending') {
               // Pending orders that haven't been confirmed
               if (pickupDate < todayDate) {
@@ -188,7 +188,7 @@ const CustomerOrders = () => {
                 reason = 'Automatically cancelled: Pickup time has passed';
               }
             }
-            
+
             console.log(`🔄 Cancelling order ${order.id} (${order.status}): ${reason}`);
             await ordersService.cancelOrder(order.id, reason, 'system');
             console.log(`✅ Auto-cancelled expired order: ${order.id} (status: ${order.status})`);
@@ -331,8 +331,8 @@ const CustomerOrders = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'warning';
-      case 'confirmed': return 'info';
-      case 'ready_for_pickup': return 'info';
+      case 'confirmed': return 'primary';
+      case 'ready_for_pickup': return 'success';
       case 'picked_up': return 'success';
       case 'cancelled': return 'danger';
       default: return 'secondary';
@@ -353,14 +353,14 @@ const CustomerOrders = () => {
   // Filter orders by date
   const filterOrdersByDate = (orders) => {
     if (dateFilter === 'all') return orders;
-    
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     return orders.filter(order => {
       const orderDate = new Date(order.created_at);
       const orderDateOnly = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate());
-      
+
       switch (dateFilter) {
         case 'today':
           return orderDateOnly.getTime() === today.getTime();
@@ -388,19 +388,19 @@ const CustomerOrders = () => {
   const filteredOrders = filterOrdersByDate(orders.filter(order => {
     // Status filter
     if (filter !== 'all' && order.status !== filter) return false;
-    
+
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       const orderNumber = order.order_number || order.id.slice(0, 8);
-      const matchesSearch = 
+      const matchesSearch =
         orderNumber.toLowerCase().includes(query) ||
         (order.notes && order.notes.toLowerCase().includes(query)) ||
         order.total_amount?.toString().includes(query);
-      
+
       if (!matchesSearch) return false;
     }
-    
+
     return true;
   }));
 
@@ -565,9 +565,9 @@ const CustomerOrders = () => {
                       {filter !== 'all' && (
                         <span className="badge bg-primary">
                           {filter === 'pending' ? 'Pending' :
-                           filter === 'ready_for_pickup' ? 'Ready' :
-                           filter === 'picked_up' ? 'Completed' :
-                           filter === 'cancelled' ? 'Cancelled' : filter}
+                            filter === 'ready_for_pickup' ? 'Ready' :
+                              filter === 'picked_up' ? 'Completed' :
+                                filter === 'cancelled' ? 'Cancelled' : filter}
                           <button
                             type="button"
                             className="btn-close btn-close-white ms-1"
@@ -625,8 +625,8 @@ const CustomerOrders = () => {
                 <i className="bi bi-box display-1 text-muted"></i>
                 <h4 className="mt-3">No Orders Found</h4>
                 <p className="text-muted">
-                  {filter === 'all' 
-                    ? "You haven't placed any orders yet." 
+                  {filter === 'all'
+                    ? "You haven't placed any orders yet."
                     : `No orders with status "${getStatusText(filter)}" found.`
                   }
                 </p>
@@ -649,18 +649,14 @@ const CustomerOrders = () => {
                         <i className="bi bi-receipt me-2 text-primary"></i>
                         <h6 className="mb-0 fw-semibold">Order #{order.order_number || order.id.slice(0, 8)}</h6>
                       </div>
-                      <span 
-                        className={`badge ${
-                          order.status === 'completed' || order.status === 'picked_up' ? 'bg-success' :
+                      <span
+                        className={`badge ${order.status === 'completed' || order.status === 'picked_up' ? 'bg-success' :
                           order.status === 'cancelled' ? 'bg-danger' :
-                          order.status === 'pending' ? 'bg-warning text-dark' :
-                          order.status === 'ready_for_pickup' ? 'bg-info' :
-                          'bg-secondary'
-                        }`}
-                        style={{
-                          backgroundColor: order.status === 'picked_up' || order.status === 'completed' ? '#ff6b35' : undefined,
-                          color: order.status === 'picked_up' || order.status === 'completed' ? '#fff' : undefined
-                        }}
+                            order.status === 'pending' ? 'bg-warning text-dark' :
+                              order.status === 'ready_for_pickup' ? 'bg-success' :
+                                order.status === 'confirmed' ? 'bg-primary' :
+                                  'bg-secondary'
+                          }`}
                       >
                         {getStatusText(order.status)}
                       </span>
@@ -685,7 +681,7 @@ const CustomerOrders = () => {
                                     }}
                                   />
                                 ) : (
-                                  <div 
+                                  <div
                                     className="rounded d-flex align-items-center justify-content-center bg-light"
                                     style={{ width: '50px', height: '50px' }}
                                   >
@@ -773,12 +769,12 @@ const CustomerOrders = () => {
                             <i className="bi bi-eye me-1"></i>
                             View Details
                           </button>
-                          
+
                           {(order.status === 'picked_up' || order.status === 'completed' || order.status === 'cancelled') && (
                             <button
                               className="btn btn-sm"
-                              style={{ 
-                                borderColor: '#ff6b35', 
+                              style={{
+                                borderColor: '#ff6b35',
                                 color: '#ff6b35',
                                 backgroundColor: 'transparent'
                               }}
@@ -788,7 +784,7 @@ const CustomerOrders = () => {
                               Buy Again
                             </button>
                           )}
-                          
+
                           {order.status === 'pending' && (
                             <button
                               className="btn btn-outline-danger btn-sm"

@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import OnboardingSlides from '../onboarding/OnboardingSlides';
 import { PushService } from '../../services/notifications/PushService';
-import './Login.css'; // Import the matching CSS file
+import './Login.css';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -15,14 +15,12 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  // On component mount, check if we should show onboarding
   useEffect(() => {
-    // Always show onboarding before login
+    // Always show onboarding when landing on login for now
     setShowOnboarding(true);
   }, []);
 
   const handleOnboardingComplete = () => {
-    // Switch to login form
     setShowOnboarding(false);
   };
 
@@ -46,7 +44,6 @@ const Login = () => {
         details: { email },
       });
 
-      // Retry saving any pending device token now that user is authenticated
       try {
         await PushService.checkAuthAndRetryToken();
       } catch (error) {
@@ -56,8 +53,6 @@ const Login = () => {
       navigate('/dashboard');
     } catch (error) {
       setError(error.message);
-
-      // Log failed login attempt
       await supabase.from('system_logs').insert({
         action: 'login_failed',
         details: { email, error: error.message },
@@ -67,95 +62,101 @@ const Login = () => {
     }
   };
 
-  // If showOnboarding is true, render the onboarding slides
   if (showOnboarding) {
     return <OnboardingSlides onComplete={handleOnboardingComplete} />;
   }
 
-  // Otherwise render the login form with matching dark theme
   return (
-    <div className="dark-onboarding">
-      <div className="dark-slide-card login-card">
-        <div className="barber-logo">
-          <div className="logo-image-container">
-            <img
-              src="/rrbooker-logo-3.png"
-              alt="RAF & ROX Barbershop"
-              className="auth-logo"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextSibling.style.display = 'block';
-              }}
-            />
-            <span className="logo-fallback-text" style={{ display: 'none' }}>R&R</span>
-          </div>
-          <div className="logo-text">
-            <h1>R&RBooker</h1>
-            <p>Welcome back!</p>
-          </div>
-        </div>
+    <div className="onboarding-container auth-page">
+      {/* Background Image (Same as first slide for continuity) */}
+      <div
+        className="onboarding-bg-slide"
+        style={{
+          backgroundImage: 'url(/assets/onboarding/welcome.png)',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%'
+        }}
+      />
 
-        {error && (
-          <div className="error-alert" role="alert">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="dark-input"
-            />
+      <div className="onboarding-content-wrapper">
+        <div className="content-glass-card login-card-premium">
+          <div className="barber-logo">
+            <div className="logo-image-container-premium">
+              <img
+                src="/rrbooker-logo-3.png"
+                alt="R&R Booker Logo"
+                className="premium-auth-logo"
+              />
+            </div>
+            <div className="logo-text-premium">
+              <h3 className="onboarding-subtitle">WELCOME BACK</h3>
+              <h2 className="onboarding-title">Sign In</h2>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="password-input-container">
+          {error && (
+            <div className="premium-error-alert">
+              <i className="bi bi-exclamation-circle-fill"></i>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="premium-form">
+            <div className="premium-input-group">
+              <i className="bi bi-envelope"></i>
+              <input
+                type="email"
+                placeholder="Email Address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="premium-input-group">
+              <i className="bi bi-lock"></i>
               <input
                 type={showPassword ? "text" : "password"}
-                id="password"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="dark-input"
               />
               <button
                 type="button"
-                className="password-toggle-btn"
+                className="premium-password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
               </button>
             </div>
+
+            <div className="forgot-password-link">
+              <Link to="/reset-password">Forgot Password?</Link>
+            </div>
+
+            <button
+              type="submit"
+              className="main-action-btn"
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="spinner-border spinner-border-sm me-2"></span>
+              ) : null}
+              <span>{loading ? 'SIGNING IN...' : 'SIGN IN'}</span>
+            </button>
+          </form>
+
+          <div className="premium-divider">
+            <span>OR</span>
           </div>
 
-          <button
-            type="submit"
-            className="action-button"
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="spinner" role="status" aria-hidden="true"></span>
-            ) : null}
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="register-link">
-          <p>
-            <Link to="/reset-password">Forgot password?</Link>
-          </p>
-          <div className="or-divider">or</div>
-          <p>
-            Don't have an account? <Link to="/register">Sign up</Link>
-          </p>
+          <div className="premium-register-prompt">
+            <p>Don't have an account? <Link to="/register">Sign up now</Link></p>
+          </div>
         </div>
       </div>
     </div>

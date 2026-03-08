@@ -1,6 +1,6 @@
 {
-  "short_name": "R&R Booker",
-  "name": "Raf & Rox Barbershop Booker",
+  "short_name": "RAF & ROX",
+  "name": "RAF & ROX Barbershop",
   "description": "Premium Barbershop Appointment and Management System",
   "icons": [
     {
@@ -24,7 +24,7 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#F8A34A",
-  "background_color": "#ffffff",
+  "theme_color": "#121212",
+  "background_color": "#121212",
   "gcm_sender_id": "160590142868"
 }

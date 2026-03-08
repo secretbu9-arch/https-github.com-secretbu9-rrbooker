@@ -1,15 +1,15 @@
 // components/manager/NotificationModal.js
 import React from 'react';
 
-const NotificationModal = ({ 
-  isOpen, 
-  onClose, 
-  type, 
-  title, 
-  message, 
+const NotificationModal = ({
+  isOpen,
+  onClose,
+  type,
+  title,
+  message,
   appointmentData,
   onConfirm,
-  loading = false 
+  loading = false
 }) => {
   if (!isOpen) return null;
 
@@ -67,17 +67,17 @@ const NotificationModal = ({
               <i className={`bi ${getIcon()} me-2`}></i>
               {title}
             </h5>
-            <button 
-              type="button" 
-              className="btn-close" 
+            <button
+              type="button"
+              className="btn-close"
               onClick={onClose}
               disabled={loading}
             ></button>
           </div>
-          
+
           <div className="modal-body">
             <p className="mb-3">{message}</p>
-            
+
             {appointmentData && (
               <div className="card bg-light">
                 <div className="card-body">
@@ -110,18 +110,18 @@ const NotificationModal = ({
               </div>
             )}
           </div>
-          
+
           <div className="modal-footer">
-            <button 
-              type="button" 
-              className="btn btn-secondary" 
+            <button
+              type="button"
+              className="btn btn-secondary"
               onClick={onClose}
               disabled={loading}
             >
               Cancel
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`btn ${getButtonClass()}`}
               onClick={onConfirm}
               disabled={loading}

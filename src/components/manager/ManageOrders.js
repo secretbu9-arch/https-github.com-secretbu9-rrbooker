@@ -15,13 +15,13 @@ const ManageOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState(null);
-  
+
   // Filters
   const [filters, setFilters] = useState({
     status: 'all',
     dateFrom: '',
     dateTo: '',
-    customerId: ''
+    customerName: ''
   });
 
   // Selected order for details
@@ -45,7 +45,7 @@ const ManageOrders = () => {
   useEffect(() => {
     console.log('ManageOrders - User:', user);
     console.log('ManageOrders - UserRole:', userRole);
-    
+
     // Check if user is a manager
     if (user && userRole && userRole !== 'manager') {
       console.log('Access denied - userRole is:', userRole);
@@ -53,7 +53,7 @@ const ManageOrders = () => {
       setLoading(false);
       return;
     }
-    
+
     if (user && userRole === 'manager') {
       console.log('Manager access granted');
       fetchOrders();
@@ -70,7 +70,7 @@ const ManageOrders = () => {
       if (filters.status !== 'all') filterParams.status = filters.status;
       if (filters.dateFrom) filterParams.dateFrom = filters.dateFrom;
       if (filters.dateTo) filterParams.dateTo = filters.dateTo;
-      if (filters.customerId) filterParams.customerId = filters.customerId;
+      if (filters.customerName) filterParams.customerName = filters.customerName;
 
       const data = await OrdersService.getAllOrders(filterParams);
       setOrders(data);
@@ -112,9 +112,9 @@ const ManageOrders = () => {
 
   const handleModalConfirm = async () => {
     const { action, order } = modalState;
-    
+
     setModalState(prev => ({ ...prev, isLoading: true }));
-    
+
     try {
       if (action === 'confirm') {
         await handleStatusUpdate(order.id, 'confirmed');
@@ -122,7 +122,7 @@ const ManageOrders = () => {
         const reason = document.getElementById('cancellationReason')?.value || '';
         await handleCancelOrder(order.id, reason);
       }
-      
+
       closeModal();
     } catch (err) {
       console.error('Error in modal action:', err);
@@ -217,8 +217,8 @@ const ManageOrders = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'warning';
-      case 'confirmed': return 'info';
-      case 'ready_for_pickup': return 'info';
+      case 'confirmed': return 'primary';
+      case 'ready_for_pickup': return 'success';
       case 'picked_up': return 'success';
       case 'cancelled': return 'danger';
       case 'refunded': return 'secondary';
@@ -307,7 +307,7 @@ const ManageOrders = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-md-3 mb-3">
                 <div className="card bg-success text-white">
                   <div className="card-body">
@@ -323,7 +323,7 @@ const ManageOrders = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="col-md-3 mb-3">
                 <div className="card bg-info text-white">
                   <div className="card-body">
@@ -339,7 +339,7 @@ const ManageOrders = () => {
                   </div>
                 </div>
               </div>
-              
+
             </div>
           )}
 
@@ -362,8 +362,8 @@ const ManageOrders = () => {
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-                
-                
+
+
                 <div className="col-md-2">
                   <label className="form-label">From Date</label>
                   <input
@@ -373,7 +373,7 @@ const ManageOrders = () => {
                     onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="col-md-2">
                   <label className="form-label">To Date</label>
                   <input
@@ -383,18 +383,18 @@ const ManageOrders = () => {
                     onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="col-md-2">
-                  <label className="form-label">Customer ID</label>
+                  <label className="form-label">Customer Name</label>
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Customer ID"
-                    value={filters.customerId}
-                    onChange={(e) => setFilters({ ...filters, customerId: e.target.value })}
+                    placeholder="Search name..."
+                    value={filters.customerName}
+                    onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="col-md-2 d-flex align-items-end">
                   <button
                     className="btn btn-outline-secondary w-100"
@@ -402,7 +402,7 @@ const ManageOrders = () => {
                       status: 'all',
                       dateFrom: '',
                       dateTo: '',
-                      customerId: ''
+                      customerName: ''
                     })}
                   >
                     Clear Filters
@@ -487,7 +487,7 @@ const ManageOrders = () => {
                               >
                                 <i className="bi bi-eye"></i>
                               </button>
-                              
+
                               {order.status === 'pending' && (
                                 <button
                                   className="btn btn-outline-success"
@@ -497,7 +497,7 @@ const ManageOrders = () => {
                                   <i className="bi bi-check"></i>
                                 </button>
                               )}
-                              
+
                               {order.status === 'confirmed' && (
                                 <button
                                   className="btn btn-outline-success"
@@ -507,7 +507,7 @@ const ManageOrders = () => {
                                   <i className="bi bi-bag-check"></i>
                                 </button>
                               )}
-                              
+
                               {order.status === 'ready_for_pickup' && (
                                 <button
                                   className="btn btn-outline-success"
@@ -517,7 +517,7 @@ const ManageOrders = () => {
                                   <i className="bi bi-check2-all"></i>
                                 </button>
                               )}
-                              
+
                               {!['picked_up', 'cancelled', 'refunded'].includes(order.status) && (
                                 <button
                                   className="btn btn-outline-danger"
@@ -616,7 +616,7 @@ const ManageOrders = () => {
                           }}
                         />
                       ) : (
-                        <div 
+                        <div
                           className="rounded-circle me-3 d-flex align-items-center justify-content-center bg-light"
                           style={{ width: '50px', height: '50px' }}
                         >
@@ -647,7 +647,7 @@ const ManageOrders = () => {
                         <tr>
                           <td><strong>Customer Since:</strong></td>
                           <td>
-                            {orderDetails.order.customer?.created_at 
+                            {orderDetails.order.customer?.created_at
                               ? new Date(orderDetails.order.customer.created_at).toLocaleDateString()
                               : 'N/A'
                             }
@@ -715,8 +715,8 @@ const ManageOrders = () => {
                         {orderDetails.order.notes && orderDetails.order.notes.trim() !== '' ? (
                           orderDetails.order.notes
                         ) : (
-                          <span style={{ 
-                            color: '#ff8c00', 
+                          <span style={{
+                            color: '#ff8c00',
                             fontStyle: 'italic',
                             fontWeight: '500'
                           }}>
@@ -739,7 +739,7 @@ const ManageOrders = () => {
                 >
                   Close
                 </button>
-                
+
                 {/* Status Update Buttons */}
                 {selectedOrder.status === 'pending' && (
                   <button
@@ -753,7 +753,7 @@ const ManageOrders = () => {
                     Confirm Order
                   </button>
                 )}
-                
+
                 {selectedOrder.status === 'confirmed' && (
                   <button
                     type="button"
@@ -766,7 +766,7 @@ const ManageOrders = () => {
                     Mark Ready for Pickup
                   </button>
                 )}
-                
+
                 {selectedOrder.status === 'ready_for_pickup' && (
                   <button
                     type="button"
@@ -779,7 +779,7 @@ const ManageOrders = () => {
                     Mark Picked Up
                   </button>
                 )}
-                
+
                 {!['picked_up', 'cancelled', 'refunded'].includes(selectedOrder.status) && (
                   <button
                     type="button"

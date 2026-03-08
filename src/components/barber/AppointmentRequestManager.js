@@ -264,9 +264,9 @@ const AppointmentRequestManager = ({ user, userRole }) => {
     const badges = {
       pending_approval: 'bg-warning text-dark',
       pending: 'bg-warning text-dark',
-      approved: 'bg-success',
-      confirmed: 'bg-success',
-      scheduled: 'bg-success',
+      approved: 'bg-primary',
+      confirmed: 'bg-primary',
+      scheduled: 'bg-primary',
       rejected: 'bg-danger',
       cancelled: 'bg-danger'
     };

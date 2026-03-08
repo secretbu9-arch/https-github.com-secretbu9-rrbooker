@@ -1091,15 +1091,15 @@ const CustomerAppointments = () => {
       case 'completed':
         return 'bg-success';
       case 'ongoing':
-        return 'bg-primary';
+        return 'bg-warning text-dark';
       case 'cancelled':
         return 'bg-danger';
       case 'pending':
         return 'bg-warning text-dark';
       case 'scheduled':
-        return 'bg-info';
+        return 'bg-primary';
       case 'confirmed':
-        return 'bg-success'; // Same as done since confirmed means ready to go
+        return 'bg-primary';
       default:
         return 'bg-secondary';
     }

@@ -392,12 +392,18 @@ export const getStatusColor = (status) => {
 
   const statusMap = {
     'pending': 'warning text-dark',
-    'confirmed': 'success',
-    'ongoing': 'primary',
+    'confirmed': 'primary',
+    'scheduled': 'primary',
+    'ongoing': 'warning',
+    'preparing': 'warning',
     'completed': 'success',
     'done': 'success',
+    'ready': 'success',
+    'ready_for_pickup': 'success',
+    'picked_up': 'success',
     'cancel': 'danger',
-    'cancelled': 'danger'
+    'cancelled': 'danger',
+    'declined': 'danger'
   };
 
   return statusMap[statusKey] || 'secondary';

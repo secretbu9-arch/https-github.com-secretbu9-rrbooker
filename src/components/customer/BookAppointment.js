@@ -4415,7 +4415,8 @@ const Step3QueueSummary = ({
               bookingData.selectedBarber,
               bookingData.selectedDate,
               serviceDuration,
-              bookingData.isUrgent || false
+              bookingData.isUrgent || false,
+              user?.id
             );
 
             // Convert to 12-hour format if needed
@@ -4431,7 +4432,7 @@ const Step3QueueSummary = ({
               queueStatus: {
                 nextQueuePosition: queueInfo.queuePosition,
                 totalInQueue: queueInfo.totalInQueue,
-                queueLength: (queueInfo.totalInQueue || 1) - 1,
+                queueLength: (queueInfo.queuePosition || 1) - 1,
                 estimatedWaitTime: queueInfo.estimatedWaitTime,
                 isOverflowingWorkHours: queueInfo.isOverflowingWorkHours
               },

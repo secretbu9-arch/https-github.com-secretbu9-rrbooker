@@ -137,7 +137,7 @@ class OrdersService {
         .from('orders')
         .select(`
           *,
-          customer:customer_id (
+          customer:users!customer_id (
             id,
             full_name,
             email,
@@ -145,7 +145,7 @@ class OrdersService {
           ),
           order_items (
             *,
-            product:product_id (
+            product:products!product_id (
               id,
               name,
               image_url
@@ -178,10 +178,6 @@ class OrdersService {
         query = query.lte('pickup_date', filters.dateTo);
       }
 
-      if (filters.customerId) {
-        query = query.eq('customer_id', filters.customerId);
-      }
-
       if (filters.limit) {
         query = query.limit(filters.limit);
       }
@@ -190,9 +186,21 @@ class OrdersService {
 
       if (error) throw error;
 
-      return data || [];
+      let result = data || [];
+
+      // Local filtering for customer name since it relies on a joined table result
+      if (filters.customerName) {
+        const queryName = filters.customerName.toLowerCase();
+        result = result.filter(order =>
+          (order.customer?.full_name?.toLowerCase().includes(queryName)) ||
+          (order.customer_email?.toLowerCase().includes(queryName)) ||
+          (order.customer_name?.toLowerCase().includes(queryName))
+        );
+      }
+
+      return result;
     } catch (error) {
-      console.error('❌ Error fetching all orders:', error);
+      console.error('❌ Error fetching all orders:', { ...error, message: error?.message, hint: error?.hint, stack: error?.stack });
       throw error;
     }
   }

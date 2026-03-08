@@ -3,7 +3,7 @@ import { supabase } from '../../supabaseClient';
 
 class QueueTimeCalculator {
   constructor() {
-    this.BUSINESS_HOURS = { start: '07:30', end: '17:00' };
+    this.BUSINESS_HOURS = { start: '08:00', end: '17:00' };
     this.LUNCH_BREAK = { start: '12:00', end: '13:00' };
     this.BUFFER_TIME = 5; // 5 minutes buffer between appointments
     this.ARRIVAL_BUFFER = 15; // 15 minutes buffer before service starts (for arrival time)
@@ -18,7 +18,7 @@ class QueueTimeCalculator {
    * @param {boolean} isUrgent - Whether the appointment is urgent
    * @returns {Promise<Object>} Queue information with estimated times
    */
-  async calculateQueueInfo(barberId, date, serviceDuration, isUrgent = false) {
+  async calculateQueueInfo(barberId, date, serviceDuration, isUrgent = false, customerId = null) {
     try {
       console.log('🕐 Calculating queue info for:', { barberId, date, serviceDuration, isUrgent });
 
@@ -30,11 +30,17 @@ class QueueTimeCalculator {
         .eq('barber_id', barberId)
         .eq('appointment_date', date)
         .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing'])
-        // Rule 3: Manual sort in JS is better for complex hierarchy
-        .order('created_at', { ascending: true });
+      // Rule 3: Manual sort in JS is better for complex hierarchy
+      let allAppointments = appointments || [];
 
-      // manual sort to match Rule 3
-      const sortedAppointments = (appointments || []).sort((a, b) => {
+      // If customerId is provided, exclude their existing appointments from being "ahead" of them
+      // This is crucial for rebooking or refreshing status
+      const originalAppointments = [...allAppointments];
+      if (customerId) {
+        allAppointments = allAppointments.filter(apt => apt.customer_id !== customerId);
+      }
+
+      const sortedAppointments = allAppointments.sort((a, b) => {
         if (a.status === 'ongoing') return -1;
         if (b.status === 'ongoing') return 1;
 
@@ -62,7 +68,7 @@ class QueueTimeCalculator {
 
       // Calculate timeline
       const timeline = this.buildTimeline(scheduledAppointments, queueAppointments, date);
-      const newAppointmentInfo = this.findBestPosition(timeline, serviceDuration, isUrgent, date);
+      const newAppointmentInfo = this.findBestPosition(timeline, serviceDuration, isUrgent, date, customerId);
 
       return {
         queuePosition: newAppointmentInfo.queuePosition,
@@ -93,7 +99,8 @@ class QueueTimeCalculator {
     const today = now.toISOString().split('T')[0];
     const isToday = targetDate === today;
 
-    let currentTime = this.timeToMinutes(this.BUSINESS_HOURS.start);
+    const firstQueueStartMinutes = this.timeToMinutes(this.FIRST_QUEUE_START);
+    let currentTime = firstQueueStartMinutes;
 
     const workEnd = this.timeToMinutes(this.BUSINESS_HOURS.end);
     const lunchStart = this.timeToMinutes(this.LUNCH_BREAK.start);
@@ -265,8 +272,8 @@ class QueueTimeCalculator {
 
     // For future dates (tomorrow or later), use business start time
     // For today, use max(current time, business start time)
-    const baseStartTime = isToday ? Math.max(workStart, currentMinutes) : workStart;
     const firstQueueStart = this.timeToMinutes(this.FIRST_QUEUE_START);
+    const baseStartTime = isToday ? Math.max(firstQueueStart, currentMinutes) : firstQueueStart;
 
     if (isUrgent) {
       // Urgent appointments go to position 1

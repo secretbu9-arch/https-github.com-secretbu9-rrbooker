@@ -192,11 +192,11 @@ const ManageBarbers = () => {
     const errors = {};
 
     // Required fields
-    if (!formData.full_name.trim()) {
+    if (!(formData.full_name || '').trim()) {
       errors.full_name = 'Name is required';
     }
 
-    if (!formData.email.trim()) {
+    if (!(formData.email || '').trim()) {
       errors.email = 'Email is required';
     } else if (!isValidEmail(formData.email)) {
       errors.email = 'Invalid email format';
@@ -328,8 +328,8 @@ const ManageBarbers = () => {
   const handleEdit = (barber) => {
     setSelectedBarber(barber);
     setFormData({
-      full_name: barber.full_name,
-      email: barber.email,
+      full_name: barber.full_name || '',
+      email: barber.email || '',
       phone: barber.phone || '',
       password: '', // Don't populate password for editing
       new_password: '', // Used for force update

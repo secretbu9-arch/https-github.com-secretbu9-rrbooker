@@ -1,12 +1,12 @@
 import React from 'react';
 
-const OrderConfirmationModal = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  order, 
+const OrderConfirmationModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  order,
   action = 'confirm',
-  isLoading = false 
+  isLoading = false
 }) => {
   if (!isOpen) return null;
 
@@ -18,16 +18,16 @@ const OrderConfirmationModal = ({
       return {
         title: 'Confirm Order',
         icon: 'bi-check-circle-fill',
-        iconColor: 'text-success',
+        iconColor: 'text-primary',
         message: `Are you sure you want to confirm this order?`,
         details: [
           `Order #${order?.order_number}`,
           `Customer: ${order?.customer?.full_name || 'Unknown'}`,
-          `Total: $${order?.total_amount || '0.00'}`,
+          `Total: ₱${order?.total_amount || '0.00'}`,
           `Pickup: ${order?.pickup_date} at ${order?.pickup_time}`
         ],
         confirmText: 'Confirm Order',
-        confirmClass: 'btn-success',
+        confirmClass: 'btn-primary',
         cancelText: 'Cancel'
       };
     } else if (isCancelAction) {
@@ -62,20 +62,20 @@ const OrderConfirmationModal = ({
               <i className={`bi ${content.icon} ${content.iconColor} me-2`}></i>
               {content.title}
             </h5>
-            <button 
-              type="button" 
-              className="btn-close" 
+            <button
+              type="button"
+              className="btn-close"
               onClick={onClose}
               disabled={isLoading}
             ></button>
           </div>
-          
+
           <div className="modal-body">
             <div className="alert alert-warning d-flex align-items-center mb-3">
               <i className="bi bi-exclamation-triangle-fill me-2"></i>
               <span className="fw-medium">{content.message}</span>
             </div>
-            
+
             <div className="card bg-light">
               <div className="card-body">
                 <h6 className="card-title text-muted mb-3">Order Details</h6>
@@ -109,18 +109,18 @@ const OrderConfirmationModal = ({
               </div>
             )}
           </div>
-          
+
           <div className="modal-footer border-0 pt-0">
-            <button 
-              type="button" 
-              className="btn btn-outline-secondary" 
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
               onClick={onClose}
               disabled={isLoading}
             >
               {content.cancelText}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`btn ${content.confirmClass}`}
               onClick={onConfirm}
               disabled={isLoading}

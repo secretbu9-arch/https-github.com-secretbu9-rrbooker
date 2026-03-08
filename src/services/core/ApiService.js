@@ -631,17 +631,23 @@ class ApiService {
   // BARBER MANAGEMENT (Enhanced)
   // =====================
 
-  async getBarbers(includeStatus = true) {
+  async getBarbers(includeStatus = true, activeOnly = false) {
     let selectFields = 'id, full_name, email, phone';
     if (includeStatus) {
       selectFields += ', barber_status';
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('users')
       .select(selectFields)
-      .eq('role', 'barber')
-      .order('full_name');
+      .eq('role', 'barber');
+
+    if (activeOnly) {
+      // "Active" means status is 'available'. We also treat NULL as available for legacy records.
+      query = query.or('barber_status.eq.available,barber_status.is.null');
+    }
+
+    const { data, error } = await query.order('full_name');
 
     if (error) throw error;
     return data;
@@ -697,11 +703,12 @@ class ApiService {
   }
 
   async getAllBarbersCapacity(date) {
-    // Return capacity summary for all barbers for a given date
+    // Return capacity summary for only active (available) barbers for a given date
     const { data: barbers, error: barbersError } = await supabase
       .from('users')
       .select('id, full_name')
       .eq('role', 'barber')
+      .or('barber_status.eq.available,barber_status.is.null')
       .order('full_name');
 
     if (barbersError) throw barbersError;

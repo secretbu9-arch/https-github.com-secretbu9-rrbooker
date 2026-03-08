@@ -80,6 +80,9 @@ const ManagerDashboard = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
         debouncedRefresh();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: 'role=eq.barber' }, () => {
+        debouncedRefresh();
+      })
       .subscribe();
 
     // Set up auto-refresh
@@ -172,11 +175,12 @@ const ManagerDashboard = () => {
           .select('*', { count: 'exact', head: true })
           .eq('role', 'customer'),
 
-        // Total barbers
+        // Total barbers (Active only - status 'available')
         supabase
           .from('users')
           .select('*', { count: 'exact', head: true })
-          .eq('role', 'barber'),
+          .eq('role', 'barber')
+          .or('barber_status.eq.available,barber_status.is.null'),
 
         // Calculate revenue (completed appointments)
         supabase
@@ -284,8 +288,8 @@ const ManagerDashboard = () => {
       const completed = appointments?.filter(apt => apt.status === 'completed').length || 0;
       const completionRate = totalScheduled > 0 ? (completed / totalScheduled) * 100 : 0;
 
-      // Get barber queues for today
-      const barbers = await apiService.getBarbers();
+      // Get only active (available) barbers for operational status
+      const barbers = await apiService.getBarbers(true, true);
       const queuePromises = barbers.map(async (barber) => {
         const queueInfo = await apiService.getBarberQueue(barber.id, todayString);
         return {
@@ -389,6 +393,7 @@ const ManagerDashboard = () => {
           barber_status
         `)
         .eq('role', 'barber')
+        .or('barber_status.eq.available,barber_status.is.null')
         .not('average_rating', 'is', null)
         .order('average_rating', { ascending: false });
 

@@ -668,7 +668,9 @@ const BookAppointment = () => {
           date: dateToFetch,
           totalTimeUsed, // Total time used in 30-minute slots
           timeBasedAvailableSlots, // Available slots based on actual service time
-          remainingTime // Remaining time in minutes
+          remainingTime, // Remaining time in minutes
+          wasPushedByLunch: queueAnalysis.wasPushedByLunch,
+          availBeforeLunch: queueAnalysis.availBeforeLunch
         };
 
         queues[barber.id] = queueInfo;
@@ -2882,6 +2884,9 @@ const BookAppointment = () => {
                   onPrev={prevStep}
                   services={services}
                   addOns={addOns}
+                  calculateTotalDuration={calculateTotalDuration}
+                  barberQueues={barberQueues}
+                  canBarberAccommodateService={canBarberAccommodateService}
                 />}
 
               </>
@@ -3440,6 +3445,26 @@ const Step1DateTypeAndBarber = ({
           return;
         }
       }
+
+      // Final strict capacity and lunch check before proceeding to services
+      if (selectedBarber) {
+        const queue = barberQueues[selectedBarber];
+        const availability = barberAvailabilityStatus[selectedBarber];
+
+        // Use a standard duration check for initial gatekeeping
+        const defaultDuration = 30;
+        const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, defaultDuration) : false;
+
+        if (availability && !availability.isAvailable) {
+          setError(`Barber is currently unavailable: ${availability.reason || 'Offline'}`);
+          return;
+        }
+
+        if (queue && (!canAccommodate || queue.isFullCapacity)) {
+          setError('This barber is at full capacity or cannot accommodate more services before closing. Please select a different barber.');
+          return;
+        }
+      }
     }
 
     // Check for existing appointment before proceeding
@@ -3734,7 +3759,7 @@ const Step1DateTypeAndBarber = ({
                           className={`form-control border-start-0 ps-0 ${friendEmailError ? 'is-invalid' : ''}`}
                           value={friendEmail}
                           onChange={(e) => handleFriendEmailChange(e.target.value)}
-                          placeholder="guardian@example.com"
+                          placeholder="child@example.com"
                           disabled={isFriendEmailVerified}
                           style={{ borderRadius: isFriendEmailVerified ? '0 8px 8px 0' : '0' }}
                         />
@@ -3832,8 +3857,9 @@ const Step1DateTypeAndBarber = ({
                           .filter(rec => {
                             if (!rec || !rec.barber) return false;
                             const queue = barberQueues[rec.barber.id];
-                            const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : false;
-                            return queue && canAccommodate && !queue.isFullCapacity;
+                            // Suggestions should still include barbers even if they are 'full' but only because of lunch push.
+                            // Only hide if they are TRULY full (exceed 5 PM or max queue)
+                            return queue && !queue.isFullyScheduled;
                           })
                           .slice(0, 3)
                           .map((rec, index) => (
@@ -4109,7 +4135,10 @@ const Step2ServicesAndAddons = ({
   onNext,
   onPrev,
   services,
-  addOns
+  addOns,
+  calculateTotalDuration,
+  barberQueues,
+  canBarberAccommodateService
 }) => {
   const [selectedServices, setSelectedServices] = useState(bookingData.selectedServices || []);
   const [selectedAddOns, setSelectedAddOns] = useState(bookingData.selectedAddOns || []);
@@ -4162,6 +4191,24 @@ const Step2ServicesAndAddons = ({
   };
 
   const handleNext = () => {
+    // Strict check for lunch and closing before proceeding to summary
+    const serviceDuration = calculateTotalDuration(
+      selectedServices,
+      selectedAddOns,
+      services,
+      addOns
+    );
+
+    const queue = barberQueues[bookingData.selectedBarber];
+    // Re-check capacity with real duration
+    if (queue) {
+      const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, serviceDuration) : true;
+      if (!canAccommodate || queue.isFullCapacity) {
+        alert('Conflicting Schedule: Selected services are too long for the available time before closing or lunch. Please try a shorter service.');
+        return;
+      }
+    }
+
     updateBookingData({
       selectedServices,
       selectedAddOns,
@@ -4251,16 +4298,37 @@ const Step2ServicesAndAddons = ({
 
             const isSelected = selectedAddOns.includes(addon.id);
 
+            // Recommendation logic
+            const isRecommended = (
+              (serviceName.includes('haircut') && (addonName.includes('spa') || addonName.includes('massage'))) ||
+              (serviceName.includes('beard') && addonName.includes('facial')) ||
+              (serviceName.includes('shave') && addonName.includes('massage'))
+            );
+
+            // Time conflict check for THIS specific addon on top of current selections
+            const currentDuration = calculateTotalDuration(selectedServices, selectedAddOns, services, addOns);
+            const durationWithThisAddon = currentDuration + (isSelected ? 0 : addon.duration);
+            const queue = barberQueues[bookingData.selectedBarber];
+            const wouldConflict = queue && !isSelected && !canBarberAccommodateService(queue, durationWithThisAddon);
+
             return (
               <div key={addon.id} className="col-md-6 col-lg-4">
                 <div
-                  className={`card barber-card h-100 ${isSelected ? 'border-warning bg-warning bg-opacity-5' : 'border-0 shadow-sm'} ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                  onClick={() => !isDisabled && handleAddOnToggle(addon.id)}
-                  title={isDisabled ? `Not available with ${selectedServiceObj?.name}` : ''}
+                  className={`card barber-card h-100 ${isSelected ? 'border-warning bg-warning bg-opacity-5' : 'border-0 shadow-sm'} ${(isDisabled || wouldConflict) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                  onClick={() => !isDisabled && !wouldConflict && handleAddOnToggle(addon.id)}
+                  title={isDisabled ? `Not available with ${selectedServiceObj?.name}` : wouldConflict ? 'This addon crosses lunch or closing' : ''}
                 >
                   <div className="card-body p-3 d-flex flex-column">
                     <div className="d-flex justify-content-between align-items-start mb-2">
-                      <h6 className="fw-bold mb-0 small">{addon.name}</h6>
+                      <div className="d-flex flex-column">
+                        <h6 className="fw-bold mb-0 small">{addon.name}</h6>
+                        {isRecommended && !isSelected && !isDisabled && !wouldConflict && (
+                          <span className="extra-small text-primary fw-bold mt-1"><i className="bi bi-hand-thumbs-up-fill me-1"></i>Highly Recommended</span>
+                        )}
+                        {wouldConflict && !isSelected && !isDisabled && (
+                          <span className="extra-small text-danger fw-bold mt-1"><i className="bi bi-clock-history me-1"></i>Time Conflict</span>
+                        )}
+                      </div>
                       <span className="small fw-bold text-warning-emphasis">{formatPrice(addon.price)}</span>
                     </div>
                     <div className="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
@@ -4270,8 +4338,8 @@ const Step2ServicesAndAddons = ({
                       </small>
                       {isSelected ? (
                         <span className="badge bg-warning text-dark rounded-pill"><i className="bi bi-check-lg"></i></span>
-                      ) : isDisabled ? (
-                        <span className="text-muted extra-small fw-bold">N/A</span>
+                      ) : (isDisabled || wouldConflict) ? (
+                        <span className="text-muted extra-small fw-bold">{wouldConflict ? 'Full' : 'N/A'}</span>
                       ) : (
                         <span className="text-warning small fw-bold">Add</span>
                       )}
@@ -4303,6 +4371,26 @@ const Step2ServicesAndAddons = ({
           placeholder="e.g., Specific style, allergies, or questions..."
         />
       </div>
+
+      {/* Lunch and Closing Warning for Step 2 */}
+      {(() => {
+        const queue = barberQueues[bookingData.selectedBarber];
+        const duration = calculateTotalDuration(selectedServices, selectedAddOns, services, addOns);
+        const canAccommodate = canBarberAccommodateService ? canBarberAccommodateService(queue, duration) : true;
+
+        if (queue && (!canAccommodate || queue.isFullCapacity)) {
+          return (
+            <div className="alert alert-warning border-0 shadow-sm rounded-4 p-3 mb-4 d-flex align-items-center gap-3">
+              <i className="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
+              <div>
+                <h6 className="mb-1 fw-bold">Time Conflict Detected</h6>
+                <p className="mb-0 small opacity-75">Your current selection takes too long ({duration}m) and will cross the lunch break or closing hour. Consider choosing shorter services or checking other barbers in Step 1.</p>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Floating Summary Bar (Mobile Only or Bottom Fixed) */}
       <div className="alert alert-primary border-0 shadow-sm rounded-4 p-3 mb-5">
@@ -4434,18 +4522,22 @@ const Step3QueueSummary = ({
                 totalInQueue: queueInfo.totalInQueue,
                 queueLength: (queueInfo.queuePosition || 1) - 1,
                 estimatedWaitTime: queueInfo.estimatedWaitTime,
-                isOverflowingWorkHours: queueInfo.isOverflowingWorkHours
+                isOverflowingWorkHours: queueInfo.isOverflowingWorkHours,
+                wasPushedByLunch: queueInfo.wasPushedByLunch,
+                availBeforeLunch: queueInfo.availBeforeLunch
               },
               availability: {
-                nextAvailableTime: formattedStartTime
+                nextAvailableTime: formattedStartTime,
+                isOverflowingWorkHours: queueInfo.isOverflowingWorkHours,
+                wasPushedByLunch: queueInfo.wasPushedByLunch
               },
               lastUpdated: new Date().toLocaleTimeString(),
               recommendations: queueInfo.recommendations
             });
 
-            // If there's a closing conflict, trigger alternative barber search
-            if (queueInfo.isOverflowingWorkHours && onLoadAlternatives) {
-              console.log('🔄 Overflow detected, loading alternatives...');
+            // If there's a closing conflict or lunch push, trigger alternative barber search
+            if ((queueInfo.isOverflowingWorkHours || queueInfo.wasPushedByLunch) && onLoadAlternatives) {
+              console.log('🔄 Conflict detected, loading alternatives...');
               onLoadAlternatives(bookingData.selectedDate, serviceDuration, bookingData.selectedBarber);
             }
           } else if (bookingData.appointmentType === 'scheduled') {
@@ -4527,13 +4619,33 @@ const Step3QueueSummary = ({
 
   const fittingAddOns = React.useMemo(() => {
     const conflict = realTimeStatus.recommendations?.find(r => r.type === 'closing_conflict' || r.type === 'lunch_conflict');
-    if (!conflict || conflict.remainingMinutes === undefined || conflict.remainingMinutes <= 0) return [];
 
-    return addOns.filter(addon =>
-      addon.duration <= conflict.remainingMinutes &&
-      !bookingData.selectedAddOns.includes(addon.id)
-    );
-  }, [realTimeStatus.recommendations, addOns, bookingData.selectedAddOns]);
+    // If there's a conflict, suggest things that fit in the remaining gap
+    if (conflict && conflict.remainingMinutes !== undefined && conflict.remainingMinutes > 0) {
+      return addOns.filter(addon =>
+        addon.duration <= conflict.remainingMinutes &&
+        !bookingData.selectedAddOns.includes(addon.id)
+      );
+    }
+
+    // If NO conflict, suggest generally recommended add-ons for the selected service
+    const selectedServiceObj = services.find(s => (bookingData.selectedServices || []).includes(s.id));
+    if (!selectedServiceObj) return [];
+
+    const serviceName = selectedServiceObj.name?.toLowerCase() || '';
+
+    return addOns.filter(addon => {
+      if ((bookingData.selectedAddOns || []).includes(addon.id)) return false;
+
+      const addonName = addon.name?.toLowerCase() || '';
+      return (
+        (serviceName.includes('haircut') && (addonName.includes('hair spa') || addonName.includes('massage') || addonName.includes('shampoo'))) ||
+        (serviceName.includes('shave') && (addonName.includes('facial') || addonName.includes('hot towel'))) ||
+        (serviceName.includes('emperor') && (addonName.includes('premium') || addonName.includes('mask'))) ||
+        (serviceName.includes('superior') && (addonName.includes('treatment') || addonName.includes('spa')))
+      );
+    }).slice(0, 3);
+  }, [realTimeStatus.recommendations, addOns, bookingData.selectedAddOns, services, bookingData.selectedServices]);
 
   return (
     <div className="container-fluid px-2 px-md-4 py-4 py-md-5 animate-fade-in">
@@ -4808,7 +4920,8 @@ const Step3QueueSummary = ({
               {!statusLoading && (
                 realTimeStatus.queueStatus?.isOverflowingWorkHours ||
                 realTimeStatus.availability?.isOverflowingWorkHours ||
-                realTimeStatus.recommendations?.some(r => r.type === 'lunch_conflict' && r.remainingMinutes > 0)
+                realTimeStatus.queueStatus?.wasPushedByLunch ||
+                realTimeStatus.availability?.wasPushedByLunch
               ) && (
                   <div className="mb-4 animate-fade-in">
                     <div className={`alert ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'alert-danger shadow-sm border-start border-4 border-danger' : 'alert-warning shadow-sm border-start border-4 border-warning'} border-0 p-3 rounded-4`}>
@@ -4871,16 +4984,26 @@ const Step3QueueSummary = ({
                               <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10 h-100">
                                 <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Compatible Add-ons</div>
                                 <div className="d-flex flex-wrap gap-2">
-                                  {fittingAddOns.slice(0, 3).map(addon => (
-                                    <button
-                                      key={addon.id}
-                                      className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale flex-grow-1"
-                                      onClick={() => updateBookingData({ selectedAddOns: [addon.id] })}
-                                    >
-                                      <i className="bi bi-plus-circle small"></i>
-                                      <span className="fw-bold extra-small">{addon.name} ({addon.duration}m)</span>
-                                    </button>
-                                  ))}
+                                  {fittingAddOns.slice(0, 3).map(addon => {
+                                    const selectedServiceObj = services.find(s => bookingData.selectedServices.includes(s.id));
+                                    const serviceName = selectedServiceObj?.name?.toLowerCase() || '';
+                                    const addonName = addon.name?.toLowerCase() || '';
+                                    const isRecommended = (
+                                      (serviceName.includes('haircut') && (addonName.includes('spa') || addonName.includes('massage'))) ||
+                                      (serviceName.includes('beard') && addonName.includes('facial'))
+                                    );
+
+                                    return (
+                                      <button
+                                        key={addon.id}
+                                        className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale flex-grow-1"
+                                        onClick={() => updateBookingData({ selectedAddOns: [addon.id] })}
+                                      >
+                                        <i className={`bi ${isRecommended ? 'bi-hand-thumbs-up-fill text-primary' : 'bi-plus-circle'} small`}></i>
+                                        <span className="fw-bold extra-small">{addon.name} ({addon.duration}m)</span>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </div>
@@ -4952,20 +5075,50 @@ const Step3QueueSummary = ({
                     </div>
                     <div className="services-list">
                       {bookingData.selectedAddOns && bookingData.selectedAddOns.length > 0 ? (
-                        bookingData.selectedAddOns.map(addonId => {
-                          const addon = addOns.find(a => a.id === addonId);
-                          return (
-                            <div key={addonId} className="service-item d-flex justify-content-between align-items-center mb-2 bg-warning bg-opacity-5 p-2 rounded-2">
-                              <div>
-                                <div className="fw-bold text-dark mb-0 small">{addon?.name}</div>
-                                <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{addon?.duration} mins</div>
+                        <div className="d-flex flex-wrap gap-2">
+                          {bookingData.selectedAddOns.map(addonId => {
+                            const addon = addOns.find(a => a.id === addonId);
+                            if (!addon) return null;
+                            return (
+                              <div key={addonId} className="badge bg-white text-dark border shadow-sm py-2 px-3 rounded-pill animate-fade-in d-flex align-items-center gap-2">
+                                <i className="bi bi-check-circle-fill text-success"></i>
+                                {addon.name}
+                                <button
+                                  className="btn-close border-start ps-2"
+                                  style={{ fontSize: '0.6rem' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateBookingData({ selectedAddOns: bookingData.selectedAddOns.filter(id => id !== addonId) });
+                                  }}
+                                ></button>
                               </div>
-                              <div className="fw-bold text-warning-emphasis small">{formatPrice(addon?.price)}</div>
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                        </div>
                       ) : (
-                        <div className="text-muted extra-small italic py-2">No add-ons selected</div>
+                        <div className="text-muted extra-small italic py-1 ps-1">No add-ons selected yet</div>
+                      )}
+
+                      {/* Suggestions in summary */}
+                      {fittingAddOns && fittingAddOns.length > 0 && (
+                        <div className="mt-3 w-100 animate-slide-up border-top pt-3">
+                          <div className="extra-small fw-bold text-primary mb-2 ls-1 text-uppercase d-flex align-items-center" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                            <i className="bi bi-stars me-2 text-warning"></i> Recommended Add-ons
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {fittingAddOns.map(addon => (
+                              <button
+                                key={addon.id}
+                                className="btn btn-sm btn-outline-primary border-dashed py-1 px-3 rounded-pill bg-white hover-lift d-flex align-items-center gap-2"
+                                onClick={() => updateBookingData({ selectedAddOns: [...(bookingData.selectedAddOns || []), addon.id] })}
+                              >
+                                <i className="bi bi-plus-lg fs-6"></i>
+                                <span className="extra-small fw-bold">{addon.name}</span>
+                                <span className="text-muted extra-small">₱{addon.price}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
 
@@ -5115,6 +5268,9 @@ const Step3QueueSummary = ({
                       bookingData.selectedServices.length === 0 ||
                       !bookingData.selectedDate ||
                       realTimeStatus.queueStatus?.isOverflowingWorkHours ||
+                      realTimeStatus.queueStatus?.wasPushedByLunch ||
+                      realTimeStatus.availability?.isOverflowingWorkHours ||
+                      realTimeStatus.recommendations?.some(r => r.type === 'lunch_conflict') || // Strict catch-all
                       (bookingData.appointmentType === 'scheduled' && realTimeStatus.availability?.hasConflict) ||
                       (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase()))
                     }

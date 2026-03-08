@@ -687,6 +687,9 @@ const CustomerAppointments = () => {
           apt.appointment_date < today || apt.status === 'completed'
         );
         break;
+      case 'completed':
+        filtered = filtered.filter(apt => apt.status === 'completed');
+        break;
       case 'pending':
         filtered = filtered.filter(apt => apt.status === 'pending');
         break;
@@ -1339,6 +1342,7 @@ const CustomerAppointments = () => {
                     <option value="all">All Statuses</option>
                     <option value="upcoming">Upcoming</option>
                     <option value="pending">Pending</option>
+                    <option value="completed">Completed</option>
                     <option value="past">Past</option>
                     <option value="cancelled">Cancelled</option>
                   </select>

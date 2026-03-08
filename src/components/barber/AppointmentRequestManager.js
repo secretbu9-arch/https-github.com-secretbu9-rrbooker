@@ -144,7 +144,20 @@ const AppointmentRequestManager = ({ user, userRole }) => {
           isRequestTable: false,
           type: 'new_booking'
         }))
-      ].sort((a, b) => new Date(b.requested_at) - new Date(a.requested_at));
+      ].sort((a, b) => {
+        // 1. Sort by Date first (ASC)
+        const dateA = a.appointment?.appointment_date || a.appointment_date || '';
+        const dateB = b.appointment?.appointment_date || b.appointment_date || '';
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+        // 2. Sort by Queue Position primarily if it's a queue type (ASC)
+        const aPos = a.appointment?.queue_position || a.queue_position || Infinity;
+        const bPos = b.appointment?.queue_position || b.queue_position || Infinity;
+        if (aPos !== bPos) return aPos - bPos;
+
+        // 3. Fallback to requested_at (Newest First)
+        return new Date(b.requested_at) - new Date(a.requested_at);
+      });
 
       const processedRequests = unified.map(request => {
         let customerName = 'Unknown Customer';

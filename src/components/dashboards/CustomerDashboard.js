@@ -256,7 +256,8 @@ const CustomerDashboard = () => {
         supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
-          .eq('customer_id', user.id),
+          .eq('customer_id', user.id)
+          .eq('status', 'completed'),
 
         supabase
           .from('appointments')

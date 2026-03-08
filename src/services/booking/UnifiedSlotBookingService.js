@@ -255,10 +255,11 @@ class UnifiedSlotBookingService {
 
         const slots = await this.getUnifiedSlots(barber.id, date, serviceDuration);
         const availableSlots = slots.filter(slot => slot.canBook);
+        const queueSlots = slots.filter(slot => slot.type === this.CONFIG.SLOT_TYPES.QUEUE);
 
-        if (availableSlots.length > 0) {
-          const nextAvailableSlot = availableSlots[0];
-          const queueSlots = slots.filter(slot => slot.type === this.CONFIG.SLOT_TYPES.QUEUE);
+        // Include if they have at least ONE available slot OR queue capacity
+        if (availableSlots.length > 0 || queueSlots.length < this.CONFIG.MAX_QUEUE_SIZE) {
+          const nextAvailableSlot = availableSlots.length > 0 ? availableSlots[0] : { time: '08:00' };
 
           alternatives.push({
             barber: barber,
@@ -274,7 +275,7 @@ class UnifiedSlotBookingService {
         }
       }
 
-      // Sort by recommendation score
+      // Sort by recommendation score (calculated based on availability and rating)
       alternatives.sort((a, b) => {
         const scoreA = this.calculateRecommendationScore(a);
         const scoreB = this.calculateRecommendationScore(b);
@@ -282,7 +283,7 @@ class UnifiedSlotBookingService {
       });
 
       console.log('✅ Found alternative barbers:', alternatives.length);
-      return alternatives.slice(0, 5); // Return top 5
+      return alternatives.slice(0, 5); // Return top 5 best alternatives
 
     } catch (error) {
       console.error('Error finding alternative barbers:', error);

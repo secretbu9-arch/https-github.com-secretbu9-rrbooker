@@ -329,9 +329,7 @@ const QueueManagementPanel = () => {
                             <td>
                               <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
                               <small className="text-muted">{appointment.customer?.phone}</small>
-                              {appointment.is_walk_in && (
-                                <span className="badge bg-info ms-2">Walk-in</span>
-                              )}
+
                               {appointment.is_double_booking && (
                                 <span className="badge bg-secondary ms-2">Friend</span>
                               )}

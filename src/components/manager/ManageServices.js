@@ -1647,7 +1647,7 @@ const ManageServices = () => {
                           <tr key={appt.id}>
                             <td>{appt.appointment_date || <span className="text-muted fst-italic">Queue</span>}</td>
                             <td>{appt.appointment_time || '-'}</td>
-                            <td>{appt.customer?.full_name || 'Walk-in Customer'}</td>
+                            <td>{appt.customer?.full_name || 'Guest Customer'}</td>
                             <td>
                               <span className={`badge bg-${['confirmed', 'ongoing'].includes(appt.status) ? 'success' :
                                 appt.status === 'completed' ? 'primary' :

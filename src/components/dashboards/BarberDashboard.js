@@ -961,6 +961,8 @@ const BarberDashboard = () => {
       case 'available': return 'success';
       case 'day_off': return 'info';
       case 'offline': return 'secondary';
+      case 'pending': return 'warning';
+      case 'urgent': return 'danger';
       default: return 'primary';
     }
   };
@@ -1143,47 +1145,54 @@ const BarberDashboard = () => {
         )}
       </div>
 
-      {/* Urgent Pending Requests Alert */}
-      {pendingRequests.filter(req => req.is_urgent).length > 0 && (
-        <div className="alert alert-danger shadow-sm mb-4" role="alert">
-          <div className="d-flex align-items-center">
-            <div className="me-3">
-              <i className="bi bi-lightning-fill fs-4"></i>
+      {/* Enhanced Multi-level Request Alerts */}
+      <div className="request-alerts-wrapper mb-3">
+        {/* Urgent Requests Alert - More dramatic on mobile */}
+        {pendingRequests.filter(req => req.is_urgent).length > 0 && (
+          <div className="alert alert-danger shadow-sm border-0 border-start border-4 border-danger pulse-red-border"
+            style={{ borderRadius: '12px', background: 'rgba(231, 76, 60, 0.08)' }}
+            role="alert">
+            <div className="d-flex align-items-center">
+              <div className="bg-danger text-white rounded-circle p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+                <i className="bi bi-lightning-fill"></i>
+              </div>
+              <div className="flex-grow-1">
+                <h6 className="alert-heading mb-0 fw-bold" style={{ color: '#c0392b' }}>
+                  {pendingRequests.filter(req => req.is_urgent).length} Urgent Booking Request{pendingRequests.filter(req => req.is_urgent).length > 1 ? 's' : ''}!
+                </h6>
+                <small className="text-danger opacity-75 d-block d-md-inline">Requires immediate response</small>
+              </div>
+              <button className="btn btn-danger btn-sm rounded-pill px-3 fw-bold"
+                onClick={() => document.getElementById('pending-requests').scrollIntoView({ behavior: 'smooth' })}>
+                View
+              </button>
             </div>
-            <div className="flex-grow-1">
-              <h5 className="alert-heading mb-1">🚨 URGENT Booking Requests!</h5>
-              <p className="mb-0">
-                You have {pendingRequests.filter(req => req.is_urgent).length} urgent booking request{pendingRequests.filter(req => req.is_urgent).length > 1 ? 's' : ''} that need immediate attention.
-              </p>
-            </div>
-            <button className="btn btn-danger" onClick={() => document.getElementById('pending-requests').scrollIntoView({ behavior: 'smooth' })}>
-              <i className="bi bi-eye me-1"></i>
-              Review Now
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Regular Pending Requests Alert */}
-      {pendingRequests.length > 0 && pendingRequests.filter(req => !req.is_urgent).length > 0 && (
-        <div className="alert alert-warning shadow-sm mb-4" role="alert">
-          <div className="d-flex align-items-center">
-            <div className="me-3">
-              <i className="bi bi-bell-fill fs-4"></i>
+        {/* Regular Requests Alert - Cleaner and distinct */}
+        {pendingRequests.length > 0 && pendingRequests.filter(req => !req.is_urgent).length > 0 && (
+          <div className="alert alert-warning shadow-sm border-0 border-start border-4 border-warning mt-2"
+            style={{ borderRadius: '12px', background: 'rgba(243, 156, 18, 0.08)' }}
+            role="alert">
+            <div className="d-flex align-items-center">
+              <div className="bg-warning text-dark rounded-circle p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+                <i className="bi bi-bell-fill"></i>
+              </div>
+              <div className="flex-grow-1">
+                <h6 className="alert-heading mb-0 fw-bold" style={{ color: '#d35400' }}>
+                  {pendingRequests.filter(req => !req.is_urgent).length} New Booking Request{pendingRequests.filter(req => !req.is_urgent).length > 1 ? 's' : ''}
+                </h6>
+                <small className="text-muted d-block d-md-inline">Waiting for confirmation</small>
+              </div>
+              <button className="btn btn-warning btn-sm rounded-pill px-3 fw-bold"
+                onClick={() => document.getElementById('pending-requests').scrollIntoView({ behavior: 'smooth' })}>
+                Review
+              </button>
             </div>
-            <div className="flex-grow-1">
-              <h5 className="alert-heading mb-1">New Booking Requests!</h5>
-              <p className="mb-0">
-                You have {pendingRequests.filter(req => !req.is_urgent).length} booking request{pendingRequests.filter(req => !req.is_urgent).length > 1 ? 's' : ''} waiting for your confirmation.
-              </p>
-            </div>
-            <button className="btn btn-warning" onClick={() => document.getElementById('pending-requests').scrollIntoView({ behavior: 'smooth' })}>
-              <i className="bi bi-eye me-1"></i>
-              Review Requests
-            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Stats Cards */}
       <div className="row mb-4 g-2 g-md-3">
@@ -1226,9 +1235,16 @@ const BarberDashboard = () => {
 
         <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
           <Link to={ROUTES.PENDING_REQUESTS} style={{ textDecoration: 'none' }} title="View all pending requests">
-            <div className={`card stats-card ${pendingRequests.length > 0 ? 'bg-gradient-warning' : 'bg-gradient-secondary'} text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
+            <div className={`card stats-card ${pendingRequests.some(req => req.is_urgent)
+                ? 'bg-gradient-danger pulse-urgent'
+                : pendingRequests.length > 0
+                  ? 'bg-gradient-warning'
+                  : 'bg-gradient-secondary'
+              } text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
               <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Pending</h6>
+                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>
+                  {pendingRequests.some(req => req.is_urgent) ? '⚠️ URGENT' : 'Pending'}
+                </h6>
                 <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.pendingRequests}</h2>
               </div>
             </div>
@@ -1271,11 +1287,11 @@ const BarberDashboard = () => {
         <div id="pending-requests" className="card mb-4 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
           <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
             <h5 className="mb-0 d-flex align-items-center" style={{ fontWeight: '700', color: '#1f2937' }}>
-              <div className="bg-warning bg-opacity-10 text-warning p-2 rounded-3 me-3 d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                <i className="bi bi-bell-fill"></i>
+              <div className={`bg-${pendingRequests.some(req => req.is_urgent) ? 'danger' : 'warning'} bg-opacity-10 text-${pendingRequests.some(req => req.is_urgent) ? 'danger' : 'warning'} p-2 rounded-3 me-3 d-flex align-items-center justify-content-center`} style={{ width: '40px', height: '40px' }}>
+                <i className={`bi bi-${pendingRequests.some(req => req.is_urgent) ? 'lightning-fill' : 'bell-fill'}`}></i>
               </div>
-              Pending Booking Requests
-              <span className="badge bg-warning text-dark ms-2 rounded-pill px-3" style={{ fontSize: '0.75rem' }}>{pendingRequests.length}</span>
+              {pendingRequests.some(req => req.is_urgent) ? 'Urgent Requests' : 'Pending Requests'}
+              <span className={`badge bg-${pendingRequests.some(req => req.is_urgent) ? 'danger pulse-red-badge' : 'warning text-dark'} ms-2 rounded-pill px-3`} style={{ fontSize: '0.75rem' }}>{pendingRequests.length}</span>
             </h5>
             <Link to={ROUTES.PENDING_REQUESTS} className="btn btn-sm btn-link text-primary text-decoration-none fw-semibold">
               View All <i className="bi bi-arrow-right ms-1"></i>

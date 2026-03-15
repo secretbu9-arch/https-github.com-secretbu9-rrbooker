@@ -643,505 +643,504 @@ const ManageBarbers = () => {
     (barber.phone && barber.phone.includes(searchQuery))
   );
 
+  // Premium Minimalist Styles - Enhanced for Mobile
+  const styles = {
+    container: {
+      padding: '1.5rem 1rem', // Reduced padding for mobile
+      backgroundColor: '#f8f9fa',
+      minHeight: '100vh',
+      fontFamily: "'Outfit', 'Inter', sans-serif"
+    },
+    header: {
+      display: 'flex',
+      flexDirection: window.innerWidth < 576 ? 'column' : 'row', // Dynamic stacking
+      justifyContent: 'space-between',
+      alignItems: window.innerWidth < 576 ? 'flex-start' : 'center',
+      marginBottom: '1.5rem',
+      background: '#fff',
+      padding: '1.25rem',
+      borderRadius: '20px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+      border: '1px solid #f0f0f0',
+      gap: '1rem'
+    },
+    title: {
+      fontSize: '1.5rem',
+      fontWeight: '800',
+      color: '#1a1a1a',
+      margin: 0,
+      letterSpacing: '-0.5px'
+    },
+    subtitle: {
+      color: '#888',
+      fontSize: '0.85rem',
+      marginTop: '0.2rem'
+    },
+    primaryBtn: {
+      backgroundColor: '#1a1a1a',
+      color: '#fff',
+      border: 'none',
+      padding: '0.8rem 1.2rem',
+      borderRadius: '14px',
+      fontWeight: '600',
+      fontSize: '0.9rem',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.6rem',
+      width: window.innerWidth < 576 ? '100%' : 'auto' // Full width on mobile
+    },
+    tabList: {
+      display: 'flex',
+      gap: '0.75rem',
+      marginBottom: '1.5rem',
+      overflowX: 'auto', // Scrollable tabs on mobile
+      paddingBottom: '5px',
+      msOverflowStyle: 'none',
+      scrollbarWidth: 'none',
+    },
+    tabItem: (active) => ({
+      padding: '0.7rem 1.2rem',
+      borderRadius: '14px',
+      cursor: 'pointer',
+      fontSize: '0.9rem',
+      fontWeight: '600',
+      whiteSpace: 'nowrap',
+      transition: 'all 0.3s ease',
+      backgroundColor: active ? '#5D4037' : '#fff',
+      color: active ? '#fff' : '#666',
+      border: active ? 'none' : '1px solid #eee',
+      boxShadow: active ? '0 8px 15px rgba(93, 64, 55, 0.2)' : 'none',
+      flex: window.innerWidth < 576 ? '1' : 'none',
+      textAlign: 'center'
+    }),
+    searchWrapper: {
+      position: 'relative',
+      marginBottom: '1.5rem'
+    },
+    searchInput: {
+      width: '100%',
+      padding: '1.1rem 1.2rem 1.1rem 3.2rem',
+      borderRadius: '18px',
+      border: '1.5px solid #f0f0f0',
+      backgroundColor: '#fff',
+      fontSize: '1rem',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+      outline: 'none',
+      transition: 'all 0.3s ease'
+    },
+    barberGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(100%, 1fr))', // Default to 1 column for mobile
+      gap: '1.25rem'
+    },
+    barberCard: {
+      backgroundColor: '#fff',
+      borderRadius: '24px',
+      padding: '1.25rem',
+      boxShadow: '0 8px 25px rgba(0,0,0,0.03)',
+      border: '1px solid #f0f0f0',
+      transition: 'all 0.3s ease',
+      position: 'relative',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    },
+    avatar: {
+      width: '72px',
+      height: '72px',
+      borderRadius: '20px',
+      objectFit: 'cover',
+    },
+    avatarPlaceholder: {
+      width: '72px',
+      height: '72px',
+      borderRadius: '20px',
+      backgroundColor: '#5D4037',
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '1.8rem',
+      fontWeight: '700',
+    },
+    statBox: {
+      backgroundColor: '#fbfbfb',
+      padding: '0.85rem 0.5rem',
+      borderRadius: '16px',
+      textAlign: 'center',
+      border: '1px solid #f5f5f5'
+    },
+    modal: {
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      backdropFilter: 'blur(8px)',
+      padding: '0'
+    },
+    modalContent: {
+      borderRadius: window.innerWidth < 576 ? '24px 24px 0 0' : '24px',
+      border: 'none',
+      marginTop: window.innerWidth < 576 ? 'auto' : '0',
+      boxShadow: '0 -10px 40px rgba(0,0,0,0.2)'
+    }
+  };
+
+  // State to handle resize for dynamic styles
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (loading && !barbers.length) {
     return <LoadingSpinner />;
   }
 
-  const activeBarbersCount = barbers.length;
-  const canAddNewBarber = activeBarbersCount < MAX_ACTIVE_BARBERS && viewFilter === 'active';
-
   return (
-    <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+    <div style={styles.container}>
+      {/* Premium Header - Responsive Stack */}
+      <div style={{...styles.header, flexDirection: windowWidth < 600 ? 'column' : 'row', alignItems: windowWidth < 600 ? 'stretch' : 'center'}}>
         <div>
-          <h2 className="mb-0 fw-bold">Manage Barbers</h2>
-          {viewFilter === 'active' && (
-            <p className="text-muted mb-0">
-              Active Barbers: <strong>{activeBarbersCount} / {MAX_ACTIVE_BARBERS}</strong>
-              {!canAddNewBarber && activeBarbersCount >= MAX_ACTIVE_BARBERS && (
-                <span className="text-danger ms-2">
-                  <i className="bi bi-exclamation-triangle me-1"></i>
-                  Limit reached
-                </span>
-              )}
-            </p>
-          )}
-          {viewFilter === 'archived' && (
-            <p className="text-muted mb-0">
-              Archived Barbers: <strong>{activeBarbersCount}</strong>
-            </p>
-          )}
+          <h2 style={styles.title}>Manage Barbers</h2>
+          <div style={styles.subtitle}>
+            {viewFilter === 'active' ? (
+              <>
+                Team Strength: <strong>{barbers.length} / {MAX_ACTIVE_BARBERS}</strong>
+              </>
+            ) : (
+              `Archived: ${barbers.length}`
+            )}
+          </div>
         </div>
         {viewFilter === 'active' && (
           <button
-            className={`btn ${canAddNewBarber ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              ...styles.primaryBtn,
+              opacity: barbers.length >= MAX_ACTIVE_BARBERS ? 0.6 : 1,
+              width: windowWidth < 600 ? '100%' : 'auto'
+            }}
             onClick={handleAddNew}
-            disabled={!canAddNewBarber}
-            title={!canAddNewBarber ? `Maximum of ${MAX_ACTIVE_BARBERS} active barbers allowed` : ''}
+            disabled={barbers.length >= MAX_ACTIVE_BARBERS}
           >
-            <i className="bi bi-person-plus me-2"></i>
-            Add New Barber
+            <i className="bi bi-plus-lg"></i>
+            Add Professional Barber
           </button>
         )}
       </div>
 
-      {/* View Filter Tabs */}
-      <ul className="nav nav-tabs mb-4" role="tablist">
-        <li className="nav-item" role="presentation">
-          <button
-            className={`nav-link ${viewFilter === 'active' ? 'active' : ''}`}
-            onClick={() => setViewFilter('active')}
-            type="button"
-          >
-            <i className="bi bi-people me-2"></i>
-            Active Barbers
-          </button>
-        </li>
-        <li className="nav-item" role="presentation">
-          <button
-            className={`nav-link ${viewFilter === 'archived' ? 'active' : ''}`}
-            onClick={() => setViewFilter('archived')}
-            type="button"
-          >
-            <i className="bi bi-archive me-2"></i>
-            Archived Barbers
-          </button>
-        </li>
-      </ul>
+      {/* Modern Scrollable Tabs */}
+      <div style={styles.tabList} className="no-scrollbar">
+        <div
+          style={styles.tabItem(viewFilter === 'active')}
+          onClick={() => setViewFilter('active')}
+        >
+          <i className="bi bi-person-check-fill me-2"></i>
+          Active Team
+        </div>
+        <div
+          style={styles.tabItem(viewFilter === 'archived')}
+          onClick={() => setViewFilter('archived')}
+        >
+          <i className="bi bi-archive-fill me-2"></i>
+          Archive
+        </div>
+      </div>
 
       {error && (
-        <div className="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <div className="alert-mobile-custom mb-3 shake" style={{
+          backgroundColor: '#fff',
+          borderLeft: '4px solid #d32f2f',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
+          borderRadius: '16px',
+          padding: '1rem',
+          color: '#333'
+        }}>
           <div className="d-flex align-items-center justify-content-between">
-            <div>
-              <i className="bi bi-exclamation-triangle-fill me-2"></i>
-              {error}
+            <div className="d-flex align-items-center">
+              <i className="bi bi-exclamation-circle-fill text-danger me-2"></i>
+              <span className="small fw-bold">{error}</span>
             </div>
-            {error.includes('archive them instead') && barberToDelete && (
-              <button
-                className="btn btn-sm btn-outline-danger ms-3 fw-bold"
-                onClick={() => {
-                  setBarberToArchive(barberToDelete);
-                  setShowArchiveModal(true);
-                  setError(null);
-                }}
-              >
-                Archive this Barber Instead
-              </button>
-            )}
+            <button type="button" className="btn-close" style={{fontSize: '0.7rem'}} onClick={() => setError(null)}></button>
           </div>
-          <button
-            type="button"
-            className="btn-close"
-            onClick={() => setError(null)}
-            aria-label="Close"
-          ></button>
+          {error.includes('archive') && barberToDelete && (
+            <button
+              className="btn btn-sm btn-dark w-100 mt-2 rounded-pill"
+              onClick={() => {
+                setBarberToArchive(barberToDelete);
+                setShowArchiveModal(true);
+                setError(null);
+              }}
+            >
+              Archive Instead
+            </button>
+          )}
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="input-group mb-4">
-        <span className="input-group-text">
-          <i className="bi bi-search"></i>
-        </span>
+      {/* Styled Search Bar */}
+      <div style={styles.searchWrapper}>
+        <i className="bi bi-search" style={{
+          position: 'absolute',
+          left: '1.25rem',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: '#bbb',
+          fontSize: '1.1rem'
+        }}></i>
         <input
           type="text"
-          className="form-control"
-          placeholder="Search barbers..."
+          style={styles.searchInput}
+          placeholder="Lookup professional..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         {searchQuery && (
-          <button
-            className="btn btn-outline-secondary"
-            type="button"
+          <div
+            style={{
+              position: 'absolute',
+              right: '1.25rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#999',
+              cursor: 'pointer',
+              padding: '5px'
+            }}
             onClick={() => setSearchQuery('')}
           >
-            <i className="bi bi-x"></i>
-          </button>
+            <i className="bi bi-x-circle-fill"></i>
+          </div>
         )}
       </div>
 
-      {/* Barbers List */}
-      <div className="row">
+      {/* Barber Card Grid - Tablet/Desktop 2-3 cols, Mobile 1 col */}
+      <div className="mobile-grid">
         {filteredBarbers.length === 0 ? (
-          <div className="col-12">
-            <div className="card">
-              <div className="card-body text-center py-5">
-                <div className="text-muted mb-3">
-                  <i className="bi bi-people fs-1"></i>
-                </div>
-                <p>
-                  {searchQuery
-                    ? "No barbers found matching your search."
-                    : viewFilter === 'active'
-                      ? "No active barbers found. Click 'Add New Barber' to create one."
-                      : "No archived barbers found."}
-                </p>
-              </div>
-            </div>
+          <div className="text-center py-5 w-100 border rounded-4 bg-white">
+            <i className="bi bi-person-slash text-muted" style={{fontSize: '3rem'}}></i>
+            <h6 className="mt-3 text-muted fw-bold">No results match your search</h6>
           </div>
         ) : (
           filteredBarbers.map(barber => (
-            <div key={barber.id} className="col-md-6 col-lg-4 mb-4">
-              <div className={`card h-100 ${viewFilter === 'archived' ? 'border-warning' : ''}`}>
-                <div className="card-header d-flex justify-content-between align-items-center">
-                  <div className="d-flex align-items-center">
-                    <div
-                      className="d-flex align-items-center justify-content-center flex-shrink-0 me-3"
-                      style={{ cursor: 'pointer', zIndex: 2 }}
-                      onClick={(e) => { e.stopPropagation(); setExpandedProfileBarber(barber); }}
-                    >
-                      {barber.profile_picture_url ? (
-                        <img src={barber.profile_picture_url} alt={barber.full_name} style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
-                      ) : (
-                        <div className="bg-primary text-white d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: '0 2px 4px rgba(13,110,253,0.2)' }}>
-                          {barber.full_name ? barber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
-                        </div>
-                      )}
+            <div key={barber.id} style={styles.barberCard} className="barber-card-mobile h-100">
+              <div className="d-flex justify-content-between align-items-start mb-3">
+                <div onClick={() => setExpandedProfileBarber(barber)} className="avatar-touch-target">
+                  {barber.profile_picture_url ? (
+                    <img src={barber.profile_picture_url} alt={barber.full_name} style={styles.avatar} />
+                  ) : (
+                    <div style={styles.avatarPlaceholder}>
+                      {barber.full_name?.charAt(0).toUpperCase()}
                     </div>
-                    <h5 className="card-title mb-0 me-2">{barber.full_name}</h5>
-                    {viewFilter === 'archived' && (
-                      <span className="badge bg-warning text-dark">
-                        <i className="bi bi-archive me-1"></i>
-                        Archived
-                      </span>
-                    )}
-                  </div>
-                  <div className="dropdown">
-                    <button className="btn btn-sm btn-outline-secondary" type="button" id={`dropdown-${barber.id}`} data-bs-toggle="dropdown" aria-expanded="false">
-                      <i className="bi bi-three-dots-vertical"></i>
-                    </button>
-                    <ul className="dropdown-menu dropdown-menu-end" aria-labelledby={`dropdown-${barber.id}`}>
-                      {viewFilter === 'active' && (
-                        <>
-                          <li>
-                            <button className="dropdown-item" onClick={() => handleEdit(barber)}>
-                              <i className="bi bi-pencil me-2"></i>Edit
-                            </button>
-                          </li>
-                          <li>
-                            <button className="dropdown-item text-warning" onClick={() => handleArchiveClick(barber)}>
-                              <i className="bi bi-archive me-2"></i>Archive
-                            </button>
-                          </li>
-                        </>
-                      )}
-                      {viewFilter === 'archived' && (
-                        <li>
-                          <button className="dropdown-item text-success" onClick={() => handleUnarchiveClick(barber)}>
-                            <i className="bi bi-arrow-counterclockwise me-2"></i>Unarchive
-                          </button>
-                        </li>
-                      )}
-                      <li><hr className="dropdown-divider" /></li>
-                      <li>
-                        <button className="dropdown-item text-danger" onClick={() => handleDeleteClick(barber)}>
-                          <i className="bi bi-trash me-2"></i>Delete Permanently
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-                <div className="card-body">
-                  <div className="mb-3">
-                    <div className="d-flex align-items-center mb-2">
-                      <i className="bi bi-envelope text-muted me-2"></i>
-                      <span>{barber.email}</span>
-                    </div>
-                    {barber.phone && (
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-telephone text-muted me-2"></i>
-                        <span>{barber.phone}</span>
-                      </div>
-                    )}
-                    {barber.skills && (
-                      <div className="d-flex align-items-center">
-                        <i className="bi bi-award text-muted me-2"></i>
-                        <div>
-                          {barber.skills.split(',').map((skill, index) => (
-                            <span key={index} className="badge bg-primary me-1 mb-1">
-                              {skill.trim()}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Barber Stats */}
-                  {barberStats[barber.id] && (
-                    <div className="row text-center g-2 mt-3">
-                      <div className="col-6">
-                        <div className="bg-success bg-opacity-10 rounded p-2">
-                          <h6 className="mb-0">{barberStats[barber.id].completed}</h6>
-                          <small className="text-muted">Completed</small>
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <div className="bg-primary bg-opacity-10 rounded p-2">
-                          <h6 className="mb-0">{barberStats[barber.id].upcoming}</h6>
-                          <small className="text-muted">Upcoming</small>
-                        </div>
-                      </div>
+                  )}
+                  {viewFilter === 'archived' && (
+                    <div className="position-absolute translate-middle-y mt-2">
+                       <span className="badge bg-warning text-dark rounded-pill px-2" style={{fontSize: '0.6rem'}}>ARCHIVED</span>
                     </div>
                   )}
                 </div>
-                <div className="card-footer text-muted">
-                  <small>Joined: {formatDate(barber.created_at)}</small>
+                <div className="dropdown">
+                  <button 
+                    className="btn btn-light rounded-circle p-0 touch-btn" 
+                    style={{width: '40px', height: '40px'}}
+                    data-bs-toggle="dropdown"
+                  >
+                    <i className="bi bi-three-dots fs-5"></i>
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-end shadow-lg border-0 p-2 fade-in" style={{ borderRadius: '18px' }}>
+                    {viewFilter === 'active' ? (
+                      <>
+                        <li><button className="dropdown-item rounded-3 py-2" onClick={() => handleEdit(barber)}><i className="bi bi-pencil-square me-2"></i>Edit Profile</button></li>
+                        <li><button className="dropdown-item rounded-3 py-2 text-warning" onClick={() => handleArchiveClick(barber)}><i className="bi bi-archive-fill me-2"></i>Archive</button></li>
+                      </>
+                    ) : (
+                      <li><button className="dropdown-item rounded-3 py-2 text-success" onClick={() => handleUnarchiveClick(barber)}><i className="bi bi-arrow-up-circle-fill me-2"></i>Restore</button></li>
+                    )}
+                    <li><hr className="dropdown-divider opacity-50" /></li>
+                    <li><button className="dropdown-item rounded-3 py-2 text-danger" onClick={() => handleDeleteClick(barber)}><i className="bi bi-trash3-fill me-2"></i>Delete Forever</button></li>
+                  </ul>
                 </div>
               </div>
+
+              <div className="flex-grow-1">
+                <h5 className="fw-bold mb-1 text-dark">{barber.full_name}</h5>
+                <p className="text-muted mb-3 d-flex align-items-center" style={{fontSize: '0.85rem'}}>
+                  <i className="bi bi-envelope-at me-2 text-secondary"></i> {barber.email}
+                </p>
+
+                <div className="mb-4">
+                  <div className="d-flex flex-wrap gap-1">
+                    {barber.skills ? (
+                      barber.skills.split(',').map((skill, i) => (
+                        <span key={i} className="skill-badge">{skill.trim()}</span>
+                      ))
+                    ) : (
+                      <span className="text-muted small italic opacity-50">General Professional</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {barberStats[barber.id] && (
+                <div className="row g-2 mt-auto">
+                  <div className="col-6">
+                    <div style={styles.statBox}>
+                      <div className="fw-bold text-dark">{barberStats[barber.id].completed}</div>
+                      <div className="stat-label">Done</div>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div style={styles.statBox}>
+                      <div className="fw-bold text-dark">{barberStats[barber.id].upcoming}</div>
+                      <div className="stat-label">Next</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Responsive Form Modal */}
       {showModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {isEditing ? 'Edit Barber' : 'Add New Barber'}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={resetFormAndCloseModal}
-                ></button>
+        <div className="modal fade show d-block" style={styles.modal}>
+          <div className={`modal-dialog modal-dialog-centered ${windowWidth < 576 ? 'm-0 h-100' : ''}`}>
+            <div className="modal-content border-0 h-sm-100" style={styles.modalContent}>
+              <div className="modal-header border-0 p-4 pb-0">
+                <div className="w-100">
+                   {windowWidth < 576 && <div className="modal-drag-indicator mb-3 mx-auto"></div>}
+                   <h5 className="fw-bold m-0">{isEditing ? 'Update Professional' : 'New Specialist'}</h5>
+                </div>
+                <button type="button" className="btn-close" onClick={resetFormAndCloseModal}></button>
               </div>
-              <div className="modal-body">
-                {!isEditing && !canAddNewBarber && (
-                  <div className="alert alert-warning mb-3" role="alert">
-                    <i className="bi bi-exclamation-triangle me-2"></i>
-                    <strong>Limit Reached:</strong> You have reached the maximum limit of {MAX_ACTIVE_BARBERS} active barbers.
-                    Please archive an existing barber before adding a new one.
-                  </div>
-                )}
+              <div className="modal-body p-4 scroll-mobile-modal" style={{maxHeight: windowWidth < 576 ? '80vh' : 'auto', overflowY: 'auto'}}>
                 <form onSubmit={handleSubmit}>
                   {isEditing && (
-                    <div className="mb-4 d-flex flex-column align-items-center">
-                      <div className="position-relative mb-3">
+                    <div className="text-center mb-4">
+                      <div className="position-relative d-inline-block">
                         {formData.profile_picture_url ? (
-                          <img
-                            src={formData.profile_picture_url}
-                            alt="Profile"
-                            className="rounded-circle border border-3 border-primary shadow-sm"
-                            style={{ width: '120px', height: '120px', objectFit: 'cover' }}
-                          />
+                          <img src={formData.profile_picture_url} alt="Profile" className="rounded-4 border-3 border-dark shadow" style={{ width: '90px', height: '90px', objectFit: 'cover' }} />
                         ) : (
-                          <div
-                            className="rounded-circle border border-3 border-secondary d-flex align-items-center justify-content-center shadow-sm"
-                            style={{ width: '120px', height: '120px', backgroundColor: '#f8f9fa' }}
-                          >
-                            <i className="bi bi-person-fill text-secondary" style={{ fontSize: '3.5rem' }}></i>
+                          <div className="rounded-4 bg-light d-flex align-items-center justify-content-center border" style={{ width: '90px', height: '90px' }}>
+                            <i className="bi bi-person-plus-fill fs-1 text-muted"></i>
                           </div>
                         )}
-                        {uploadingImage && (
-                          <div className="position-absolute top-0 start-0 w-100 h-100 rounded-circle d-flex align-items-center justify-content-center bg-dark bg-opacity-50">
-                            <span className="spinner-border text-white" role="status"></span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="d-flex gap-2">
-                        <label className={`btn btn-primary btn-sm rounded-pill px-3 shadow-sm ${uploadingImage ? 'disabled' : ''}`} style={{ cursor: uploadingImage ? 'default' : 'pointer' }}>
-                          <i className="bi bi-camera me-1"></i>
-                          {formData.profile_picture_url ? 'Change' : 'Upload'} Picture
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            style={{ display: 'none' }}
-                            disabled={uploadingImage}
-                          />
+                        <label className="position-absolute bottom-0 end-0 bg-dark text-white rounded-circle d-flex align-items-center justify-content-center shadow-lg" style={{ width: '32px', height: '32px', cursor: 'pointer', border: '2px solid #fff' }}>
+                          <i className="bi bi-camera-fill" style={{fontSize: '0.8rem'}}></i>
+                          <input type="file" className="d-none" onChange={handleImageUpload} />
                         </label>
-                        {formData.profile_picture_url && (
-                          <button
-                            type="button"
-                            className="btn btn-outline-danger btn-sm rounded-pill px-3 shadow-sm"
-                            onClick={handleRemoveImage}
-                            disabled={uploadingImage}
-                          >
-                            <i className="bi bi-trash me-1"></i>
-                            Remove
-                          </button>
-                        )}
                       </div>
                     </div>
                   )}
 
-                  <div className="mb-3">
-                    <label htmlFor="full_name" className="form-label">Full Name</label>
+                  <div className="form-floating mb-3">
                     <input
                       type="text"
-                      className={`form-control ${formErrors.full_name ? 'is-invalid' : ''}`}
+                      className="form-control premium-input"
                       id="full_name"
+                      placeholder="John Doe"
                       name="full_name"
                       value={formData.full_name}
                       onChange={handleChange}
                       required
                     />
-                    {formErrors.full_name && (
-                      <div className="invalid-feedback">{formErrors.full_name}</div>
-                    )}
+                    <label htmlFor="full_name">Full Name</label>
                   </div>
 
-                  <div className="mb-3">
-                    <label htmlFor="email" className="form-label">Email</label>
+                  <div className="form-floating mb-3">
                     <input
                       type="email"
-                      className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
+                      className="form-control premium-input"
                       id="email"
+                      placeholder="name@example.com"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
+                      disabled={isEditing}
                       required
-                      disabled={isEditing} // Cannot change email for existing users
                     />
-                    {formErrors.email && (
-                      <div className="invalid-feedback">{formErrors.email}</div>
-                    )}
-                    {isEditing && (
-                      <div className="form-text d-flex justify-content-between align-items-center mt-2">
-                        <span>Email cannot be changed for existing users.</span>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-warning"
-                          onClick={handleResetPassword}
-                          disabled={loading}
-                        >
-                          <i className="bi bi-envelope me-1"></i> Send Password Reset
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {isEditing && (
-                    <div className="mb-3 p-3 bg-light rounded border">
-                      <label htmlFor="new_password" className="form-label text-danger fw-bold">
-                        <i className="bi bi-shield-lock me-1"></i> Override Password Directly
-                      </label>
-                      <div className="input-group">
-                        <input
-                          type="password"
-                          className="form-control border-danger border-opacity-50"
-                          id="new_password"
-                          name="new_password"
-                          value={formData.new_password}
-                          onChange={handleChange}
-                          placeholder="Force a new password (min. 6 characters)"
-                          minLength={6}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={handleForcePasswordUpdate}
-                          disabled={loading || !formData.new_password || formData.new_password.length < 6}
-                        >
-                          Override Now
-                        </button>
-                      </div>
-                      <small className="form-text text-muted">
-                        Use this if the barber has a dummy email (like janedoe@example.com) and cannot receive the reset email.
-                      </small>
-                    </div>
-                  )}
-
-                  <div className="mb-3">
-                    <label htmlFor="phone" className="form-label">Phone (optional)</label>
-                    <div style={{ position: 'relative' }}>
-                      <img
-                        src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png"
-                        alt="Philippines"
-                        style={{
-                          position: 'absolute',
-                          left: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          width: '20px',
-                          height: '15px',
-                          zIndex: 10,
-                          pointerEvents: 'none',
-                          objectFit: 'cover'
-                        }}
-                      />
-                      <input
-                        type="tel"
-                        className={`form-control ${formErrors.phone ? 'is-invalid' : ''}`}
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="+63XXXXXXXXXX"
-                        maxLength={13}
-                        style={{ paddingLeft: '45px' }}
-                      />
-                    </div>
-                    <small className="form-text text-muted">Format: +63 followed by 10 digits</small>
-                    {formErrors.phone && (
-                      <div className="invalid-feedback">{formErrors.phone}</div>
-                    )}
-                  </div>
-
-                  <div className="mb-3">
-                    <label htmlFor="skills" className="form-label">Skills (optional)</label>
-                    <input
-                      type="text"
-                      className={`form-control ${formErrors.skills ? 'is-invalid' : ''}`}
-                      id="skills"
-                      name="skills"
-                      value={formData.skills}
-                      onChange={handleChange}
-                      placeholder="e.g., Haircut, Beard Trim, Styling"
-                    />
-                    {formErrors.skills && (
-                      <div className="invalid-feedback">{formErrors.skills}</div>
-                    )}
-                    <div className="form-text">Enter specializations separated by commas</div>
+                    <label htmlFor="email">Email Address</label>
                   </div>
 
                   {!isEditing && (
-                    <div className="mb-3">
-                      <label htmlFor="password" className="form-label">Password</label>
+                    <div className="form-floating mb-3">
                       <input
                         type="password"
-                        className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
+                        className="form-control premium-input"
                         id="password"
+                        placeholder="Password"
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
-                        required={!isEditing}
+                        required
                         minLength={6}
                       />
-                      {formErrors.password && (
-                        <div className="invalid-feedback">{formErrors.password}</div>
-                      )}
-                      <div className="form-text">Password must be at least 6 characters long.</div>
+                      <label htmlFor="password">Initial Password</label>
                     </div>
                   )}
 
-                  <div className="d-flex justify-content-end gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={resetFormAndCloseModal}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={loading || (!isEditing && !canAddNewBarber)}
-                    >
+                  <div className="mb-3">
+                    <label className="small fw-bold text-uppercase text-muted mb-2 px-2">Phone Number</label>
+                    <div className="position-relative">
+                      <div className="position-absolute h-100 d-flex align-items-center px-3" style={{zIndex: 10}}>
+                        <img src="https://www.flagcolorcodes.com/data/flag-of-the-philippines.png" alt="PH" style={{ width: '22px', borderRadius: '2px' }} />
+                      </div>
+                      <input
+                        type="tel"
+                        className="form-control premium-input"
+                        style={{ paddingLeft: '3.5rem' }}
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="9xx xxx xxxx"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="small fw-bold text-uppercase text-muted mb-2 px-2">Expertise</label>
+                    <input
+                      type="text"
+                      className="form-control premium-input"
+                      name="skills"
+                      value={formData.skills}
+                      onChange={handleChange}
+                      placeholder="e.g. Fades, Grooming, Styling"
+                    />
+                  </div>
+
+                  {isEditing && (
+                    <div className="admin-zone p-3 mb-4 rounded-4">
+                      <div className="small fw-bold text-danger mb-2 d-flex align-items-center">
+                        <i className="bi bi-shield-lock-fill me-2"></i>
+                        ADMIN SECURITY OVERRIDE
+                      </div>
+                      <div className="input-group">
+                        <input
+                          type="password"
+                          className="form-control border-0 bg-white"
+                          placeholder="New Strength Password"
+                          name="new_password"
+                          value={formData.new_password}
+                          onChange={handleChange}
+                        />
+                        <button className="btn btn-danger px-3" type="button" onClick={handleForcePasswordUpdate}>
+                          RESET
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="d-grid gap-2 mb-2">
+                    <button type="submit" className="btn btn-dark btn-lg py-3 rounded-4 fw-bold shadow-dark" disabled={loading}>
                       {loading ? (
                         <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          Saving...
+                          <span className="spinner-border spinner-border-sm me-2"></span>
+                          SAVING DATA...
                         </>
-                      ) : (
-                        'Save Barber'
-                      )}
+                      ) : isEditing ? 'UPDATE PROFESSIONAL' : 'LAUNCH ACCOUNT'}
                     </button>
+                    <button type="button" className="btn btn-link text-muted py-2" onClick={resetFormAndCloseModal}>Dismiss Changes</button>
                   </div>
                 </form>
               </div>
@@ -1150,240 +1149,279 @@ const ManageBarbers = () => {
         </div>
       )}
 
-      {/* Archive Confirmation Modal */}
-      {showArchiveModal && barberToArchive && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header border-0">
-                <h5 className="modal-title d-flex align-items-center">
-                  <i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-                  Archive Barber
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={handleArchiveCancel}
-                  disabled={loading}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <p>
-                  Are you sure you want to archive <strong>{barberToArchive.full_name}</strong>?
-                </p>
-                <p className="text-muted mb-0">
-                  The barber will no longer appear in the active barbers list. You can view and unarchive them from the Archived Barbers tab.
-                </p>
-              </div>
-              <div className="modal-footer border-0">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleArchiveCancel}
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-warning"
-                  onClick={handleArchiveConfirm}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Archiving...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-archive me-2"></i>
-                      Archive Barber
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Unarchive Confirmation Modal */}
-      {showUnarchiveModal && barberToUnarchive && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header border-0">
-                <h5 className="modal-title d-flex align-items-center">
-                  <i className="bi bi-check-circle-fill text-success me-2"></i>
-                  Unarchive Barber
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={handleUnarchiveCancel}
-                  disabled={loading}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <p>
-                  Are you sure you want to unarchive <strong>{barberToUnarchive.full_name}</strong>?
-                </p>
-                {!canUnarchive && (
-                  <div className="alert alert-warning mt-3 mb-0" role="alert">
-                    <i className="bi bi-exclamation-triangle me-2"></i>
-                    <strong>Limit Reached:</strong> Maximum limit of {MAX_ACTIVE_BARBERS} active barbers reached.
-                    Please archive an existing barber before unarchiving this one.
-                  </div>
-                )}
-                {canUnarchive && (
-                  <p className="text-muted mb-0">
-                    The barber will be restored to the active barbers list and will be available for appointments again.
-                  </p>
-                )}
-              </div>
-              <div className="modal-footer border-0">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleUnarchiveCancel}
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-success"
-                  onClick={handleUnarchiveConfirm}
-                  disabled={loading || !canUnarchive}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Unarchiving...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-arrow-counterclockwise me-2"></i>
-                      Unarchive Barber
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow-lg">
-              <div className="modal-body text-center p-5">
-                <div className="mb-4">
-                  <i className="bi bi-check-circle-fill text-success" style={{ fontSize: '4rem' }}></i>
+      {/* Styled Interaction Modals */}
+      {showArchiveModal && (
+        <div className="modal fade show d-block" style={styles.modal}>
+          <div className="modal-dialog modal-dialog-centered modal-sm p-3">
+            <div className="modal-content border-0 card-shadow-lg" style={{borderRadius: '28px'}}>
+              <div className="modal-body p-4 text-center">
+                <div className="mb-3 mx-auto d-flex align-items-center justify-content-center" style={{width: '64px', height: '64px', backgroundColor: '#fff3e0', borderRadius: '20px'}}>
+                   <i className="bi bi-archive-fill text-warning fs-2"></i>
                 </div>
-                <h3 className="fw-bold mb-3">User Registered!</h3>
-                <p className="text-muted mb-4">{successMessage}</p>
-                <button
-                  className="btn btn-success px-5 py-2 rounded-pill fw-bold"
-                  onClick={() => setShowSuccessModal(false)}
-                >
-                  Dismiss
-                </button>
+                <h5 className="fw-800">Archive Team Member?</h5>
+                <p className="small text-muted mb-4 px-2">Profile will be moved to the archive. You can restore them anytime.</p>
+                <div className="d-grid gap-2">
+                  <button className="btn btn-warning py-3 rounded-pill fw-bold" onClick={handleArchiveConfirm}>Archive Now</button>
+                  <button className="btn btn-link text-muted" onClick={() => setShowArchiveModal(false)}>Keep Active</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Modal */}
+      {showUnarchiveModal && (
+        <div className="modal fade show d-block" style={styles.modal}>
+          <div className="modal-dialog modal-dialog-centered modal-sm p-3">
+            <div className="modal-content border-0 card-shadow-lg" style={{borderRadius: '28px'}}>
+              <div className="modal-body p-4 text-center">
+                <div className="mb-3 mx-auto d-flex align-items-center justify-content-center" style={{width: '64px', height: '64px', backgroundColor: '#e8f5e9', borderRadius: '20px'}}>
+                   <i className="bi bi-arrow-up-circle-fill text-success fs-2"></i>
+                </div>
+                <h5 className="fw-800">Restore Specialist?</h5>
+                <p className="small text-muted mb-4 px-2">Move this specialist back to the active team roster?</p>
+                <div className="d-grid gap-2">
+                  <button className="btn btn-success py-3 rounded-pill fw-bold" onClick={handleUnarchiveConfirm}>Restore to Team</button>
+                  <button className="btn btn-link text-muted" onClick={() => setShowUnarchiveModal(false)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeleteModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow">
-              <div className="modal-header bg-danger text-white">
-                <h5 className="modal-title">Delete Barber Permanently</h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setShowDeleteModal(false)}
-                ></button>
-              </div>
-              <div className="modal-body p-4">
-                <div className="text-center mb-4">
-                  <i className="bi bi-exclamation-octagon text-danger" style={{ fontSize: '3rem' }}></i>
+        <div className="modal fade show d-block" style={styles.modal}>
+          <div className="modal-dialog modal-dialog-centered modal-sm p-3">
+            <div className="modal-content border-0 card-shadow-lg" style={{borderRadius: '28px'}}>
+              <div className="modal-body p-4 text-center">
+                <div className="mb-3 mx-auto d-flex align-items-center justify-content-center" style={{width: '64px', height: '64px', backgroundColor: '#ffebee', borderRadius: '20px'}}>
+                   <i className="bi bi-trash3-fill text-danger fs-2"></i>
                 </div>
-                <p className="text-center fw-bold">Warning: This action is irreversible.</p>
-                <p>Are you sure you want to permanently delete <strong>{barberToDelete?.full_name}</strong> from the database?</p>
-                <p className="small text-danger">
-                  <i className="bi bi-info-circle me-1"></i>
-                  Note: Deletion will fail if the barber has appointments or other related records. In that case, use <strong>Archive</strong> instead.
-                </p>
-              </div>
-              <div className="modal-footer border-0">
-                <button
-                  type="button"
-                  className="btn btn-light"
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger px-4"
-                  onClick={handleDeleteConfirm}
-                  disabled={loading}
-                >
-                  {loading ? 'Deleting...' : 'Permanently Delete'}
-                </button>
+                <h5 className="fw-800 text-danger">Purge Record?</h5>
+                <p className="small text-muted mb-4 px-2 italic">This is permanent. We recommend Archiving instead.</p>
+                <div className="d-grid gap-2">
+                  <button className="btn btn-danger py-3 rounded-pill fw-bold" onClick={handleDeleteConfirm}>Delete Forever</button>
+                  <button className="btn btn-link text-muted" onClick={() => setShowDeleteModal(false)}>Go Back</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Expanded Profile Modal */}
-      {expandedProfileBarber && (
-        <div className="modal-backdrop fade show" style={{ zIndex: 1070 }} onClick={() => setExpandedProfileBarber(null)}></div>
-      )}
-      {expandedProfileBarber && (
-        <div className="modal fade show d-block" tabIndex="-1" style={{ zIndex: 1071 }} onClick={() => setExpandedProfileBarber(null)}>
-          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
-            <div className="modal-content border-0 overflow-hidden shadow-lg" style={{ borderRadius: '24px' }}>
-              <div className="modal-header border-0 bg-transparent p-3 position-absolute top-0 w-100 z-3" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%)' }}>
-                <button type="button" className="btn-close btn-close-white ms-auto bg-dark bg-opacity-50 rounded-circle shadow-sm p-2" onClick={() => setExpandedProfileBarber(null)}></button>
+      {showSuccessModal && (
+        <div className="modal fade show d-block" style={styles.modal}>
+          <div className="modal-dialog modal-dialog-centered modal-sm p-3">
+            <div className="modal-content border-0 card-shadow-lg" style={{borderRadius: '28px'}}>
+              <div className="modal-body p-4 text-center">
+                <div className="mb-3 mx-auto d-flex align-items-center justify-content-center" style={{width: '64px', height: '64px', backgroundColor: '#e8f5e9', borderRadius: '20px'}}>
+                   <i className="bi bi-check-all text-success fs-1"></i>
+                </div>
+                <h5 className="fw-800">Account Ready!</h5>
+                <p className="small text-muted">{successMessage}</p>
+                <button className="btn btn-dark w-100 mt-3 py-3 rounded-pill fw-bold" onClick={() => setShowSuccessModal(false)}>Excellent</button>
               </div>
-              <div className="modal-body p-0 text-center position-relative">
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Expanded View - Full Screen for Mobile */}
+      {expandedProfileBarber && (
+        <div className="modal fade show d-block" style={styles.modal} onClick={() => setExpandedProfileBarber(null)}>
+          <div className={`modal-dialog ${windowWidth < 576 ? 'modal-fullscreen' : 'modal-dialog-centered'}`} onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 overflow-hidden" style={{ borderRadius: windowWidth < 576 ? '0' : '32px' }}>
+              <div className="position-relative">
                 {expandedProfileBarber.profile_picture_url ? (
-                  <img
-                    src={expandedProfileBarber.profile_picture_url}
-                    alt={expandedProfileBarber.full_name}
-                    className="img-fluid w-100"
-                    style={{ minHeight: '300px', maxHeight: '450px', objectFit: 'cover' }}
-                  />
+                  <img src={expandedProfileBarber.profile_picture_url} alt="" style={{ width: '100%', height: windowWidth < 576 ? '60vh' : '450px', objectFit: 'cover' }} />
                 ) : (
-                  <div className="bg-primary text-white d-flex flex-column align-items-center justify-content-center w-100" style={{ height: '350px', fontSize: '6rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)' }}>
-                    {expandedProfileBarber.full_name ? expandedProfileBarber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
+                  <div style={{ height: windowWidth < 576 ? '50vh' : '350px', backgroundColor: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12rem', color: '#fff', fontWeight: '800' }}>
+                    {expandedProfileBarber.full_name?.charAt(0)}
                   </div>
                 )}
-                <div className="bg-white p-4 text-start position-relative z-2" style={{ marginTop: '-20px', borderRadius: '24px 24px 0 0', boxShadow: '0 -10px 20px rgba(0,0,0,0.05)' }}>
-                  <h4 className="fw-bold mb-1">{expandedProfileBarber.full_name}</h4>
-                  <div className="d-flex flex-wrap gap-2 mt-2">
-                    <span className="badge bg-light text-dark shadow-sm py-2 px-3 fw-bold">
-                      <i className="bi bi-star-fill text-warning me-1"></i>
-                      {expandedProfileBarber.average_rating || '0'} <span className="text-muted fw-normal ms-1">({expandedProfileBarber.total_ratings || 0} reviews)</span>
-                    </span>
-                    {expandedProfileBarber.skills && expandedProfileBarber.skills.split(',').map((skill, i) => (
-                      <span key={i} className="badge bg-primary bg-opacity-10 text-primary shadow-sm py-2 px-3">{skill.trim()}</span>
-                    ))}
-                  </div>
+                <div className="position-absolute top-0 start-0 w-100 p-3 d-flex justify-content-between">
+                  <button onClick={() => setExpandedProfileBarber(null)} className="btn btn-blur rounded-circle p-0" style={{ width: '44px', height: '44px' }}>
+                    <i className="bi bi-arrow-left fs-4"></i>
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 bg-white" style={{marginTop: '-40px', borderRadius: '40px 40px 0 0', position: 'relative', zIndex: 10, minHeight: '40vh'}}>
+                <div className="d-flex justify-content-between align-items-center">
+                   <h2 className="fw-800 mb-0">{expandedProfileBarber.full_name}</h2>
+                   <span className="badge bg-light text-dark shadow-sm py-2 px-3 rounded-pill fw-800" style={{fontSize: '1rem'}}>
+                      <i className="bi bi-star-fill text-warning me-1"></i> NEW
+                   </span>
+                </div>
+                <p className="text-secondary mt-2 mb-4 d-flex align-items-center">
+                   <i className="bi bi-shield-check-fill text-dark me-2"></i> Verified Professional Team Member
+                </p>
+                
+                <h6 className="fw-800 text-uppercase small text-dark opacity-50 letter-spacing-1 mb-3">Specializations</h6>
+                <div className="d-flex flex-wrap gap-2 mb-5">
+                  {expandedProfileBarber.skills ? (
+                    expandedProfileBarber.skills.split(',').map((s, i) => (
+                      <span key={i} className="skill-pill">{s.trim()}</span>
+                    ))
+                  ) : <span className="skill-pill">Full Service Styling</span>}
+                </div>
+                
+                <div className="d-grid">
+                   <button className="btn btn-dark py-3 rounded-4 fw-bold" onClick={() => setExpandedProfileBarber(null)}>Close Profile View</button>
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Global Responsive Overrides */}
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @media (min-width: 768px) {
+          .mobile-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+          }
+        }
+        
+        @media (min-width: 1200px) {
+          .mobile-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        .barber-card-mobile {
+          transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .barber-card-mobile:active {
+          transform: scale(0.98);
+        }
+
+        .skill-badge {
+          font-size: 0.65rem;
+          padding: 0.35rem 0.75rem;
+          border-radius: 10px;
+          background-color: #f3f3f3;
+          color: #333;
+          font-weight: 700;
+          text-transform: uppercase;
+          border: 1px solid #eee;
+        }
+
+        .skill-pill {
+          background: #000;
+          color: #fff;
+          padding: 0.6rem 1.4rem;
+          border-radius: 16px;
+          font-weight: 600;
+          font-size: 0.85rem;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .stat-label {
+          font-size: 0.6rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #bdbdbd;
+          letter-spacing: 0.5px;
+          margin-top: 2px;
+        }
+
+        .touch-btn {
+          transition: all 0.2s ease;
+          border: none !important;
+          background: #f8f9fa !important;
+        }
+
+        .touch-btn:active {
+          background: #eee !important;
+          transform: scale(0.9);
+        }
+
+        .premium-input {
+          border-radius: 16px !important;
+          border: 1.5px solid #eee !important;
+          background-color: #fafafa !important;
+          padding-top: 1.625rem !important;
+          padding-bottom: 0.625rem !important;
+        }
+
+        .premium-input:focus {
+          border-color: #000 !important;
+          box-shadow: 0 0 0 4px rgba(0,0,0,0.05) !important;
+          background-color: #fff !important;
+        }
+
+        .modal-drag-indicator {
+          width: 40px;
+          height: 5px;
+          background: #ddd;
+          border-radius: 10px;
+        }
+
+        .admin-zone {
+          background: #fff5f5;
+          border: 1px dashed #feb2b2;
+        }
+
+        .btn-blur {
+          background: rgba(255,255,255,0.7);
+          backdrop-filter: blur(10px);
+          border: none;
+          color: #000;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .fw-800 { font-weight: 800; }
+        .letter-spacing-1 { letter-spacing: 1px; }
+        .shadow-dark { boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }
+        
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Mobile Slide Up Animation for Modals */
+        @media (max-width: 575.98px) {
+          .modal.show .modal-dialog {
+            transform: translateY(0);
+          }
+          .modal .modal-dialog {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: flex-end;
+            margin: 0;
+            height: 100%;
+          }
+          .modal-content {
+            border-radius: 30px 30px 0 0 !important;
+            max-height: 92%;
+          }
+        }
+
+        .avatar-touch-target {
+          cursor: pointer;
+          position: relative;
+          transition: transform 0.2s ease;
+        }
+        
+        .avatar-touch-target:active {
+          transform: scale(0.95);
+        }
+
+        @keyframes shake {
+          0%, 100% {transform: translateX(0);}
+          10%, 30%, 50%, 70%, 90% {transform: translateX(-5px);}
+          20%, 40%, 60%, 80% {transform: translateX(5px);}
+        }
+      `}</style>
     </div>
   );
 };

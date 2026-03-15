@@ -1,0 +1,366 @@
+/* Barber Dashboard Global Styles */
+:root {
+  --barber-black: #121212;
+  --barber-dark-brown: #3d2b1f;
+  --barber-brown: #5c4033;
+  --barber-light-brown: #a67c52;
+  --barber-white: #ffffff;
+  --barber-light-gray: #f5f5f5;
+  --barber-medium-gray: #e0e0e0;
+}
+
+.dashboard-container {
+  background-color: var(--barber-light-gray);
+  min-height: 100vh;
+}
+
+.barber-welcome-header {
+  background: linear-gradient(135deg, var(--barber-black) 0%, var(--barber-dark-brown) 100%) !important;
+  border-left: 6px solid var(--barber-light-brown) !important;
+  color: var(--barber-white) !important;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.barber-welcome-header .dashboard-logo {
+  background-color: var(--barber-white);
+  padding: 5px;
+  border-radius: 8px;
+}
+
+.quick-action-item {
+  background: var(--barber-white) !important;
+  border: 1px solid var(--barber-medium-gray) !important;
+  color: var(--barber-black) !important;
+}
+
+.quick-action-item:hover {
+  background: var(--barber-light-gray) !important;
+  border-color: var(--barber-light-brown) !important;
+  transform: translateY(-5px);
+}
+
+.quick-action-icon-wrapper {
+  background: var(--barber-light-gray) !important;
+  border: 1px solid var(--barber-medium-gray);
+}
+
+.quick-action-icon-wrapper.primary-action { color: var(--barber-black); }
+.quick-action-icon-wrapper.info-action { color: var(--barber-brown); }
+.quick-action-icon-wrapper.warning-action { color: var(--barber-light-brown); }
+.quick-action-icon-wrapper.success-action { color: var(--barber-black); }
+
+.stat-card-minimal {
+  border-radius: 16px !important;
+  border: none !important;
+  background: var(--barber-white) !important;
+  transition: all 0.3s ease;
+}
+
+.stat-card-minimal:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08) !important;
+}
+
+.stat-icon-small {
+  width: 48px;
+  height: 48px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--barber-light-gray) !important;
+  font-size: 1.25rem;
+}
+
+.stat-icon-small.text-success { color: var(--barber-black) !important; }
+.stat-icon-small.text-primary { color: var(--barber-brown) !important; }
+.stat-icon-small.text-warning { color: var(--barber-light-brown) !important; }
+.stat-icon-small.text-info { color: var(--barber-black) !important; }
+
+.serving-card-cockpit {
+  border-radius: 20px !important;
+  background: var(--barber-white) !important;
+  border: 1px solid var(--barber-medium-gray) !important;
+}
+
+.serving-accent-mini {
+  background: linear-gradient(135deg, var(--barber-dark-brown) 0%, var(--barber-black) 100%) !important;
+  width: 100px;
+}
+
+.avatar-serving-mini {
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-dark-finish {
+  background: var(--barber-black) !important;
+  color: var(--barber-white) !important;
+  border: none !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn-dark-finish:hover {
+  background: var(--barber-brown) !important;
+}
+
+.modern-queue-item-mini {
+  transition: all 0.2s ease;
+}
+
+.modern-queue-item-mini:hover {
+  background-color: var(--barber-light-gray) !important;
+}
+
+.queue-num-mini {
+  width: 32px;
+  height: 32px;
+  background: var(--barber-brown);
+  color: var(--barber-white);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.action-button-mini {
+  background: var(--barber-white);
+  border: 1px solid var(--barber-medium-gray);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.action-button-mini:hover {
+  border-color: var(--barber-brown);
+  background: var(--barber-light-gray);
+}
+
+.action-icon-mini {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.action-icon-mini.bg-primary-subtle { background: var(--barber-light-gray) !important; color: var(--barber-black) !important; }
+.action-icon-mini.bg-info-subtle { background: var(--barber-light-gray) !important; color: var(--barber-brown) !important; }
+.action-icon-mini.bg-warning-subtle { background: var(--barber-light-gray) !important; color: var(--barber-light-brown) !important; }
+.action-icon-mini.bg-success-subtle { background: var(--barber-light-gray) !important; color: var(--barber-black) !important; }
+
+/* Review cards */
+.review-card-premium {
+  background: var(--barber-white) !important;
+  border: 1px solid var(--barber-medium-gray) !important;
+}
+
+.avatar-circle-sm {
+  background: var(--barber-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+.text-warning {
+  color: var(--barber-light-brown) !important;
+}
+
+/* Modals */
+.modal-content {
+  border-radius: 20px !important;
+  border: none !important;
+}
+
+.modal-header.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--barber-black) 0%, var(--barber-dark-brown) 100%) !important;
+}
+
+/* Overriding Bootstrap Primary classes for this context */
+.dashboard-container .text-primary {
+  color: var(--barber-brown) !important;
+}
+
+.dashboard-container .btn-primary {
+  background-color: var(--barber-brown) !important;
+  border-color: var(--barber-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .btn-primary:hover {
+  background-color: var(--barber-dark-brown) !important;
+  border-color: var(--barber-dark-brown) !important;
+}
+
+.dashboard-container .bg-primary {
+  background-color: var(--barber-brown) !important;
+}
+
+.dashboard-container .btn-outline-primary {
+  color: var(--barber-brown) !important;
+  border-color: var(--barber-brown) !important;
+}
+
+.dashboard-container .btn-outline-primary:hover {
+  background-color: var(--barber-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .alert-danger {
+  background-color: var(--barber-light-gray) !important;
+  color: var(--barber-black) !important;
+  border-left: 4px solid #cc0000 !important;
+}
+
+.dashboard-container .badge.bg-primary {
+  background-color: var(--barber-brown) !important;
+}
+
+.dashboard-container .badge.bg-success {
+  background-color: var(--barber-black) !important;
+}
+
+.dashboard-container .text-success {
+  color: var(--barber-dark-brown) !important;
+}
+
+.dashboard-container .badge.bg-warning {
+  background-color: var(--barber-light-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .card-header.bg-warning {
+  background-color: var(--barber-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+/* More overrides to eliminate non-palette colors */
+.dashboard-container .bg-info,
+.dashboard-container .btn-info,
+.dashboard-container .badge.bg-info {
+  background-color: var(--barber-light-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .text-info {
+  color: var(--barber-light-brown) !important;
+}
+
+.dashboard-container .bg-success,
+.dashboard-container .btn-success,
+.dashboard-container .badge.bg-success {
+  background-color: var(--barber-black) !important;
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .text-success {
+  color: var(--barber-dark-brown) !important;
+}
+
+.dashboard-container .bg-warning,
+.dashboard-container .btn-warning,
+.dashboard-container .badge.bg-warning {
+  background-color: var(--barber-brown) !important;
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .text-warning {
+  color: var(--barber-brown) !important;
+}
+
+.dashboard-container .alert-info {
+  background-color: var(--barber-light-gray) !important;
+  color: var(--barber-black) !important;
+  border-left: 4px solid var(--barber-light-brown) !important;
+}
+
+.dashboard-container .alert-success {
+  background-color: var(--barber-light-gray) !important;
+  color: var(--barber-black) !important;
+  border-left: 4px solid var(--barber-black) !important;
+}
+
+.dashboard-container .form-control:focus,
+.dashboard-container .form-select:focus {
+  border-color: var(--barber-brown) !important;
+  box-shadow: 0 0 0 0.25rem rgba(92, 64, 51, 0.2) !important;
+}
+
+/* Strict Palette Enforcement */
+.dashboard-container a,
+.dashboard-container .link-primary,
+.dashboard-container .nav-link {
+  color: var(--barber-brown) !important;
+}
+
+.dashboard-container a:hover {
+  color: var(--barber-dark-brown) !important;
+}
+
+.dashboard-container .bg-danger,
+.dashboard-container .btn-danger,
+.dashboard-container .badge.bg-danger {
+  background-color: var(--barber-brown) !important; /* Replacing Red with Brown */
+  color: var(--barber-white) !important;
+}
+
+.dashboard-container .text-danger {
+  color: var(--barber-brown) !important;
+}
+
+.dashboard-container .bg-light {
+  background-color: var(--barber-light-gray) !important;
+}
+
+.dashboard-container .border-light-subtle {
+  border-color: var(--barber-medium-gray) !important;
+}
+
+/* Utility Classes */
+.text-barber-brown { color: var(--barber-brown) !important; }
+.text-barber-black { color: var(--barber-black) !important; }
+.text-barber-gray { color: #666666 !important; }
+
+.bg-barber-brown { background-color: var(--barber-brown) !important; }
+.bg-barber-black { background-color: var(--barber-black) !important; }
+.bg-barber-light-gray { background-color: var(--barber-light-gray) !important; }
+
+/* Dashboard Background */
+.dashboard-container.container-fluid {
+  background-color: var(--barber-light-gray);
+  padding-bottom: 3rem !important;
+}
+
+/* Section Dividers */
+.dashboard-container hr {
+  border-color: var(--barber-medium-gray);
+  opacity: 1;
+}
+
+/* Premium Typography */
+.dashboard-container .fw-black {
+  font-weight: 800 !important;
+  color: var(--barber-black);
+}
+
+.dashboard-container .fw-bold {
+  color: var(--barber-black);
+}
+
+.dashboard-container .text-muted {
+  color: #888888 !important;
+}

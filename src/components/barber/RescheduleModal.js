@@ -14,6 +14,20 @@ const RescheduleModal = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [addOnsDisplay, setAddOnsDisplay] = useState('');
+  
+  // Helper to format time strings
+  const formatTime = (timeString) => {
+    if (!timeString) return null;
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours, 10);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      return `${hour % 12 || 12}:${minutes} ${period}`;
+    } catch (e) {
+      return timeString;
+    }
+  };
+
   const isSubmittingRef = useRef(false);
   const lastRequestIdRef = useRef(null); // Track the last request ID to prevent duplicates
 
@@ -247,218 +261,135 @@ const RescheduleModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">
-              <i className="bi bi-arrow-repeat me-2"></i>
-              Reschedule Appointment
-            </h5>
+    <div className="modal show d-block premium-modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content border-0 shadow-ultra-premium overflow-hidden" style={{ borderRadius: '24px' }}>
+          {/* Header with Dark Gradient Background */}
+          <div className="modal-header border-0 p-4" style={{ background: 'linear-gradient(135deg, #2c1810 0%, #000000 100%)' }}>
+            <div className="d-flex align-items-center gap-3">
+              <div className="bg-warning bg-opacity-20 text-warning p-2 rounded-3 d-flex align-items-center justify-content-center" style={{ width: '45px', height: '45px' }}>
+                <i className="bi bi-arrow-repeat fs-4"></i>
+              </div>
+              <div>
+                <h5 className="modal-title fw-black text-white mb-0" style={{ letterSpacing: '-0.5px' }}>Reschedule Request</h5>
+                <p className="text-white-50 small mb-0">Adjust the booking for {appointment.customer?.full_name}</p>
+              </div>
+            </div>
             <button 
               type="button" 
-              className="btn-close" 
+              className="btn-close btn-close-white shadow-none" 
               onClick={onClose}
               disabled={loading}
+              aria-label="Close"
             ></button>
           </div>
           
           <form onSubmit={handleSubmit}>
-            <div className="modal-body">
+            <div className="modal-body p-4 scroll-container-minimal" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* Context Summary Card */}
               <div className="mb-4">
-                <h6 className="text-primary mb-3">
-                  <i className="bi bi-calendar-event me-2"></i>
-                  Current Appointment Details
-                </h6>
-                <div className="card border-0 bg-light">
+                <div className="card border-0 bg-light rounded-4 overflow-hidden">
                   <div className="card-body p-3">
                     <div className="row g-3">
-                      <div className="col-12 col-sm-6">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-calendar-date text-primary me-2"></i>
-                          <div>
-                            <small className="text-muted d-block">Date</small>
-                            <strong>{new Date(appointment.appointment_date).toLocaleDateString('en-US', { 
-                              weekday: 'long', 
-                              year: 'numeric', 
-                              month: 'long', 
-                              day: 'numeric' 
-                            })}</strong>
-                          </div>
+                      <div className="col-6">
+                        <div className="small text-muted text-uppercase fw-bold mb-1" style={{ fontSize: '0.65rem', letterSpacing: '1px' }}>Date</div>
+                        <div className="fw-semibold text-dark small">
+                          {new Date(appointment.appointment_date).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })} • {formatTime(appointment.appointment_time) || 'Queue'}
                         </div>
                       </div>
-                      <div className="col-12 col-sm-6">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-list-ol text-primary me-2"></i>
-                          <div>
-                            <small className="text-muted d-block">Queue Position</small>
-                            <strong>
-                              {appointment.queue_position ? `#${appointment.queue_position}` : 'Not assigned'}
-                            </strong>
-                          </div>
-                        </div>
+                      <div className="col-6">
+                        <div className="small text-muted text-uppercase fw-bold mb-1" style={{ fontSize: '0.65rem', letterSpacing: '1px' }}>Service</div>
+                        <div className="fw-semibold text-dark small truncate">{appointment.service?.name || 'Multiple'}</div>
                       </div>
-                      <div className="col-12 col-sm-6">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-person-badge text-primary me-2"></i>
-                          <div>
-                            <small className="text-muted d-block">Customer</small>
-                            <strong>{appointment.customer?.full_name || 'N/A'}</strong>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-12 col-sm-6">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-tag text-primary me-2"></i>
-                          <div>
-                            <small className="text-muted d-block">Type</small>
-                            <span className="badge bg-warning">
-                              Queue
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-12 col-sm-6">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-scissors text-primary me-2"></i>
-                          <div>
-                            <small className="text-muted d-block">Services</small>
-                            <strong>
-                              {appointment.service?.name || appointment.services_data ? 
-                                (Array.isArray(appointment.services_data) ? 
-                                  appointment.services_data.length + ' service(s)' : 
-                                  'Service') : 
-                                'N/A'}
-                            </strong>
-                          </div>
-                        </div>
-                      </div>
-                      {addOnsDisplay && (
-                        <div className="col-12 col-sm-6">
-                          <div className="d-flex align-items-center">
-                            <i className="bi bi-plus-circle text-primary me-2"></i>
-                            <div>
-                              <small className="text-muted d-block">Add-ons</small>
-                              <strong className="text-info">{addOnsDisplay || 'None'}</strong>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mb-4">
-                <h6 className="text-success mb-3">
-                  <i className="bi bi-calendar-check me-2"></i>
-                  New Appointment Details
-                </h6>
-                
-                <div className="row g-3">
-                  <div className="col-12">
-                    <div className="alert alert-info mb-3">
-                      <i className="bi bi-info-circle me-2"></i>
-                      <strong>Queue-Only System:</strong> The appointment will remain as a queue appointment on the new date. 
-                      The customer will join the queue on the selected date.
-                    </div>
-                  </div>
-
-                  <div className="col-12 col-md-6">
-                    <label htmlFor="newDate" className="form-label fw-semibold">
-                      <i className="bi bi-calendar-date me-2"></i>
-                      New Date *
-                    </label>
+              {/* Input Section */}
+              <div className="space-y-4">
+                <div className="mb-4">
+                  <label htmlFor="newDate" className="form-label small fw-black text-muted text-uppercase mb-2 d-block" style={{ letterSpacing: '1px' }}>
+                    Select New Date
+                  </label>
+                  <div className="position-relative">
+                    <i className="bi bi-calendar3 position-absolute top-50 start-0 translate-middle-y ms-3 text-primary"></i>
                     <input
                       type="date"
                       id="newDate"
-                      className="form-control"
+                      className="form-control ps-5 py-3 rounded-4 border-light-subtle bg-white shadow-sm"
                       value={newDate}
                       onChange={handleDateChange}
                       min={new Date().toISOString().split('T')[0]}
                       required
                       disabled={loading}
                     />
-                    <div className="form-text mt-2">
-                      <i className="bi bi-info-circle me-1"></i>
-                      The customer will be added to the queue on this date.
-                    </div>
-                  </div>
-
-                  <div className="col-12 col-md-6">
-                    <label className="form-label fw-semibold">
-                      <i className="bi bi-list-check me-2"></i>
-                      Appointment Type
-                    </label>
-                    <div className="form-control bg-light">
-                      <span className="badge bg-warning me-2">
-                        <i className="bi bi-list-ol me-1"></i>
-                        Queue
-                      </span>
-                      <small className="text-muted">Queue appointments don't have specific time slots</small>
-                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="mb-4">
-                <label htmlFor="reason" className="form-label fw-semibold">
-                  <i className="bi bi-chat-text me-2"></i>
-                  Reason for Rescheduling *
-                </label>
-                <textarea
-                  id="reason"
-                  className="form-control border-2"
-                  rows="4"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Please explain why you need to reschedule this appointment..."
-                  required
-                  disabled={loading}
-                  style={{ resize: 'vertical' }}
-                />
-                <div className="form-text mt-2">
-                  <i className="bi bi-info-circle me-1"></i>
-                  The customer will receive a notification to confirm or decline this reschedule request.
+                <div className="mb-4">
+                  <label htmlFor="reason" className="form-label small fw-black text-muted text-uppercase mb-2 d-block" style={{ letterSpacing: '1px' }}>
+                    Reason for Change
+                  </label>
+                  <textarea
+                    id="reason"
+                    className="form-control rounded-4 border-light-subtle bg-white shadow-sm p-3"
+                    rows="3"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Short message for the customer..."
+                    required
+                    disabled={loading}
+                    style={{ resize: 'none' }}
+                  />
+                  <div className="form-text mt-2 small text-muted">
+                    <i className="bi bi-info-circle me-1"></i>
+                    The customer must approve this request before the change is finalized.
+                  </div>
                 </div>
               </div>
 
               {error && (
-                <div className="alert alert-danger">
-                  <i className="bi bi-exclamation-triangle me-2"></i>
-                  {error}
+                <div className="alert alert-danger border-0 rounded-4 py-3 d-flex align-items-center">
+                  <i className="bi bi-exclamation-circle-fill me-3 fs-4"></i>
+                  <div className="small fw-medium">{error}</div>
                 </div>
               )}
             </div>
 
-            <div className="modal-footer bg-light border-0">
-              <div className="d-flex gap-2 w-100">
-                <button 
-                  type="button" 
-                  className="btn btn-outline-secondary flex-fill" 
-                  onClick={onClose}
-                  disabled={loading}
-                >
-                  <i className="bi bi-x-lg me-2"></i>
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-warning flex-fill"
-                  disabled={loading || !newDate || !reason.trim()}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-arrow-repeat me-2"></i>
-                      Submit Reschedule Request
-                    </>
-                  )}
-                </button>
+            <div className="modal-footer border-0 p-4 pt-0">
+              <div className="row g-3 w-100">
+                <div className="col-4">
+                  <button 
+                    type="button" 
+                    className="btn btn-outline-light text-dark fw-bold w-100 rounded-pill py-3 border-light-subtle transition-all" 
+                    onClick={onClose}
+                    disabled={loading}
+                  >
+                    Back
+                  </button>
+                </div>
+                <div className="col-8">
+                  <button 
+                    type="submit" 
+                    className="btn btn-warning fw-black text-dark w-100 rounded-pill py-3 shadow-premium transition-all d-flex align-items-center justify-content-center"
+                    disabled={loading || !newDate || !reason.trim()}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Send Request <i className="bi bi-send-fill ms-2"></i>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </form>

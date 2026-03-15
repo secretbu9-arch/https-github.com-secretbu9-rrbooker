@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import logo from '../../assets/images/raf-rok-logo.png';
 import OrderReports from './OrderReports';
 
 const Reports = () => {
@@ -39,101 +40,75 @@ const Reports = () => {
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
 
-      // Add header with date range
-      pdf.setFontSize(16);
+      // Add Brand Header
+      // Draw Logo
+      const logoWidth = 30;
+      const logoHeight = 30;
+      const margin = 20;
+      pdf.addImage(logo, 'PNG', margin, 15, logoWidth, logoHeight);
+
+      // Shop Information
       pdf.setFont('helvetica', 'bold');
-      pdf.text(`${reportTypes.find(t => t.value === reportType)?.label || 'Report'}`, 20, 20);
+      pdf.setFontSize(22);
+      pdf.setTextColor(26, 26, 26);
+      pdf.text('RAF & ROX BARBER SHOP', margin + logoWidth + 10, 25);
 
-      pdf.setFontSize(12);
       pdf.setFont('helvetica', 'normal');
-      const dateText = `Date Range: ${new Date(dateRange.start).toLocaleDateString()} - ${new Date(dateRange.end).toLocaleDateString()}`;
-      pdf.text(dateText, 20, 30);
-
       pdf.setFontSize(10);
-      const generatedText = `Generated on: ${new Date().toLocaleString()}`;
-      pdf.text(generatedText, 20, 40);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('"Your Hair, Your Style"', margin + logoWidth + 10, 32);
+      pdf.text('Generated Performance Report', margin + logoWidth + 10, 37);
 
-      // Add a line separator
+      // Report Specific Header
+      pdf.setDrawColor(240, 240, 240);
       pdf.setLineWidth(0.5);
-      pdf.line(20, 45, 190, 45);
+      pdf.line(margin, 50, pageWidth - margin, 50);
 
-      const imgWidth = 190;
-      const pageHeight = 250; // Reduced to account for header
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`${reportTypes.find(t => t.value === reportType)?.label || 'Performance Report'}`, margin, 60);
+
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(120, 120, 120);
+      const dateText = `Period: ${new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} to ${new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      pdf.text(dateText, margin, 66);
+      pdf.text(`Exported: ${new Date().toLocaleString()}`, pageWidth - margin - 50, 66);
+
+      // Content
+      const imgWidth = pageWidth - (margin * 2);
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeight = pdf.internal.pageSize.getHeight();
       let heightLeft = imgHeight;
+      let position = 75;
 
-      let position = 50; // Start below header
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - position - margin);
 
-      pdf.addImage(imgData, 'PNG', 20, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight + 50; // Account for header on new pages
+      while (heightLeft > 0) {
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 20, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        position = margin;
+        // On new pages, add a small header or just the content
+        pdf.addImage(imgData, 'PNG', margin, position - (imgHeight - heightLeft - (75 - margin)), imgWidth, imgHeight);
+        heightLeft -= (pageHeight - (margin * 2));
       }
+
+      // Add Footer on last page
+      const finalPage = pdf.internal.getNumberOfPages();
+      pdf.setPage(finalPage);
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text('This is an official business report from RAF & ROX Management System.', pageWidth / 2, pageHeight - 10, { align: 'center' });
 
       const fileName = `${reportType}_report_${dateRange.start}_to_${dateRange.end}.pdf`;
       pdf.save(fileName);
+      setSuccess('PDF Report exported successfully');
     } catch (error) {
       console.error('Error exporting to PDF:', error);
-      alert('Error exporting to PDF. Please try again.');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const exportToImage = async () => {
-    if (!reportRef.current) return;
-
-    setIsExporting(true);
-    try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      });
-
-      // Create a new canvas with header information
-      const headerCanvas = document.createElement('canvas');
-      const headerCtx = headerCanvas.getContext('2d');
-
-      // Set canvas size (add space for header)
-      headerCanvas.width = canvas.width;
-      headerCanvas.height = canvas.height + 80; // Add space for header
-
-      // Fill background
-      headerCtx.fillStyle = '#ffffff';
-      headerCtx.fillRect(0, 0, headerCanvas.width, headerCanvas.height);
-
-      // Add header text
-      headerCtx.fillStyle = '#000000';
-      headerCtx.font = 'bold 24px Arial';
-      headerCtx.textAlign = 'left';
-      headerCtx.fillText(`${reportTypes.find(t => t.value === reportType)?.label || 'Report'}`, 20, 30);
-
-      headerCtx.font = '18px Arial';
-      const dateText = `Date Range: ${new Date(dateRange.start).toLocaleDateString()} - ${new Date(dateRange.end).toLocaleDateString()}`;
-      headerCtx.fillText(dateText, 20, 55);
-
-      headerCtx.font = '14px Arial';
-      headerCtx.fillStyle = '#666666';
-      const generatedText = `Generated on: ${new Date().toLocaleString()}`;
-      headerCtx.fillText(generatedText, 20, 75);
-
-      // Draw the original report content below the header
-      headerCtx.drawImage(canvas, 0, 80);
-
-      const link = document.createElement('a');
-      link.download = `${reportType}_report_${dateRange.start}_to_${dateRange.end}.png`;
-      link.href = headerCanvas.toDataURL();
-      link.click();
-    } catch (error) {
-      console.error('Error exporting to image:', error);
-      alert('Error exporting to image. Please try again.');
+      setError('Error exporting to PDF. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -678,320 +653,285 @@ const Reports = () => {
   };
 
 
+  // Premium Minimalist Styles
+  const styles = {
+    container: {
+      padding: '2rem 1.5rem',
+      backgroundColor: '#fcfcfc',
+      minHeight: '100vh',
+      fontFamily: "'Outfit', 'Inter', sans-serif"
+    },
+    headerCard: {
+      background: '#fff',
+      padding: '1.5rem',
+      borderRadius: '24px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+      border: '1px solid #f0f0f0',
+      marginBottom: '1.5rem',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: '1rem'
+    },
+    card: {
+      backgroundColor: '#fff',
+      padding: '1.5rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      marginBottom: '1.5rem',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+    },
+    filterGroup: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '1.25rem',
+      marginBottom: '1.5rem'
+    },
+    filterItem: {
+      flex: '1',
+      minWidth: '200px'
+    },
+    label: {
+      fontSize: '0.75rem',
+      fontWeight: '800',
+      color: '#888',
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+      marginBottom: '0.5rem',
+      display: 'block'
+    },
+    select: {
+      width: '100%',
+      padding: '0.8rem 1rem',
+      borderRadius: '16px',
+      border: '1.5px solid #f0f0f0',
+      backgroundColor: '#f9f9f9',
+      fontSize: '0.95rem',
+      fontWeight: '600',
+      color: '#1a1a1a',
+      outline: 'none',
+      transition: 'all 0.2s'
+    },
+    input: {
+      width: '100%',
+      padding: '0.8rem 1rem',
+      borderRadius: '16px',
+      border: '1.5px solid #f0f0f0',
+      backgroundColor: '#f9f9f9',
+      fontSize: '0.95rem',
+      color: '#1a1a1a',
+      outline: 'none'
+    },
+    primaryBtn: {
+      backgroundColor: '#1a1a1a',
+      color: '#fff',
+      border: 'none',
+      padding: '0.8rem 1.5rem',
+      borderRadius: '16px',
+      fontWeight: '700',
+      fontSize: '0.9rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.6rem',
+      transition: 'all 0.3s'
+    },
+    reportTable: {
+      width: '100%',
+      borderCollapse: 'separate',
+      borderSpacing: '0',
+      fontSize: '0.85rem'
+    },
+    th: {
+      padding: '1.25rem 1rem',
+      backgroundColor: '#f8f9fa',
+      borderBottom: '2px solid #eee',
+      fontWeight: '800',
+      color: '#444',
+      textAlign: 'left',
+      fontSize: '0.75rem',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    },
+    td: {
+      padding: '1.1rem 1rem',
+      borderBottom: '1px solid #f5f5f5',
+      color: '#1a1a1a',
+      fontWeight: '500'
+    }
+  };
+
+  const [success, setSuccess] = useState('');
   return (
-    <div className="container py-4">
-      <style>
-        {`
-          .report-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          }
-          .btn-group .btn {
-            margin-right: 5px;
-          }
-          .btn-group .btn:last-child {
-            margin-right: 0;
-          }
-          input[type="date"] {
-            position: relative;
-            background-color: #fff;
-            border: 2px solid #dee2e6;
-            border-radius: 0.375rem;
-            transition: all 0.3s ease;
-          }
-          input[type="date"]:focus {
-            border-color: #0d6efd;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-            outline: none;
-          }
-          input[type="date"]:hover {
-            border-color: #adb5bd;
-          }
-          input[type="date"]::-webkit-calendar-picker-indicator {
-            cursor: pointer;
-            opacity: 0.6;
-            margin-left: 0.5rem;
-            filter: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);
-          }
-          input[type="date"]::-webkit-calendar-picker-indicator:hover {
-            opacity: 1;
-          }
-          .form-label {
-            color: #495057;
-            margin-bottom: 0.5rem;
-          }
-          .form-label i {
-            color: #0d6efd;
-          }
-          /* Excel-like table styling */
-          .report-content table {
-            border-collapse: collapse;
-            width: 100%;
-            font-size: 13px;
-            border: 1px solid #d0d0d0;
-          }
-          .report-content table thead {
-            background-color: #f2f2f2;
-            border-bottom: 2px solid #d0d0d0;
-          }
-          .report-content table thead th {
-            background-color: #f2f2f2;
-            border: 1px solid #d0d0d0;
-            padding: 8px 10px;
-            text-align: left;
-            font-weight: 600;
-            color: #000;
-            white-space: nowrap;
-          }
-          .report-content table tbody td {
-            border: 1px solid #d0d0d0;
-            padding: 6px 10px;
-            background-color: #fff;
-          }
-          .report-content table tbody tr:nth-child(even) {
-            background-color: #f9f9f9;
-          }
-          .report-content table tbody tr:nth-child(even) td {
-            background-color: #f9f9f9;
-          }
-          .report-content table tbody tr:hover {
-            background-color: #e8f4f8;
-          }
-          .report-content table tbody tr:hover td {
-            background-color: #e8f4f8;
-          }
-          .report-content table tbody tr:first-child td {
-            border-top: 1px solid #d0d0d0;
-          }
-          .report-content .table-responsive {
-            border: 1px solid #d0d0d0;
-            overflow-x: auto;
-          }
-        `}
-      </style>
-      <div className="card">
-        <div className="card-header">
-          <div className="row align-items-center">
-            <div className="col-md-8">
-              <h3 className="mb-0">Reports & Analytics</h3>
-            </div>
-            <div className="col-md-4 text-end">
-              {reportData && (
-                <div className="btn-group" role="group">
-                  <button
-                    className="btn btn-danger"
-                    onClick={exportToPDF}
-                    disabled={isExporting}
-                  >
-                    <i className="bi bi-file-earmark-pdf me-2"></i>
-                    {isExporting ? 'Exporting...' : 'Export PDF'}
-                  </button>
-                  <button
-                    className="btn btn-info"
-                    onClick={exportToImage}
-                    disabled={isExporting}
-                  >
-                    <i className="bi bi-image me-2"></i>
-                    {isExporting ? 'Exporting...' : 'Export Image'}
-                  </button>
-                </div>
+    <div style={styles.container}>
+      {/* Header Card */}
+      <div style={styles.headerCard}>
+        <div>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+            Analytics & Reports
+          </h2>
+          <p className="text-muted small mb-0">Track performance metrics and business growth</p>
+        </div>
+        <div>
+          {reportData && (
+            <button
+              style={styles.primaryBtn}
+              onClick={exportToPDF}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <span className="spinner-border spinner-border-sm"></span>
+              ) : (
+                <i className="bi bi-file-earmark-pdf-fill"></i>
               )}
-            </div>
+              EXPORT PDF REPORT
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content Card */}
+      <div style={styles.card}>
+        <div style={styles.filterGroup}>
+          <div style={styles.filterItem}>
+            <label style={styles.label}>Select Report Type</label>
+            <select
+              style={styles.select}
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value)}
+            >
+              {reportTypes.map(type => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={styles.filterItem}>
+            <label style={styles.label}>Start Date</label>
+            <input
+              type="date"
+              style={styles.input}
+              value={dateRange.start}
+              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+              max={dateRange.end}
+            />
+          </div>
+
+          <div style={styles.filterItem}>
+            <label style={styles.label}>End Date</label>
+            <input
+              type="date"
+              style={styles.input}
+              value={dateRange.end}
+              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+              min={dateRange.start}
+            />
           </div>
         </div>
 
-        <div className="card-body">
-          <div className="row mb-4">
-            <div className="col-md-4">
-              <label className="form-label fw-bold">
-                <i className="bi bi-graph-up me-2"></i>
-                Report Type
-              </label>
-              <select
-                className="form-select"
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value)}
-              >
-                {reportTypes.map(type => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {error && (
+          <div className="alert alert-danger rounded-4 border-0 mb-4 d-flex align-items-center">
+            <i className="bi bi-exclamation-circle-fill me-2"></i>
+            <span className="fw-bold small">{error}</span>
+          </div>
+        )}
 
-            <div className="col-md-4">
-              <label className="form-label fw-bold">
-                <i className="bi bi-calendar-event me-2"></i>
-                Start Date
-              </label>
-              <div className="position-relative">
-                <input
-                  type="date"
-                  className="form-control"
-                  value={dateRange.start}
-                  onChange={(e) => {
-                    setDateRange(prev => ({ ...prev, start: e.target.value }));
-                  }}
-                  max={dateRange.end}
-                  style={{
-                    paddingLeft: '2.5rem',
-                    fontSize: '1rem',
-                    cursor: 'pointer'
-                  }}
-                />
-                <i className="bi bi-calendar3 position-absolute"
-                  style={{
-                    left: '0.75rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#6c757d',
-                    pointerEvents: 'none'
-                  }}></i>
-              </div>
-            </div>
+        {success && (
+          <div className="alert alert-success rounded-4 border-0 mb-4 d-flex align-items-center">
+            <i className="bi bi-check-circle-fill me-2"></i>
+            <span className="fw-bold small">{success}</span>
+          </div>
+        )}
 
-            <div className="col-md-4">
-              <label className="form-label fw-bold">
-                <i className="bi bi-calendar-check me-2"></i>
-                End Date
-              </label>
-              <div className="position-relative">
-                <input
-                  type="date"
-                  className="form-control"
-                  value={dateRange.end}
-                  onChange={(e) => {
-                    setDateRange(prev => ({ ...prev, end: e.target.value }));
-                  }}
-                  min={dateRange.start}
-                  style={{
-                    paddingLeft: '2.5rem',
-                    fontSize: '1rem',
-                    cursor: 'pointer'
-                  }}
-                />
-                <i className="bi bi-calendar3 position-absolute"
-                  style={{
-                    left: '0.75rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#6c757d',
-                    pointerEvents: 'none'
-                  }}></i>
+        {loading ? (
+          <div className="text-center py-5">
+            <div className="spinner-border text-dark" style={{ width: '3rem', height: '3rem' }}></div>
+            <p className="mt-3 text-muted fw-bold text-uppercase letter-spacing-1 small">Generating Analytics...</p>
+          </div>
+        ) : reportData ? (
+          <div ref={reportRef}>
+            {/* Report View Container */}
+            <div className="p-4" style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #f0f0f0' }}>
+              <div className="mb-4 pb-3 border-bottom d-flex justify-content-between align-items-end">
+                <div>
+                  <h4 className="fw-800 mb-1">{reportTypes.find(t => t.value === reportType)?.label}</h4>
+                  <div className="text-muted small fw-bold">
+                    PERIOD: {new Date(dateRange.start).toLocaleDateString()} - {new Date(dateRange.end).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="text-end text-muted small fw-700">
+                  DATE GENERATED: {new Date().toLocaleDateString()}
+                </div>
               </div>
+
+              {reportType === 'revenue' && <RevenueReportView data={reportData} styles={styles} />}
+              {reportType === 'orders' && <OrderReports dateRange={dateRange} styles={styles} />}
+              {reportType === 'appointments' && <AppointmentsReportView data={reportData} styles={styles} />}
+              {reportType === 'customers' && <CustomerReportView data={reportData} styles={styles} />}
+              {reportType === 'services' && <ServiceReportView data={reportData} styles={styles} />}
+              {reportType === 'queue' && <QueueReportView data={reportData} styles={styles} />}
+              {reportType === 'inventory' && <InventoryReportView data={reportData} styles={styles} />}
+              {reportType === 'system' && <SystemReportView data={reportData} styles={styles} />}
             </div>
           </div>
-
-          {/* Date Range Display */}
-          <div className="row mb-3">
-            <div className="col-12">
-              <div className="alert alert-info d-flex align-items-center mb-0" role="alert">
-                <i className="bi bi-info-circle me-2"></i>
-                <span>
-                  <strong>Selected Date Range:</strong> {new Date(dateRange.start).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })} - {new Date(dateRange.end).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </span>
-              </div>
-            </div>
+        ) : (
+          <div className="text-center py-5 opacity-50">
+            <i className="bi bi-bar-chart-fill" style={{ fontSize: '4rem' }}></i>
+            <h5 className="mt-3 fw-800">No Analytics Data</h5>
+            <p className="text-muted small mb-0">Adjust your filters to generate a new report.</p>
           </div>
-
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border" role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
-              <p className="mt-3 text-muted">Generating report...</p>
-            </div>
-          ) : reportData ? (
-            <div ref={reportRef} className="report-content">
-              {/* Render report based on type */}
-              {reportType === 'revenue' && <RevenueReportView data={reportData} />}
-              {reportType === 'orders' && <OrderReports dateRange={dateRange} />}
-              {reportType === 'appointments' && <AppointmentsReportView data={reportData} />}
-              {reportType === 'customers' && <CustomerReportView data={reportData} />}
-              {reportType === 'services' && <ServiceReportView data={reportData} />}
-              {reportType === 'queue' && <QueueReportView data={reportData} />}
-              {reportType === 'inventory' && <InventoryReportView data={reportData} />}
-              {reportType === 'system' && <SystemReportView data={reportData} />}
-            </div>
-          ) : (
-            <div className="text-center py-5">
-              <div className="text-muted mb-3">
-                <i className="bi bi-graph-up fs-1"></i>
-              </div>
-              <h5>No Data Available</h5>
-              <p className="text-muted">Select a date range and report type to generate analytics.</p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
 };
 
 // Individual report view components
-const RevenueReportView = ({ data }) => (
+const RevenueReportView = ({ data, styles }) => (
   <div>
     {/* Revenue Summary Table */}
     <div className="row mb-4">
       <div className="col-12">
-        <h5>Revenue Summary</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Revenue Summary</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Metric</th>
-                <th>Value</th>
+                <th style={styles.th}>Metric</th>
+                <th style={styles.th}>Value</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Service Revenue</strong></td>
-                <td className="currency-table-cell">₱{(data.summary.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={styles.td}><strong>Service Revenue</strong></td>
+                <td style={styles.td} className="currency-table-cell">₱{(data.summary.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td><strong>Product Revenue</strong></td>
-                <td className="currency-table-cell">₱{(data.summary.totalOrderRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={styles.td}><strong>Product Revenue</strong></td>
+                <td style={styles.td} className="currency-table-cell">₱{(data.summary.totalOrderRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td><strong>Total Revenue</strong></td>
-                <td className="currency-table-cell"><strong>₱{(data.summary.totalCombinedRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+                <td style={styles.td}><strong>Total Revenue</strong></td>
+                <td style={styles.td} className="currency-table-cell"><span className="badge bg-success-subtle text-success px-3 py-2 rounded-pill fw-800">₱{(data.summary.totalCombinedRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
               </tr>
               <tr>
-                <td><strong>Today's Revenue</strong></td>
-                <td className="currency-table-cell">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={styles.td}><strong>Today's Revenue</strong></td>
+                <td style={styles.td} className="currency-table-cell">₱{(data.summary.todayRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td><strong>Total Appointments</strong></td>
-                <td>{data.summary.totalAppointments}</td>
+                <td style={styles.td}><strong>Total Appointments</strong></td>
+                <td style={styles.td}>{data.summary.totalAppointments}</td>
               </tr>
               <tr>
-                <td><strong>Total Orders</strong></td>
-                <td>{data.summary.totalOrders}</td>
+                <td style={styles.td}><strong>Total Orders</strong></td>
+                <td style={styles.td}>{data.summary.totalOrders}</td>
               </tr>
               <tr>
-                <td><strong>Average Service Value</strong></td>
-                <td className="currency-table-cell">₱{(data.summary.averageTransaction || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={styles.td}><strong>Average Service Value</strong></td>
+                <td style={styles.td} className="currency-table-cell">₱{(data.summary.averageTransaction || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td><strong>Average Order Value</strong></td>
-                <td className="currency-table-cell">₱{(data.summary.averageOrderValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={styles.td}><strong>Average Order Value</strong></td>
+                <td style={styles.td} className="currency-table-cell">₱{(data.summary.averageOrderValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
             </tbody>
           </table>
@@ -999,24 +939,24 @@ const RevenueReportView = ({ data }) => (
       </div>
     </div>
 
-    <div className="row">
+    <div className="row g-4">
       <div className="col-md-6">
-        <h5>Revenue by Barber</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Revenue by Barber</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Barber</th>
-                <th>Revenue</th>
-                <th>Appointments</th>
+                <th style={styles.th}>Barber</th>
+                <th style={styles.th}>Revenue</th>
+                <th style={styles.th}>Appointments</th>
               </tr>
             </thead>
             <tbody>
               {(data.revenueByBarber || []).map((barber, index) => (
                 <tr key={index}>
-                  <td>{barber.name}</td>
-                  <td className="currency-table-cell"><strong>₱{(barber.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
-                  <td>{barber.appointments}</td>
+                  <td style={styles.td}>{barber.name}</td>
+                  <td style={styles.td} className="currency-table-cell"><strong>₱{(barber.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+                  <td style={styles.td}>{barber.appointments}</td>
                 </tr>
               ))}
             </tbody>
@@ -1025,22 +965,22 @@ const RevenueReportView = ({ data }) => (
       </div>
 
       <div className="col-md-6">
-        <h5>Revenue by Service</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Revenue by Service</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Service</th>
-                <th>Revenue</th>
-                <th>Count</th>
+                <th style={styles.th}>Service</th>
+                <th style={styles.th}>Revenue</th>
+                <th style={styles.th}>Count</th>
               </tr>
             </thead>
             <tbody>
               {(data.revenueByService || []).map((service, index) => (
                 <tr key={index}>
-                  <td>{service.name}</td>
-                  <td className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td>{service.count}</td>
+                  <td style={styles.td}>{service.name}</td>
+                  <td style={styles.td} className="currency-table-cell">₱{(service.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td style={styles.td}>{service.count}</td>
                 </tr>
               ))}
             </tbody>
@@ -1048,11 +988,11 @@ const RevenueReportView = ({ data }) => (
         </div>
       </div>
     </div>
-
   </div>
 );
 
-const AppointmentsReportView = ({ data }) => {
+
+const AppointmentsReportView = ({ data, styles }) => {
   // Ensure data has proper structure with defaults
   const summary = data?.summary || {};
   const statusBreakdown = summary.statusBreakdown || { pending: 0, confirmed: 0, ongoing: 0, completed: 0, cancelled: 0 };
@@ -1065,61 +1005,41 @@ const AppointmentsReportView = ({ data }) => {
       {/* Summary Table */}
       <div className="row mb-4">
         <div className="col-12">
-          <h5>Appointments Summary</h5>
-          <div className="table-responsive">
-            <table className="table">
+          <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Appointments Summary</h5>
+          <div className="table-responsive border rounded-4 overflow-hidden">
+            <table style={styles.reportTable}>
               <thead>
                 <tr>
-                  <th>Metric</th>
-                  <th>Count</th>
-                  <th>Percentage</th>
+                  <th style={styles.th}>Metric</th>
+                  <th style={styles.th}>Count</th>
+                  <th style={styles.th}>Percentage</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td><strong>Total Appointments</strong></td>
-                  <td><strong>{summary.total || 0}</strong></td>
-                  <td>100%</td>
+                  <td style={styles.td}><strong>Total Appointments</strong></td>
+                  <td style={styles.td}><strong>{summary.total || 0}</strong></td>
+                  <td style={styles.td}>100%</td>
                 </tr>
                 <tr>
-                  <td>Completed</td>
-                  <td>{statusBreakdown.done || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.done || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                  <td style={styles.td}>Completed</td>
+                  <td style={styles.td}><span className="badge bg-success-subtle text-success py-1 px-2 rounded-2 fw-700">{statusBreakdown.completed || statusBreakdown.done || 0}</span></td>
+                  <td style={styles.td}>{(summary.total || 0) > 0 ? (((statusBreakdown.completed || statusBreakdown.done || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
                 </tr>
                 <tr>
-                  <td>Confirmed</td>
-                  <td>{statusBreakdown.confirmed || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.confirmed || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                  <td style={styles.td}>Confirmed</td>
+                  <td style={styles.td}>{statusBreakdown.confirmed || 0}</td>
+                  <td style={styles.td}>{(summary.total || 0) > 0 ? (((statusBreakdown.confirmed || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
                 </tr>
                 <tr>
-                  <td>Ongoing</td>
-                  <td>{statusBreakdown.ongoing || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.ongoing || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                  <td style={styles.td}>Ongoing</td>
+                  <td style={styles.td}>{statusBreakdown.ongoing || 0}</td>
+                  <td style={styles.td}>{(summary.total || 0) > 0 ? (((statusBreakdown.ongoing || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
                 </tr>
                 <tr>
-                  <td>Cancelled</td>
-                  <td>{statusBreakdown.cancelled || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((statusBreakdown.cancelled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
-                </tr>
-                <tr>
-                  <td>Queue Appointments</td>
-                  <td>{summary.queueAppointments || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((summary.queueAppointments || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
-                </tr>
-                <tr>
-                  <td>Scheduled Appointments</td>
-                  <td>{summary.scheduledAppointments || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((summary.scheduledAppointments || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
-                </tr>
-                <tr>
-                  <td>Walk-in Appointments</td>
-                  <td>{summary.walkInAppointments || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((summary.walkInAppointments || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
-                </tr>
-                <tr>
-                  <td>Double Bookings</td>
-                  <td>{summary.doubleBookings || 0}</td>
-                  <td>{(summary.total || 0) > 0 ? (((summary.doubleBookings || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
+                  <td style={styles.td}>Cancelled</td>
+                  <td style={styles.td}><span className="badge bg-danger-subtle text-danger py-1 px-2 rounded-2 fw-700">{statusBreakdown.cancelled || 0}</span></td>
+                  <td style={styles.td}>{(summary.total || 0) > 0 ? (((statusBreakdown.cancelled || 0) / (summary.total || 1)) * 100).toFixed(1) : 0}%</td>
                 </tr>
               </tbody>
             </table>
@@ -1130,19 +1050,16 @@ const AppointmentsReportView = ({ data }) => {
       {/* Appointments by Barber */}
       <div className="row mb-4">
         <div className="col-12">
-          <h5>Appointments by Barber</h5>
-          <div className="table-responsive">
-            <table className="table">
+          <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Appointments by Barber</h5>
+          <div className="table-responsive border rounded-4 overflow-hidden">
+            <table style={styles.reportTable}>
               <thead>
                 <tr>
-                  <th>Barber</th>
-                  <th>Total</th>
-                  <th>Confirmed</th>
-                  <th>Queue</th>
-                  <th>Ongoing</th>
-                  <th>Completed</th>
-                  <th>Cancelled</th>
-                  <th>Completion Rate</th>
+                  <th style={styles.th}>Barber</th>
+                  <th style={styles.th}>Total</th>
+                  <th style={styles.th}>Completed</th>
+                  <th style={styles.th}>Cancelled</th>
+                  <th style={styles.th}>Rate</th>
                 </tr>
               </thead>
               <tbody>
@@ -1150,14 +1067,11 @@ const AppointmentsReportView = ({ data }) => {
                   const barberStatusBreakdown = barber.statusBreakdown || { pending: 0, confirmed: 0, ongoing: 0, completed: 0, cancelled: 0 };
                   return (
                     <tr key={index}>
-                      <td><strong>{barber.name || 'Unknown'}</strong></td>
-                      <td>{barber.total || 0}</td>
-                      <td>{barberStatusBreakdown?.confirmed || 0}</td>
-                      <td>{barber?.queueAppointments || 0}</td>
-                      <td>{barberStatusBreakdown?.ongoing || 0}</td>
-                      <td>{barberStatusBreakdown?.completed || 0}</td>
-                      <td>{barberStatusBreakdown?.cancelled || barberStatusBreakdown?.cancel || 0}</td>
-                      <td>{(barber?.total || 0) > 0 ? (((barberStatusBreakdown?.completed || 0) / (barber?.total || 1)) * 100).toFixed(1) : 0}%</td>
+                      <td style={styles.td}><strong>{barber.name || 'Unknown'}</strong></td>
+                      <td style={styles.td}>{barber.total || 0}</td>
+                      <td style={styles.td}>{barberStatusBreakdown?.completed || 0}</td>
+                      <td style={styles.td}>{barberStatusBreakdown?.cancelled || barberStatusBreakdown?.cancel || 0}</td>
+                      <td style={styles.td}>{(barber?.total || 0) > 0 ? (((barberStatusBreakdown?.completed || 0) / (barber?.total || 1)) * 100).toFixed(1) : 0}%</td>
                     </tr>
                   );
                 })}
@@ -1167,61 +1081,29 @@ const AppointmentsReportView = ({ data }) => {
         </div>
       </div>
 
-      {/* Appointments by Service */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <h5>Appointments by Service</h5>
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Service</th>
-                  <th>Total Bookings</th>
-                  <th>Completed</th>
-                  <th>Average Duration</th>
-                  <th>Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(appointmentsByService || []).map((service, index) => (
-                  <tr key={index}>
-                    <td><strong>{service?.name || 'Unknown'}</strong></td>
-                    <td>{service?.total || 0}</td>
-                    <td>{service?.completed || 0}</td>
-                    <td>₱{(service?.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
       {/* Daily Breakdown */}
       <div className="row mb-4">
         <div className="col-12">
-          <h5>Daily Appointment Breakdown</h5>
-          <div className="table-responsive">
-            <table className="table">
+          <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Daily Appointment Breakdown</h5>
+          <div className="table-responsive border rounded-4 overflow-hidden">
+            <table style={styles.reportTable}>
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Total</th>
-                  <th>Scheduled</th>
-                  <th>Queue</th>
-                  <th>Completed</th>
-                  <th>Cancelled</th>
+                  <th style={styles.th}>Date</th>
+                  <th style={styles.th}>Total</th>
+                  <th style={styles.th}>Scheduled</th>
+                  <th style={styles.th}>Queue</th>
+                  <th style={styles.th}>Completed</th>
                 </tr>
               </thead>
               <tbody>
                 {dailyBreakdown.map((day, index) => (
                   <tr key={index}>
-                    <td><strong>{day.date ? new Date(day.date).toLocaleDateString() : 'Unknown Date'}</strong></td>
-                    <td>{day.total || 0}</td>
-                    <td>{day.scheduled || 0}</td>
-                    <td>{day.queue || 0}</td>
-                    <td>{day?.completed || 0}</td>
-                    <td>{day?.cancelled || 0}</td>
+                    <td style={styles.td}><strong>{day.date ? new Date(day.date).toLocaleDateString() : 'Unknown Date'}</strong></td>
+                    <td style={styles.td}>{day.total || 0}</td>
+                    <td style={styles.td}>{day.scheduled || 0}</td>
+                    <td style={styles.td}>{day.queue || 0}</td>
+                    <td style={styles.td}>{day?.completed || 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1233,31 +1115,31 @@ const AppointmentsReportView = ({ data }) => {
   );
 };
 
-const CustomerReportView = ({ data }) => (
+const CustomerReportView = ({ data, styles }) => (
   <div>
     <div className="row mb-4">
       <div className="col-12">
-        <h5>Customer Summary</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Customer Summary</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Metric</th>
-                <th>Count</th>
+                <th style={styles.th}>Metric</th>
+                <th style={styles.th}>Count</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Total Customers</strong></td>
-                <td><strong>{data?.summary?.totalCustomers || 0}</strong></td>
+                <td style={styles.td}><strong>Total Customers</strong></td>
+                <td style={styles.td}><strong>{data?.summary?.totalCustomers || 0}</strong></td>
               </tr>
               <tr>
-                <td>New Customers</td>
-                <td>{data?.summary?.newCustomers || 0}</td>
+                <td style={styles.td}>New Customers</td>
+                <td style={styles.td}>{data?.summary?.newCustomers || 0}</td>
               </tr>
               <tr>
-                <td>Repeat Customers</td>
-                <td>{data?.summary?.repeatCustomers || 0}</td>
+                <td style={styles.td}>Repeat Customers</td>
+                <td style={styles.td}>{data?.summary?.repeatCustomers || 0}</td>
               </tr>
             </tbody>
           </table>
@@ -1265,24 +1147,24 @@ const CustomerReportView = ({ data }) => (
       </div>
     </div>
 
-    <h5>Customer Statistics</h5>
-    <div className="table-responsive">
-      <table className="table">
+    <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Customer Statistics</h5>
+    <div className="table-responsive border rounded-4 overflow-hidden">
+      <table style={styles.reportTable}>
         <thead>
           <tr>
-            <th>Customer</th>
-            <th>Appointments</th>
-            <th>Total Spent</th>
-            <th>Last Visit</th>
+            <th style={styles.th}>Customer</th>
+            <th style={styles.th}>Appointments</th>
+            <th style={styles.th}>Total Spent</th>
+            <th style={styles.th}>Last Visit</th>
           </tr>
         </thead>
         <tbody>
           {(data.customerStats || []).map((customer) => (
             <tr key={customer.id}>
-              <td>{customer.full_name}</td>
-              <td>{customer.appointments}</td>
-              <td className="currency-table-cell">₱{(customer.totalSpent || 0).toFixed(2)}</td>
-              <td>{customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : 'Never'}</td>
+              <td style={styles.td}>{customer.full_name}</td>
+              <td style={styles.td}>{customer.appointments}</td>
+              <td style={styles.td} className="currency-table-cell">₱{(customer.totalSpent || 0).toFixed(2)}</td>
+              <td style={styles.td}>{customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : 'Never'}</td>
             </tr>
           ))}
         </tbody>
@@ -1291,30 +1173,30 @@ const CustomerReportView = ({ data }) => (
   </div>
 );
 
-const ServiceReportView = ({ data }) => (
+const ServiceReportView = ({ data, styles }) => (
   <div>
     <div className="row mb-4">
       <div className="col-12">
-        <h5>Service Highlights</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Service Highlights</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Metric</th>
-                <th>Service</th>
-                <th>Value</th>
+                <th style={styles.th}>Metric</th>
+                <th style={styles.th}>Service</th>
+                <th style={styles.th}>Value</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Most Popular Service</strong></td>
-                <td>{data.mostPopular?.name || 'N/A'}</td>
-                <td>{data.mostPopular?.bookings || 0} bookings</td>
+                <td style={styles.td}><strong>Most Popular Service</strong></td>
+                <td style={styles.td}>{data.mostPopular?.name || 'N/A'}</td>
+                <td style={styles.td}>{data.mostPopular?.bookings || 0} bookings</td>
               </tr>
               <tr>
-                <td><strong>Highest Revenue Service</strong></td>
-                <td>{data.mostRevenue?.name || 'N/A'}</td>
-                <td className="currency-table-cell">₱{(data.mostRevenue?.revenue || 0).toFixed(2)}</td>
+                <td style={styles.td}><strong>Highest Revenue Service</strong></td>
+                <td style={styles.td}>{data.mostRevenue?.name || 'N/A'}</td>
+                <td style={styles.td} className="currency-table-cell">₱{(data.mostRevenue?.revenue || 0).toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
@@ -1322,24 +1204,24 @@ const ServiceReportView = ({ data }) => (
       </div>
     </div>
 
-    <h5>Service Performance</h5>
-    <div className="table-responsive">
-      <table className="table">
+    <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Service Performance</h5>
+    <div className="table-responsive border rounded-4 overflow-hidden">
+      <table style={styles.reportTable}>
         <thead>
           <tr>
-            <th>Service</th>
-            <th>Price</th>
-            <th>Bookings</th>
-            <th>Revenue</th>
+            <th style={styles.th}>Service</th>
+            <th style={styles.th}>Price</th>
+            <th style={styles.th}>Bookings</th>
+            <th style={styles.th}>Revenue</th>
           </tr>
         </thead>
         <tbody>
           {(data.servicePerformance || []).map((service) => (
             <tr key={service.id}>
-              <td>{service.name}</td>
-              <td className="currency-table-cell">₱{(service.price || 0).toFixed(2)}</td>
-              <td>{service.bookings}</td>
-              <td className="currency-table-cell">₱{(service.revenue || 0).toFixed(2)}</td>
+              <td style={styles.td}>{service.name}</td>
+              <td style={styles.td} className="currency-table-cell">₱{(service.price || 0).toFixed(2)}</td>
+              <td style={styles.td}>{service.bookings}</td>
+              <td style={styles.td} className="currency-table-cell">₱{(service.revenue || 0).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
@@ -1348,31 +1230,31 @@ const ServiceReportView = ({ data }) => (
   </div>
 );
 
-const InventoryReportView = ({ data }) => (
+const InventoryReportView = ({ data, styles }) => (
   <div>
     <div className="row mb-4">
       <div className="col-12">
-        <h5>Inventory Summary</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Inventory Summary</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Metric</th>
-                <th>Count</th>
+                <th style={styles.th}>Metric</th>
+                <th style={styles.th}>Count</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Total Products</strong></td>
-                <td><strong>{data.summary.totalProducts}</strong></td>
+                <td style={styles.td}><strong>Total Products</strong></td>
+                <td style={styles.td}><strong>{data.summary.totalProducts}</strong></td>
               </tr>
               <tr>
-                <td>Needs Restock</td>
-                <td>{data.summary.needsRestock}</td>
+                <td style={styles.td}>Needs Restock</td>
+                <td style={styles.td}>{data.summary.needsRestock}</td>
               </tr>
               <tr>
-                <td>Low Stock</td>
-                <td>{data.summary.lowStock}</td>
+                <td style={styles.td}>Low Stock</td>
+                <td style={styles.td}>{data.summary.lowStock}</td>
               </tr>
             </tbody>
           </table>
@@ -1380,24 +1262,24 @@ const InventoryReportView = ({ data }) => (
       </div>
     </div>
 
-    <div className="row">
+    <div className="row g-4">
       <div className="col-md-6">
-        <h5>Products Needing Restock</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Products Needing Restock</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Current Stock</th>
-                <th>Status</th>
+                <th style={styles.th}>Product</th>
+                <th style={styles.th}>Current Stock</th>
+                <th style={styles.th}>Status</th>
               </tr>
             </thead>
             <tbody>
               {(data.needsRestock || []).map((product) => (
                 <tr key={product.id}>
-                  <td>{product.name}</td>
-                  <td>{product.stock_quantity}</td>
-                  <td>{product.stock_quantity < 5 ? 'Critical' : 'Low Stock'}</td>
+                  <td style={styles.td}>{product.name}</td>
+                  <td style={styles.td}>{product.stock_quantity}</td>
+                  <td style={styles.td}>{product.stock_quantity < 5 ? 'Critical' : 'Low Stock'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1406,22 +1288,22 @@ const InventoryReportView = ({ data }) => (
       </div>
 
       <div className="col-md-6">
-        <h5>Product Sales</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Product Sales</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Quantity Sold</th>
-                <th>Revenue</th>
+                <th style={styles.th}>Product</th>
+                <th style={styles.th}>Quantity Sold</th>
+                <th style={styles.th}>Revenue</th>
               </tr>
             </thead>
             <tbody>
               {(data.productSales || []).map((product, index) => (
                 <tr key={index}>
-                  <td>{product.name}</td>
-                  <td>{product.quantity}</td>
-                  <td className="currency-table-cell">₱{(product.revenue || 0).toFixed(2)}</td>
+                  <td style={styles.td}>{product.name}</td>
+                  <td style={styles.td}>{product.quantity}</td>
+                  <td style={styles.td} className="currency-table-cell">₱{(product.revenue || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1432,27 +1314,27 @@ const InventoryReportView = ({ data }) => (
   </div>
 );
 
-const SystemReportView = ({ data }) => (
+const SystemReportView = ({ data, styles }) => (
   <div>
     <div className="row mb-4">
       <div className="col-12">
-        <h5>System Summary</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">System Summary</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Metric</th>
-                <th>Count</th>
+                <th style={styles.th}>Metric</th>
+                <th style={styles.th}>Count</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Total Logs</strong></td>
-                <td><strong>{data.summary.totalLogs}</strong></td>
+                <td style={styles.td}><strong>Total Logs</strong></td>
+                <td style={styles.td}><strong>{data.summary.totalLogs}</strong></td>
               </tr>
               <tr>
-                <td>Failed Login Attempts</td>
-                <td>{data.summary.failedLogins}</td>
+                <td style={styles.td}>Failed Login Attempts</td>
+                <td style={styles.td}>{data.summary.failedLogins}</td>
               </tr>
             </tbody>
           </table>
@@ -1460,22 +1342,22 @@ const SystemReportView = ({ data }) => (
       </div>
     </div>
 
-    <div className="row">
+    <div className="row g-4">
       <div className="col-md-6">
-        <h5>Action Breakdown</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Action Breakdown</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Action</th>
-                <th>Count</th>
+                <th style={styles.th}>Action</th>
+                <th style={styles.th}>Count</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(data.summary.actionBreakdown || {}).map(([action, count]) => (
                 <tr key={action}>
-                  <td>{action.replace(/_/g, ' ').toUpperCase()}</td>
-                  <td>{count}</td>
+                  <td style={styles.td}>{action.replace(/_/g, ' ').toUpperCase()}</td>
+                  <td style={styles.td}>{count}</td>
                 </tr>
               ))}
             </tbody>
@@ -1484,22 +1366,22 @@ const SystemReportView = ({ data }) => (
       </div>
 
       <div className="col-md-6">
-        <h5>Recent Logs</h5>
-        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-          <table className="table table-sm">
-            <thead>
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Recent Logs</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden" style={{ maxHeight: '400px' }}>
+          <table style={styles.reportTable}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
               <tr>
-                <th>Time</th>
-                <th>Action</th>
-                <th>User ID</th>
+                <th style={styles.th}>Time</th>
+                <th style={styles.th}>Action</th>
+                <th style={styles.th}>User</th>
               </tr>
             </thead>
             <tbody>
               {(data.recentLogs || []).slice(0, 20).map((log) => (
                 <tr key={log.id}>
-                  <td>{new Date(log.created_at).toLocaleString()}</td>
-                  <td>{log.action}</td>
-                  <td>{log.user_id?.substring(0, 8) || 'N/A'}</td>
+                  <td style={styles.td}>{new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                  <td style={styles.td}>{log.action}</td>
+                  <td style={styles.td}>{log.user_id?.substring(0, 8) || 'N/A'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1510,44 +1392,39 @@ const SystemReportView = ({ data }) => (
   </div>
 );
 
-// New Advanced Report View Components
-const QueueReportView = ({ data }) => (
+const QueueReportView = ({ data, styles }) => (
   <div>
     <div className="row mb-4">
       <div className="col-12">
-        <h5>Queue Summary</h5>
-        <div className="table-responsive">
-          <table className="table">
+        <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Queue Summary</h5>
+        <div className="table-responsive border rounded-4 overflow-hidden">
+          <table style={styles.reportTable}>
             <thead>
               <tr>
-                <th>Metric</th>
-                <th>Value</th>
+                <th style={styles.th}>Metric</th>
+                <th style={styles.th}>Value</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Total Queue Appointments</strong></td>
-                <td><strong>{data.summary.totalQueueAppointments}</strong></td>
+                <td style={styles.td}><strong>Total Queue Appointments</strong></td>
+                <td style={styles.td}><strong>{data.summary.totalQueueAppointments}</strong></td>
               </tr>
               <tr>
-                <td>Completed</td>
-                <td>{data.summary.completedQueue}</td>
+                <td style={styles.td}>Completed</td>
+                <td style={styles.td}>{data.summary.completedQueue}</td>
               </tr>
               <tr>
-                <td>Cancelled</td>
-                <td>{data.summary.cancelledQueue}</td>
+                <td style={styles.td}>Cancelled</td>
+                <td style={styles.td}>{data.summary.cancelledQueue}</td>
               </tr>
               <tr>
-                <td>Pending</td>
-                <td>{data.summary.pendingQueue}</td>
+                <td style={styles.td}>Average Wait Time</td>
+                <td style={styles.td}>{data.summary.averageWaitTime || 0} min</td>
               </tr>
               <tr>
-                <td>Average Wait Time</td>
-                <td>{data.summary.averageWaitTime || 0} min</td>
-              </tr>
-              <tr>
-                <td>Completion Rate</td>
-                <td>{(data.summary.completionRate || 0).toFixed(1)}%</td>
+                <td style={styles.td}>Completion Rate</td>
+                <td style={styles.td}>{(data.summary.completionRate || 0).toFixed(1)}%</td>
               </tr>
             </tbody>
           </table>
@@ -1555,28 +1432,26 @@ const QueueReportView = ({ data }) => (
       </div>
     </div>
 
-    <h5>Queue Performance by Barber</h5>
-    <div className="table-responsive">
-      <table className="table">
+    <h5 className="fw-800 small text-uppercase letter-spacing-1 mb-3">Queue Performance by Barber</h5>
+    <div className="table-responsive border rounded-4 overflow-hidden">
+      <table style={styles.reportTable}>
         <thead>
           <tr>
-            <th>Barber</th>
-            <th>Total Queue</th>
-            <th>Completed</th>
-            <th>Cancelled</th>
-            <th>Pending</th>
-            <th>Avg Wait Time</th>
+            <th style={styles.th}>Barber</th>
+            <th style={styles.th}>Total Queue</th>
+            <th style={styles.th}>Completed</th>
+            <th style={styles.th}>Cancelled</th>
+            <th style={styles.th}>Avg Wait Time</th>
           </tr>
         </thead>
         <tbody>
           {(data.queueByBarber || []).map((barber, index) => (
             <tr key={index}>
-              <td>{barber.name}</td>
-              <td>{barber.total}</td>
-              <td>{barber.completed}</td>
-              <td>{barber.cancelled}</td>
-              <td>{barber.pending}</td>
-              <td>{Math.round(barber.averageWaitTime || 0)} min</td>
+              <td style={styles.td}>{barber.name}</td>
+              <td style={styles.td}>{barber.total}</td>
+              <td style={styles.td}>{barber.completed}</td>
+              <td style={styles.td}>{barber.cancelled}</td>
+              <td style={styles.td}>{Math.round(barber.averageWaitTime || 0)} min</td>
             </tr>
           ))}
         </tbody>

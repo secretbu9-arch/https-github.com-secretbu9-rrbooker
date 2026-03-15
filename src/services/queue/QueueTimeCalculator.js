@@ -455,16 +455,7 @@ class QueueTimeCalculator {
       });
     }
 
-    // Check for early morning availability
-    const earlyMorningSlots = this.findEarlyMorningSlots(timeline, serviceDuration);
-    if (earlyMorningSlots.length > 0) {
-      recommendations.push({
-        type: 'early_availability',
-        message: 'Earlier slots available',
-        suggestion: 'Book earlier for less wait',
-        alternativeTimes: earlyMorningSlots
-      });
-    }
+    // Removed early morning availability recommendation to keep Final Confirmation minimalist and focused.
 
     return recommendations;
   }

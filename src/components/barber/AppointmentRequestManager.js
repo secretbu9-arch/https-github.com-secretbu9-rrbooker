@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import BarberAvailabilityService from '../../services/booking/BarberAvailabilityService';
+import RescheduleModal from './RescheduleModal';
 
 const AppointmentRequestManager = ({ user, userRole }) => {
   const [requests, setRequests] = useState([]);
@@ -12,6 +13,7 @@ const AppointmentRequestManager = ({ user, userRole }) => {
   const [typeFilter, setTypeFilter] = useState('all'); // all, new_booking, change (reschedule/cancel)
   const [availabilityStatus, setAvailabilityStatus] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null });
 
   useEffect(() => {
     fetchRequests();
@@ -508,6 +510,14 @@ const AppointmentRequestManager = ({ user, userRole }) => {
                       >
                         Decline
                       </button>
+                      <button
+                        className="btn btn-warning flex-fill rounded-pill py-2 fw-bold shadow-sm"
+                        onClick={() => setRescheduleModal({ isOpen: true, appointment: request.appointment })}
+                        style={{ fontSize: '0.9rem' }}
+                        title="Adjust (Reschedule) this booking"
+                      >
+                        Adjust
+                      </button>
                     </div>
                   ) : (
                     <div className="text-center py-2 mt-3 bg-light rounded-pill opacity-75">
@@ -524,6 +534,17 @@ const AppointmentRequestManager = ({ user, userRole }) => {
           ))}
         </div>
       )}
+
+      {/* Reschedule Modal for Adjusting Requests */}
+      <RescheduleModal
+        isOpen={rescheduleModal.isOpen}
+        onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
+        appointment={rescheduleModal.appointment}
+        onSuccess={() => {
+          setRescheduleModal({ isOpen: false, appointment: null });
+          fetchRequests();
+        }}
+      />
     </div>
   );
 };

@@ -2,11 +2,11 @@
 
 /* CSS Custom Properties for Font Families */
 :root {
-  /* Primary San Francisco Font Stack */
-  --font-primary: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  /* Primary Outfit Font Stack */
+  --font-primary: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   
   /* Secondary Font Stack (for headings) */
-  --font-secondary: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  --font-secondary: 'Outfit', 'Inter', sans-serif;
   
   /* Monospace Font Stack (for code) */
   --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', 'Courier New', monospace;

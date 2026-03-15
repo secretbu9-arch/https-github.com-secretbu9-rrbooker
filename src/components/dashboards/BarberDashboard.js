@@ -8,6 +8,7 @@ import RescheduleModal from '../barber/RescheduleModal';
 import addOnsService from '../../services/booking/AddOnsService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import NotificationPermission from '../common/NotificationPermission';
+import './BarberDashboard.css';
 
 const BarberDashboard = () => {
   const [todaySchedule, setTodaySchedule] = useState([]);
@@ -19,7 +20,8 @@ const BarberDashboard = () => {
     completedAppointments: 0,
     revenue: 0,
     pendingRequests: 0,
-    queueLength: 0
+    queueLength: 0,
+    ongoingCount: 0
   });
 
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,7 @@ const BarberDashboard = () => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [availableServices, setAvailableServices] = useState([]);
   const [customerDetailsModal, setCustomerDetailsModal] = useState({ isOpen: false, request: null });
+  const [declineModal, setDeclineModal] = useState({ isOpen: false, requestId: null, reason: '' });
 
   const navigate = useNavigate();
 
@@ -401,8 +404,18 @@ const BarberDashboard = () => {
         completedAppointments: completed.length,
         revenue: Number(revenueToday) || 0,
         pendingRequests: pending.length,
-        queueLength: queue.length
+        queueLength: queue.length,
+        ongoingCount: current ? 1 : 0
       });
+
+      // 4. Auto-cancel No-shows (Appointments more than 15 mins late)
+      const hasCancelledAny = await checkAndAutoCancelNoShows(safeSchedule, today);
+      if (hasCancelledAny) {
+        console.log('🔄 Data changed by auto-cancel, re-fetching to update UI state...');
+        // We set isFetchingData back to false so the next call can proceed
+        setIsFetchingData(false);
+        return fetchBarberData();
+      }
 
       console.log('✅ fetchBarberData completed successfully, revenue:', revenueToday);
 
@@ -595,6 +608,99 @@ const BarberDashboard = () => {
     }
   };
 
+  const parseTimeToMinutes = (timeString) => {
+    if (!timeString) return 0;
+    try {
+      const parts = timeString.split(':');
+      const hours = parseInt(parts[0], 10) || 0;
+      const minutes = parseInt(parts[1], 10) || 0;
+      return hours * 60 + minutes;
+    } catch (e) {
+      console.error('Error parsing time to minutes:', e);
+      return 0;
+    }
+  };
+
+  const checkAndAutoCancelNoShows = async (schedule, todayDateStr) => {
+    try {
+      if (!schedule || schedule.length === 0) return;
+
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const NO_SHOW_THRESHOLD = 15; // 15 minutes grace period
+
+      const appointmentsToCancel = schedule.filter(apt => {
+        // Only cancel confirmed/scheduled appointments for TODAY
+        const isTargetStatus = ['confirmed', 'scheduled', 'pending'].includes(apt.status?.toLowerCase());
+        const isToday = apt.appointment_date === todayDateStr;
+
+        if (!isTargetStatus || !isToday || !apt.appointment_time) return false;
+
+        const appointmentMinutes = parseTimeToMinutes(apt.appointment_time);
+        const diff = currentMinutes - appointmentMinutes;
+
+        // Condition: Current time is > 15 mins past the scheduled appointment time
+        return diff > NO_SHOW_THRESHOLD;
+      });
+
+      if (appointmentsToCancel.length > 0) {
+        console.log(`🕒 Auto-cancelling ${appointmentsToCancel.length} late appointments:`, appointmentsToCancel.map(a => a.id));
+
+        const { default: centralizedNotificationService } = await import('../../services/notifications/CentralizedNotificationService');
+
+        for (const apt of appointmentsToCancel) {
+          // 1. Update status in database
+          const { error } = await supabase
+            .from('appointments')
+            .update({
+              status: 'cancelled',
+              cancellation_reason: 'Auto-cancelled: Customer was late by more than 15 minutes.',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', apt.id);
+
+          if (error) {
+            console.error(`Error auto-cancelling appointment ${apt.id}:`, error);
+            continue;
+          }
+
+          // 2. Notify the customer
+          try {
+            await centralizedNotificationService.createNotification({
+              userId: apt.customer_id,
+              title: 'Appointment Auto-Cancelled ❌',
+              message: `Your appointment at ${formatTime(apt.appointment_time)} was auto-cancelled because you were more than 15 minutes late.`,
+              type: 'appointment',
+              data: {
+                appointment_id: apt.id,
+                status: 'cancelled'
+              }
+            });
+          } catch (notifErr) {
+            console.warn('Silent failure sending auto-cancel notification:', notifErr);
+          }
+
+          // 3. Broadcast status change (so other UI components can react)
+          window.dispatchEvent(new CustomEvent('appointmentStatusChanged', {
+            detail: {
+              appointmentId: apt.id,
+              newStatus: 'cancelled',
+              barberId: user.id,
+              appointmentDate: apt.appointment_date,
+              timestamp: Date.now()
+            }
+          }));
+        }
+
+        // Return true to indicate we made changes
+        return true;
+      }
+    } catch (err) {
+      console.error('Error in checkAndAutoCancelNoShows:', err);
+    }
+    return false;
+  };
+
   // Calculate actual estimated time based on queue position and service duration
   const calculateEstimatedTime = (appointment) => {
     if (!appointment.queue_position) return '';
@@ -684,14 +790,16 @@ const BarberDashboard = () => {
             .select('queue_position')
             .eq('barber_id', user.id)
             .eq('appointment_date', appointment.appointment_date)
-            .eq('status', 'confirmed')
+            .in('status', ['confirmed', 'ongoing', 'scheduled'])
             .not('queue_position', 'is', null);
 
           const maxQueueNumber = dateAppointments && dateAppointments.length > 0
             ? Math.max(0, ...dateAppointments.map(apt => apt.queue_position || 0))
             : 0;
 
-          updates.queue_position = maxQueueNumber + 1;
+          // If the appointment already has a queue position (e.g. it was confirmed), keep it
+          // OR if it's new, give it the next available slot
+          updates.queue_position = appointment.queue_position || (maxQueueNumber + 1);
         }
 
         const { error } = await supabase
@@ -1004,16 +1112,23 @@ const BarberDashboard = () => {
     );
   }
 
+  const statsCards = [
+    { label: 'COMPLETED', value: todayStats.completedAppointments, icon: 'check2-circle', color: 'success' },
+    { label: "TODAY'S REVENUE", value: `₱${todayStats.revenue.toLocaleString()}`, icon: 'cash-stack', color: 'primary' },
+    { label: 'PENDING', value: todayStats.pendingRequests, icon: 'hourglass-split', color: 'warning' },
+    { label: 'QUEUE', value: todayStats.queueLength, icon: 'people-fill', color: 'info' }
+  ];
+
   return (
     <div className="container-fluid py-4 dashboard-container">
       {/* Notification Permission Banner */}
-      <div className="row mb-3 mt-2">
+      <div className="row mb-1 mt-1">
         <div className="col">
           <NotificationPermission />
         </div>
       </div>
       {/* Barber Welcome Header */}
-      <div className="row mb-1">
+      <div className="row">
         <div className="col">
           <div className="barber-welcome-header rounded shadow-sm d-flex align-items-center" style={{ padding: 'clamp(1rem, 3vw, 1.5rem)' }}>
             <div>
@@ -1092,12 +1207,15 @@ const BarberDashboard = () => {
           <Link
             to="/schedule"
             className={`quick-action-item ${animateActions ? 'action-card-animated' : ''}`}
-            style={{ animationDelay: '0.2s' }}
+            style={{
+              animationDelay: '0.2s',
+              position: 'relative'
+            }}
           >
             <div className="quick-action-icon-wrapper info-action">
               <i className="bi bi-calendar-week"></i>
             </div>
-            <span className="quick-action-name">Schedule</span>
+            <span className="quick-action-name">My Schedule</span>
             <span className="quick-action-description d-none d-md-block">View full schedule</span>
           </Link>
 
@@ -1137,616 +1255,183 @@ const BarberDashboard = () => {
             <span className="quick-action-description d-none d-md-block">View revenue details</span>
           </Link>
         </div>
-
-        {todayStats.queueLength > 0 && (
-          <div className="mt-3 p-2 bg-light rounded">
-
-          </div>
-        )}
       </div>
 
-      {/* Enhanced Multi-level Request Alerts */}
-      <div className="request-alerts-wrapper mb-3">
-        {/* Urgent Requests Alert - More dramatic on mobile */}
-        {pendingRequests.filter(req => req.is_urgent).length > 0 && (
-          <div className="alert alert-danger shadow-sm border-0 border-start border-4 border-danger pulse-red-border"
-            style={{ borderRadius: '12px', background: 'rgba(231, 76, 60, 0.08)' }}
-            role="alert">
-            <div className="d-flex align-items-center">
-              <div className="bg-danger text-white rounded-circle p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                <i className="bi bi-lightning-fill"></i>
-              </div>
-              <div className="flex-grow-1">
-                <h6 className="alert-heading mb-0 fw-bold" style={{ color: '#c0392b' }}>
-                  {pendingRequests.filter(req => req.is_urgent).length} Urgent Booking Request{pendingRequests.filter(req => req.is_urgent).length > 1 ? 's' : ''}!
-                </h6>
-                <small className="text-danger opacity-75 d-block d-md-inline">Requires immediate response</small>
-              </div>
-              <button className="btn btn-danger btn-sm rounded-pill px-3 fw-bold"
-                onClick={() => document.getElementById('pending-requests').scrollIntoView({ behavior: 'smooth' })}>
-                View
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Regular Requests Alert - Cleaner and distinct */}
-        {pendingRequests.length > 0 && pendingRequests.filter(req => !req.is_urgent).length > 0 && (
-          <div className="alert alert-warning shadow-sm border-0 border-start border-4 border-warning mt-2"
-            style={{ borderRadius: '12px', background: 'rgba(243, 156, 18, 0.08)' }}
-            role="alert">
-            <div className="d-flex align-items-center">
-              <div className="bg-warning text-dark rounded-circle p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                <i className="bi bi-bell-fill"></i>
-              </div>
-              <div className="flex-grow-1">
-                <h6 className="alert-heading mb-0 fw-bold" style={{ color: '#d35400' }}>
-                  {pendingRequests.filter(req => !req.is_urgent).length} New Booking Request{pendingRequests.filter(req => !req.is_urgent).length > 1 ? 's' : ''}
-                </h6>
-                <small className="text-muted d-block d-md-inline">Waiting for confirmation</small>
-              </div>
-              <button className="btn btn-warning btn-sm rounded-pill px-3 fw-bold"
-                onClick={() => document.getElementById('pending-requests').scrollIntoView({ behavior: 'smooth' })}>
-                Review
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Stats Cards */}
-      <div className="row mb-4 g-2 g-md-3">
-        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
-          <div className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
-            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Total Today</h6>
-              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.totalAppointments}</h2>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
-          <div className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
-            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Completed</h6>
-              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.completedAppointments}</h2>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
-          <Link
-            to={ROUTES.BARBER_REVENUE}
-            style={{ textDecoration: 'none' }}
-            title="View revenue details"
-          >
-            <div className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = ''; }}>
-              <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Revenue</h6>
-                <h2 className="mb-0" style={{ fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 'bold', lineHeight: '1.2' }}>
-                  <span className="currency-amount-large">
-                    ₱{(todayStats.revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </h2>
-              </div>
-            </div>
-          </Link>
-        </div>
-
-        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
-          <Link to={ROUTES.PENDING_REQUESTS} style={{ textDecoration: 'none' }} title="View all pending requests">
-            <div className={`card stats-card ${pendingRequests.some(req => req.is_urgent)
-                ? 'bg-gradient-danger pulse-urgent'
-                : pendingRequests.length > 0
-                  ? 'bg-gradient-warning'
-                  : 'bg-gradient-secondary'
-              } text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
-              <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>
-                  {pendingRequests.some(req => req.is_urgent) ? '⚠️ URGENT' : 'Pending'}
-                </h6>
-                <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.pendingRequests}</h2>
-              </div>
-            </div>
-          </Link>
-        </div>
-
-        <div className="col-6 col-sm-6 col-md-4 col-lg-3 mb-2 mb-md-3">
-          <div
-            className={`card stats-card bg-gradient-dark text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ cursor: 'pointer' }}
-            onClick={() => document.getElementById('queue-section')?.scrollIntoView({ behavior: 'smooth' })}
-          >
-            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Queue</h6>
-              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{todayStats.queueLength}</h2>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-4 col-lg-3 mb-2 mb-md-3">
-          <div className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`} style={{ cursor: 'pointer' }}>
-            <div className="card-body text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Rating</h6>
-              <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>
-                {barberInfo?.average_rating || '5'}
-                <small className="fs-6" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1rem)' }}>/5</small>
-              </h2>
-              <small className="opacity-75 d-block mt-1" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
-                {barberInfo?.total_ratings || 0} reviews
-              </small>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Alert Banner for New Requests removed as requested */}
-
-      {/* Pending Booking Requests - New Minimalist Design */}
-      {pendingRequests.length > 0 && (
-        <div id="pending-requests" className="card mb-4 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-          <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h5 className="mb-0 d-flex align-items-center" style={{ fontWeight: '700', color: '#1f2937' }}>
-              <div className={`bg-${pendingRequests.some(req => req.is_urgent) ? 'danger' : 'warning'} bg-opacity-10 text-${pendingRequests.some(req => req.is_urgent) ? 'danger' : 'warning'} p-2 rounded-3 me-3 d-flex align-items-center justify-content-center`} style={{ width: '40px', height: '40px' }}>
-                <i className={`bi bi-${pendingRequests.some(req => req.is_urgent) ? 'lightning-fill' : 'bell-fill'}`}></i>
-              </div>
-              {pendingRequests.some(req => req.is_urgent) ? 'Urgent Requests' : 'Pending Requests'}
-              <span className={`badge bg-${pendingRequests.some(req => req.is_urgent) ? 'danger pulse-red-badge' : 'warning text-dark'} ms-2 rounded-pill px-3`} style={{ fontSize: '0.75rem' }}>{pendingRequests.length}</span>
-            </h5>
-            <Link to={ROUTES.PENDING_REQUESTS} className="btn btn-sm btn-link text-primary text-decoration-none fw-semibold">
-              View All <i className="bi bi-arrow-right ms-1"></i>
-            </Link>
-          </div>
-          <div className="card-body p-0">
-            <div className="list-group list-group-flush">
-              {pendingRequests.slice(0, 3).map((request, index) => (
-                <div key={request.id} className="list-group-item border-0 px-4 py-3 position-relative" style={{ background: index % 2 === 0 ? '#f1f5f9' : '#f8fafc', borderBottom: '1px solid rgba(0,0,0,0.05)', minHeight: '100px' }}>
-                  {/* Price - Upper Right */}
-                  <div className="position-absolute top-0 end-0 p-3 pt-4 text-end">
-                    <div className="fw-bold text-primary fs-4">₱{Number(getTotalPrice(request)).toLocaleString()}</div>
-                    <div className="text-muted" style={{ fontSize: '0.7rem' }}>{request.total_duration || 30} min</div>
-                  </div>
-
-                  <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 pe-5 pe-md-0">
-                    <div className="d-flex align-items-center flex-grow-1 w-100 w-md-auto">
-                      <div className="avatar-sm bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0" style={{ width: '45px', height: '45px', fontWeight: '600' }}>
-                        {(request.customer?.full_name || 'C').charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0" style={{ maxWidth: 'calc(100% - 60px)' }}>
-                        <h6 className="mb-0 text-dark fw-bold truncate">
-                          {request.customer?.full_name || 'Guest Customer'}
-                        </h6>
-                        <div className="d-flex flex-wrap gap-1 my-1">
-                          {request.is_urgent && <span className="badge bg-danger rounded-pill" style={{ fontSize: '0.65rem' }}>URGENT</span>}
-                          {request.is_rebooking && <span className="badge bg-info rounded-pill" style={{ fontSize: '0.65rem' }}>RESCHEDULE</span>}
-                        </div>
-                        <div className="text-muted small d-flex flex-wrap align-items-center gap-x-2 gap-y-1 mt-1">
-                          <span className="text-nowrap"><i className="bi bi-calendar me-1"></i>{new Date(request.appointment_date).toLocaleDateString()}</span>
-                          <span className="d-none d-sm-inline opacity-50">•</span>
-                          <span className="truncate" style={{ maxWidth: '150px' }}><i className="bi bi-scissors me-1"></i>{getServicesDisplay(request)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="d-flex align-items-center gap-2 w-100 w-md-auto mt-2 mt-md-0">
-                      <button
-                        className="btn btn-primary btn-sm rounded-3 px-4 shadow-sm flex-grow-1 flex-md-grow-0"
-                        onClick={() => handleBookingResponse(request.id, 'accept')}
-                        style={{ height: '38px', fontWeight: '600' }}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        className="btn btn-outline-light btn-sm rounded-3 text-dark border bg-white shadow-sm"
-                        onClick={() => setCustomerDetailsModal({ isOpen: true, request: request })}
-                        style={{ width: '38px', height: '38px', padding: '0' }}
-                        title="View Details"
-                      >
-                        <i className="bi bi-three-dots-vertical"></i>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {pendingRequests.length > 3 && (
-                <div className="p-3 bg-light text-center border-top">
-                  <Link to={ROUTES.PENDING_REQUESTS} className="text-muted small text-decoration-none">
-                    And {pendingRequests.length - 3} more requests... <strong>Review All</strong>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Current Customer / Next Up Section */}
-      <div className="mb-4">
-        {!currentAppointment && queueStatus.length > 0 ? (
-          <div className="card serve-next-card shadow-sm">
-            <div className="card-header bg-success text-white border-0">
-              <h5 className="mb-0 fw-bold">
-                <i className="bi bi-play-circle me-2"></i>
-                Ready to Serve Next
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                <div className="d-flex align-items-center flex-grow-1">
-                  <div className="rounded-circle bg-success bg-opacity-10 p-3 d-flex align-items-center justify-content-center me-3" style={{ width: '60px', height: '60px' }}>
-                    <i className="bi bi-person fs-2 text-success"></i>
+      {/* NEW COMPACT COCKPIT LAYOUT */}
+      <div className="cockpit-wrapper fade-in-up">
+        <div className="row g-3 stats-row-compact mb-3">
+          {statsCards.map((card, index) => (
+            <div key={index} className="col-6 col-md-3">
+              <div className={`card border-0 shadow-sm h-100 rounded-4 overflow-hidden stat-card-minimal`}>
+                <div className="card-body p-3 d-flex align-items-center gap-3">
+                  <div className={`stat-icon-small bg-light`} style={{ color: card.color === 'success' ? 'var(--barber-black)' : 'var(--barber-brown)' }}>
+                    <i className={`bi bi-${card.icon}`} style={{ fontSize: '1.5rem' }}></i>
                   </div>
                   <div>
-                    <h5 className="mb-1">{queueStatus[0].customer?.full_name}</h5>
-                    <p className="mb-0 text-muted small">
-                      <i className="bi bi-scissors me-1"></i>
-                      {getServicesDisplay(queueStatus[0])}
-                      <span className="ms-2">
-                        <i className="bi bi-clock me-1"></i>
-                        {queueStatus[0].total_duration || queueStatus[0].service?.duration || 30} min
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="d-grid gap-2 d-md-block">
-                  <button
-                    className="btn btn-success btn-lg px-4"
-                    onClick={() => handleAppointmentStatus(queueStatus[0].id, 'ongoing')}
-                    style={{ fontWeight: '600' }}
-                  >
-                    <i className="bi bi-scissors me-2"></i>
-                    Start Service Now
-                  </button>
-                  {queueStatus[0].customer?.phone && (
-                    <a href={`tel:${queueStatus[0].customer.phone}`} className="btn btn-outline-secondary ms-md-2 mt-2 mt-md-0">
-                      <i className="bi bi-telephone"></i>
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : currentAppointment ? (
-          <div className="card currently-serving-card shadow-sm">
-            <div className="card-header bg-primary text-white border-0">
-              <h5 className="mb-0 fw-bold">
-                <i className="bi bi-scissors me-2"></i>
-                Currently Serving
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="row align-items-center">
-                <div className="col-md-4">
-                  <div className="text-center">
-                    <div className="rounded-circle bg-primary bg-opacity-10 p-4 d-inline-block mb-3 position-relative">
-                      <i className="bi bi-person-circle fs-1 text-primary"></i>
-                      {currentAppointment.queue_position && (
-                        <div className="position-absolute bottom-0 end-0 bg-primary text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" style={{ width: '32px', height: '32px', border: '2px solid white', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                          #{currentAppointment.queue_position}
-                        </div>
-                      )}
-                    </div>
-                    <h4>{currentAppointment.customer?.full_name}</h4>
-                    <p className="text-muted">{currentAppointment.customer?.phone}</p>
-                    {currentAppointment.customer?.phone && (
-                      <a href={`tel:${currentAppointment.customer.phone}`} className="btn btn-outline-primary btn-sm">
-                        <i className="bi bi-telephone me-1"></i>Call
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                <div className="col-md-5">
-                  <h5>Service Details</h5>
-                  <p className="mb-1"><strong>Services:</strong> {getServicesDisplay(currentAppointment)}</p>
-                  <p className="mb-1"><strong>Add-ons:</strong> <AddOnsDisplay appointment={currentAppointment} /></p>
-                  <p className="mb-1"><strong>Total:</strong> <span className="text-success fw-bold">₱{Number(getTotalPrice(currentAppointment)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></p>
-                  <p className="mb-1"><strong>Duration:</strong> {(currentAppointment.total_duration || currentAppointment.service?.duration)} min</p>
-                  {currentAppointment.notes && (
-                    <div className="mt-2 text-start">
-                      <strong>Notes:</strong>
-                      <div className="bg-light p-2 rounded small text-muted mt-1">{currentAppointment.notes}</div>
-                    </div>
-                  )}
-                  <FriendBookingDisplay appointment={currentAppointment} variant="compact" />
-                </div>
-
-                <div className="col-md-3 text-center">
-                  <div className="d-grid gap-2">
-                    <button
-                      className="btn btn-warning w-100"
-                      onClick={() => setRescheduleModal({ isOpen: true, appointment: currentAppointment })}
-                      title="Reschedule Appointment"
-                      style={{
-                        minHeight: 'clamp(40px, 9vw, 48px)',
-                        fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
-                        padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
-                        fontWeight: '500',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <i className="bi bi-arrow-repeat me-2"></i>
-                      Reschedule
-                    </button>
-                    <button
-                      className="btn btn-success w-100"
-                      onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
-                      style={{
-                        minHeight: 'clamp(40px, 9vw, 48px)',
-                        fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
-                        padding: 'clamp(0.625rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
-                        fontWeight: '500',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <i className="bi bi-check-circle me-2"></i>
-                      Complete Service
-                    </button>
+                    <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '0.6rem', letterSpacing: '0.5px' }}>{card.label}</div>
+                    <div className="h5 mb-0 fw-black">{card.value}</div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="row">
-        {/* Reschedule Appointments - New Minimalist Design */}
-        <div className="col-md-12 mb-4">
-          <div className="card border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-            <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-              <h5 className="mb-0 d-flex align-items-center" style={{ fontWeight: '700', color: '#1f2937' }}>
-                <div className="bg-primary bg-opacity-10 text-primary p-2 rounded-3 me-3 d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                  <i className="bi bi-calendar-check"></i>
-                </div>
-                Schedule Overview
-              </h5>
-              <Link to={ROUTES.SCHEDULE} className="btn btn-sm btn-link text-primary text-decoration-none fw-semibold">
-                Full Schedule <i className="bi bi-arrow-right ms-1"></i>
-              </Link>
-            </div>
-            <div className="card-body p-0">
-              {todaySchedule.filter(apt => {
-                const status = apt.status?.toLowerCase();
-                // Exclude completed/done, but allow cancelled/cancel at the bottom
-                return status !== 'completed' && status !== 'done';
-              }).length === 0 ? (
-                <div className="text-center py-5">
-                  <p className="text-muted mb-0">No active appointments found for today</p>
-                </div>
-              ) : (
-                <div className="list-group list-group-flush">
-                  {todaySchedule
-                    .filter(apt => {
-                      const status = apt.status?.toLowerCase();
-                      // Only hide completed/done, keep active and cancelled
-                      return status !== 'completed' && status !== 'done';
-                    })
-                    .slice(0, 10)
-                    .map((appointment) => (
-                      <div key={appointment.id} className={`list-group-item border-0 border-bottom-light px-4 py-3 mb-2 rounded-3 shadow-sm position-relative ${appointment.status === 'ongoing' ? 'bg-warning bg-opacity-10' : (appointment.status === 'cancelled' || appointment.status === 'cancel' ? 'bg-danger bg-opacity-10' : 'bg-white')}`}>
-
-
-                        <div className="d-flex justify-content-between align-items-center gap-3 pe-5">
-                          <div className="d-flex align-items-center flex-grow-1 min-w-0">
-                            <div className="me-3 text-center" style={{ width: '40px' }}>
-                              <div className={`fw-bold ${appointment.status === 'ongoing' ? 'text-warning' : (appointment.queue_position === 1 ? 'text-success' : 'text-dark')}`} style={{ lineHeight: '1', fontSize: '1.1rem' }}>
-                                {(appointment.status === 'cancelled' || appointment.status === 'cancel') ? 'X' : (appointment.queue_position ? `#${appointment.queue_position}` : '-')}
-                              </div>
-                              <small className="text-muted" style={{ fontSize: '0.6rem', textTransform: 'uppercase' }}>{(appointment.status === 'cancelled' || appointment.status === 'cancel') ? 'Void' : 'Pos'}</small>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="d-flex align-items-center gap-2">
-                                <h6 className="mb-0 text-dark fw-bold truncate">{appointment.customer?.full_name}</h6>
-                                <div className="d-flex align-items-center gap-2 mt-1">
-                                  {appointment.status === 'ongoing' && <span className="badge bg-warning animate-pulse py-1" style={{ fontSize: '0.6rem' }}>ONGOING</span>}
-                                  {(appointment.status === 'cancelled' || appointment.status === 'cancel') && <span className="badge bg-danger py-1" style={{ fontSize: '0.6rem' }}>CANCELLED</span>}
-                                  {appointment.is_urgent && <span className="badge bg-danger py-1" style={{ fontSize: '0.6rem' }}>URGENT</span>}
-                                  <span className="text-primary fw-bold" style={{ fontSize: '0.75rem' }}>
-                                    <i className="bi bi-clock me-1"></i>
-                                    {calculateEstimatedTime(appointment)}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-muted small truncate">{getServicesDisplay(appointment)}</div>
-                            </div>
-                          </div>
-                          <div className="d-flex gap-2 align-items-center">
-                            {appointment.status === 'confirmed' || appointment.status === 'scheduled' ? (
-                              <button
-                                className="btn btn-success btn-sm rounded-pill px-3 fw-bold"
-                                onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
-                              >
-                                Start
-                              </button>
-                            ) : null}
-                            <button
-                              className="btn btn-outline-light btn-sm rounded-circle text-primary border shadow-sm bg-white"
-                              onClick={() => setRescheduleModal({ isOpen: true, appointment: appointment })}
-                              style={{ width: '36px', height: '36px', padding: '0' }}
-                              title="Reschedule"
-                            >
-                              <i className="bi bi-arrow-repeat"></i>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* Queue Status (Legacy View) */}
-        <div id="queue-section" className="col-md-12 mb-4">
-          <div className="card shadow-sm">
-            <div className="card-header" style={{ padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)' }}>
-              <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                <h5 className="mb-0 flex-grow-1" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.25rem)' }}>
-                  <i className="bi bi-list-ol me-2"></i>
-                  Today's Queue ({queueStatus.length})
-                </h5>
-                <div className="d-flex gap-2 align-items-center">
-                  <Link
-                    to="/queue"
-                    className="btn btn-primary btn-sm"
-                    style={{
-                      minHeight: 'clamp(36px, 8vw, 40px)',
-                      fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
-                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    <i className="bi bi-list-ol me-1 d-none d-sm-inline"></i>
-                    <span className="d-sm-none">Queue</span>
-                    <span className="d-none d-sm-inline">Manage Queue</span>
-                  </Link>
-                  <button
-                    className="btn btn-outline-primary btn-sm flex-shrink-0"
-                    onClick={fetchBarberData}
-                    style={{
-                      minHeight: 'clamp(36px, 8vw, 40px)',
-                      minWidth: 'clamp(36px, 8vw, 40px)',
-                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem)',
-                      transition: 'all 0.2s ease'
-                    }}
-                    title="Refresh"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'rotate(180deg)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'rotate(0deg)';
-                    }}
-                  >
-                    <i className="bi bi-arrow-clockwise" style={{ fontSize: 'clamp(0.8rem, 2vw, 0.875rem)' }}></i>
-                  </button>
+        <div className="row g-3">
+          {/* LEFT COLUMN: SERVING & QUEUE */}
+          <div className="col-lg-8">
+            {/* COMPACT SERVING CARD */}
+            {currentAppointment ? (
+              <div className="card border-0 shadow-premium overflow-hidden mb-3 rounded-4 bg-white serving-card-cockpit">
+                <div className="card-body p-0">
+                  <div className="d-flex flex-column flex-md-row">
+                    <div className="serving-accent-mini p-4 d-flex align-items-center justify-content-center">
+                      <div className="position-relative">
+                        <div className="avatar-serving-mini shadow-sm">
+                          <i className="bi bi-person-fill text-white fs-4"></i>
+                        </div>
+                        <span className="position-absolute top-100 start-50 translate-middle badge rounded-pill bg-danger shadow-sm border border-2 border-white" style={{ fontSize: '0.5rem' }}>LIVE</span>
+                      </div>
+                    </div>
+                    <div className="p-3 flex-grow-1">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <h5 className="fw-black mb-0">{currentAppointment.customer?.full_name}</h5>
+                          <p className="text-muted small mb-0"><i className="bi bi-clock me-1 text-primary"></i>Started {formatTime(currentAppointment.appointment_time)}</p>
+                        </div>
+                        <div className="h4 mb-0 fw-black text-success">₱{Number(getTotalPrice(currentAppointment)).toLocaleString()}</div>
+                      </div>
+                      <div className="d-flex flex-wrap gap-2 mb-3">
+                        <span className="badge bg-light text-dark border-0 rounded-pill px-2 py-1 small fw-medium">{getServicesDisplay(currentAppointment)}</span>
+                        <AddOnsDisplay appointment={currentAppointment} variant="compact" />
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button
+                          className="btn btn-dark-finish btn-sm flex-grow-1 rounded-pill py-2"
+                          onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
+                        >
+                          <i className="bi bi-check-circle-fill me-2"></i>Finish Job
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="card border-0 shadow-sm rounded-4 mb-3 p-4 text-center bg-white">
+                <div className="p-2 bg-light d-inline-block rounded-circle mb-2 mx-auto" style={{ width: '50px', height: '50px' }}>
+                  <i className="bi bi-cup-hot text-primary fs-4"></i>
+                </div>
+                <h6 className="fw-bold mb-1">Break Time?</h6>
+                <p className="small text-muted mb-0">No active sessions. Start a job from the queue below.</p>
+              </div>
+            )}
+
+            {/* COMPACT QUEUE LIST */}
+            <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+              <div className="card-header bg-white border-0 p-3 pt-4 d-flex justify-content-between align-items-center">
+                <h6 className="fw-black mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>
+                  Queue <span className="text-primary">({queueStatus.length})</span>
+                </h6>
+                <Link to="/queue" className="small fw-bold text-decoration-none text-primary">View All <i className="bi bi-arrow-right"></i></Link>
+              </div>
+              <div className="card-body p-0">
+                <div className="cockpit-queue-scroll scroll-container-minimal" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+                  {queueStatus.length === 0 ? (
+                    <div className="text-center py-5">
+                      <p className="text-muted small">Queue is empty</p>
+                    </div>
+                  ) : (
+                    queueStatus.map((appointment, index) => (
+                      <div key={appointment.id} className="modern-queue-item-mini p-3 border-bottom border-light-subtle d-flex align-items-center gap-3">
+                        <div className="queue-num-mini">{appointment.queue_position || index + 1}</div>
+                        <div className="flex-grow-1">
+                          <div className="fw-bold text-dark small">{appointment.customer?.full_name}</div>
+                          <div className="text-muted" style={{ fontSize: '0.7rem' }}>{getServicesDisplay(appointment).split(',')[0]} • {appointment.total_duration || 30}m</div>
+                        </div>
+                        <div className="text-end">
+                          <div className="fw-bold text-success small">₱{Number(getTotalPrice(appointment)).toLocaleString()}</div>
+                          <button
+                            className="btn btn-primary btn-sm rounded-circle p-0 mt-1"
+                            style={{ width: '28px', height: '28px' }}
+                            onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
+                            title="Start serving"
+                          >
+                            <i className="bi bi-play-fill" style={{ fontSize: '0.8rem' }}></i>
+                          </button>
+                          <button
+                            className="btn btn-warning btn-sm rounded-circle p-0 mt-1 ms-1"
+                            style={{ width: '28px', height: '28px' }}
+                            onClick={() => setRescheduleModal({ isOpen: true, appointment: appointment })}
+                            title="Adjust booking"
+                          >
+                            <i className="bi bi-arrow-repeat" style={{ fontSize: '0.8rem' }}></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
-            <div className="card-body">
-              {queueStatus.length === 0 ? (
-                <div className="text-center py-5">
-                  <div className="display-4 text-muted mb-3">
-                    <i className="bi bi-list-ul"></i>
-                  </div>
-                  <h5>Queue is Empty</h5>
-                  <p className="text-muted">No confirmed appointments today. Check pending requests above.</p>
-                </div>
-              ) : (
-                <div className="list-group list-group-flush">
-                  {queueStatus.slice(0, 5).map((appointment, index) => (
-                    <div key={appointment.id} className={`list-group-item px-3 py-3 border-bottom ${index === 0 ? 'bg-light-subtle' : ''}`} style={{ transition: 'background-color 0.2s ease' }}>
-                      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-                        <div className="d-flex align-items-center w-100 w-md-auto" style={{ minWidth: 0 }}>
-                          <div
-                            className={`rounded-circle ${appointment.is_urgent ? 'bg-danger' : 'bg-primary'} text-white d-flex align-items-center justify-content-center me-3 flex-shrink-0 queue-bubble-interactive`}
-                            onClick={() => setCustomerDetailsModal({ isOpen: true, request: appointment })}
-                            style={{
-                              width: 'clamp(35px, 8vw, 40px)',
-                              height: 'clamp(35px, 8vw, 40px)',
-                              fontSize: 'clamp(0.8rem, 2vw, 1rem)',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.1)';
-                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)';
-                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                            }}
-                          >
-                            {appointment.is_urgent ? <i className="bi bi-lightning-fill"></i> : (appointment.queue_position || index + 1)}
-                          </div>
-                          <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                            <div className="d-flex align-items-center justify-content-between mb-1">
-                              <h6 className="mb-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '700' }}>{appointment.customer?.full_name}</h6>
-                              <span className="text-primary fw-bold p-1 rounded bg-primary bg-opacity-10" style={{ fontSize: '0.8rem' }}>
-                                <i className="bi bi-clock me-1"></i>
-                                {calculateEstimatedTime(appointment)}
-                              </span>
-                            </div>
-                            <p className="mb-1 text-muted" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>{getServicesDisplay(appointment)}</p>
-                            <small className="text-info addon-display" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
-                              Add-ons: <AddOnsDisplay appointment={appointment} />
-                            </small>
-                          </div>
+          </div>
+
+          {/* RIGHT COLUMN: ACTIONS & REQUESTS */}
+          <div className="col-lg-4">
+            {/* MINI QUICK ACTIONS GRID */}
+            <div className="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden">
+              <div className="card-body p-3">
+                <div className="row g-2">
+                  {[
+                    { to: "/queue", icon: "people", label: "Queue", color: "primary" },
+                    { to: "/schedule", icon: "calendar-week", label: "Schedule", color: "info" },
+                    { to: "/appointment-requests", icon: "clipboard-check", label: "Requests", color: "warning" },
+                    { to: ROUTES.BARBER_REVENUE, icon: "cash-coin", label: "Revenue", color: "success" }
+                  ].map((action, i) => (
+                    <div key={i} className="col-6">
+                      <Link to={action.to} className="action-button-mini text-decoration-none">
+                        <div className={`action-icon-mini bg-${action.color}-subtle text-${action.color}`}>
+                          <i className={`bi bi-${action.icon}`}></i>
                         </div>
-                        <div className="d-flex flex-row flex-md-column align-items-center align-items-md-end justify-content-between justify-content-md-end gap-2" style={{ minWidth: 'fit-content', width: '100%' }}>
-                          <div className="text-end">
-                            <div className="text-success fw-bold" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>₱{getTotalPrice(appointment)}</div>
-                            <small className="text-muted" style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)' }}>
-                              {appointment.total_duration || appointment.service?.duration} min
-                            </small>
-                            {appointment.is_urgent && (
-                              <div className="mt-1">
-                                <span className="badge bg-danger" style={{ fontSize: 'clamp(0.65rem, 1.5vw, 0.75rem)' }}>URGENT</span>
-                              </div>
-                            )}
-                            <FriendBookingDisplay appointment={appointment} variant="inline" />
-                          </div>
-                          <div className="d-flex gap-2 w-100 w-md-auto">
-                            <button
-                              className="btn btn-sm btn-success flex-fill"
-                              onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
-                              title="Start Service"
-                              style={{
-                                minHeight: 'clamp(36px, 8vw, 40px)',
-                                fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
-                                fontWeight: '500',
-                                transition: 'all 0.2s ease'
-                              }}
-                            >
-                              <i className="bi bi-play-fill me-1"></i>
-                              Serve
-                            </button>
-                            <button
-                              className="btn btn-sm btn-warning flex-fill"
-                              onClick={() => setRescheduleModal({ isOpen: true, appointment: appointment })}
-                              title="Reschedule Appointment"
-                              style={{
-                                minHeight: 'clamp(36px, 8vw, 40px)',
-                                fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
-                                whiteSpace: 'nowrap',
-                                fontWeight: '500',
-                                transition: 'all 0.2s ease'
-                              }}
-                            >
-                              <i className="bi bi-arrow-repeat me-1"></i>
-                              Reschedule
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {queueStatus.length > 5 && (
-                    <div className="list-group-item text-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-                      <Link
-                        to="/queue"
-                        className="btn btn-outline-primary w-100 w-md-auto"
-                        style={{
-                          minHeight: 'clamp(36px, 8vw, 40px)',
-                          fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
-                          padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
-                          fontWeight: '500',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <i className="bi bi-arrow-right me-1 d-none d-sm-inline"></i>
-                        <span className="d-sm-none">View All ({queueStatus.length})</span>
-                        <span className="d-none d-sm-inline">View All {queueStatus.length} Customers</span>
+                        <span className="small fw-bold text-dark mt-1">{action.label}</span>
                       </Link>
                     </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* REQUESTS SCROLLABLE LIST */}
+            <div className="card border-0 shadow-sm rounded-4 overflow-hidden mb-3">
+              <div className="card-header bg-white border-0 p-3 pt-4">
+                <h6 className="fw-black mb-0 text-uppercase" style={{ letterSpacing: '1px' }}>Requests</h6>
+              </div>
+              <div className="card-body p-0">
+                <div className="cockpit-requests-scroll scroll-container-minimal" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  {pendingRequests.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-muted small">No new requests</p>
+                    </div>
+                  ) : (
+                    pendingRequests.map(request => (
+                      <div key={request.id} className="p-3 border-bottom border-light-subtle">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span className="fw-bold small text-dark truncate pe-2">{request.customer?.full_name}</span>
+                          <span className="text-muted text-nowrap" style={{ fontSize: '0.65rem' }}>{new Date(request.appointment_date).toLocaleDateString()}</span>
+                        </div>
+                        <div className="d-flex gap-1">
+                          <button className="btn btn-success btn-sm flex-grow-1 py-1" style={{ fontSize: '0.7rem' }} onClick={() => handleBookingResponse(request.id, 'accept')}>Accept</button>
+                          <button className="btn btn-warning btn-sm flex-grow-1 py-1" style={{ fontSize: '0.7rem' }} onClick={() => setRescheduleModal({ isOpen: true, appointment: request })}>Adjust</button>
+                          <button className="btn btn-outline-danger btn-sm px-2 py-1" style={{ fontSize: '0.7rem' }} onClick={() => setDeclineModal({ isOpen: true, requestId: request.id, reason: '' })}><i className="bi bi-x"></i></button>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
-              )}
+              </div>
             </div>
+
+
           </div>
         </div>
       </div>
@@ -1948,7 +1633,60 @@ const BarberDashboard = () => {
         )
       }
 
-    </div >
+      {/* Decline Reason Modal */}
+      {declineModal.isOpen && (
+        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content overflow-hidden border-0 shadow-lg">
+              <div className="modal-header bg-danger text-white border-0 p-4">
+                <h5 className="modal-title fw-black">
+                  <i className="bi bi-x-circle me-2"></i>
+                  Decline Request
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setDeclineModal({ isOpen: false, requestId: null, reason: '' })}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <p className="text-muted small mb-3">Please provide a reason for declining this request. This will be sent to the customer.</p>
+                <div className="form-group mb-3">
+                  <label className="form-label small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>Reason (Required)</label>
+                  <textarea
+                    className="form-control border-light-subtle rounded-3"
+                    rows="3"
+                    placeholder="e.g. Fully booked for today, please try another day."
+                    value={declineModal.reason}
+                    onChange={(e) => setDeclineModal(prev => ({ ...prev, reason: e.target.value }))}
+                  ></textarea>
+                </div>
+              </div>
+              <div className="modal-footer border-0 p-4 pt-0">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary flex-grow-1 rounded-pill py-2"
+                  onClick={() => setDeclineModal({ isOpen: false, requestId: null, reason: '' })}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger flex-grow-1 rounded-pill py-2"
+                  disabled={!declineModal.reason.trim()}
+                  onClick={() => {
+                    handleBookingResponse(declineModal.requestId, 'reject', declineModal.reason);
+                    setDeclineModal({ isOpen: false, requestId: null, reason: '' });
+                  }}
+                >
+                  Decline Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

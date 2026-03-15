@@ -1092,19 +1092,18 @@ const CustomerAppointments = () => {
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'completed':
-        return 'bg-success';
+        return 'bg-status-completed border-0';
       case 'ongoing':
-        return 'bg-warning text-dark';
+        return 'bg-brown-premium text-white pulse-badge';
       case 'cancelled':
-        return 'bg-danger';
+        return 'bg-status-cancelled border-0';
       case 'pending':
-        return 'bg-warning text-dark';
+        return 'bg-status-pending border-0';
       case 'scheduled':
-        return 'bg-primary';
       case 'confirmed':
-        return 'bg-primary';
+        return 'bg-status-confirmed border-0';
       default:
-        return 'bg-secondary';
+        return 'bg-light text-muted';
     }
   };
 
@@ -1229,11 +1228,80 @@ const CustomerAppointments = () => {
   return (
     <div className="container py-3 py-md-4">
       <style>{`
+        :root {
+          --premium-black: #000000;
+          --premium-brown: #3d2c24;
+          --premium-brown-dark: #261a15;
+          --premium-brown-light: #5d4a41;
+          --premium-gray-light: #fdfdfd;
+          --premium-gray-medium: #f0f0f0;
+          --premium-green-dark: #004d40;
+          --premium-red-dark: #b71c1c;
+          --premium-blue-dark: #01579b;
+          --premium-bronze-dark: #f9a825;
+        }
+        .bg-brown-premium {
+          background-color: var(--premium-brown);
+        }
+        .bg-brown-light {
+          background-color: var(--premium-brown-light);
+        }
+        .text-brown-premium {
+          color: var(--premium-brown);
+        }
+        .bg-status-completed {
+          background-color: var(--premium-green-dark);
+          color: #e0f2f1;
+        }
+        .bg-status-cancelled {
+          background-color: var(--premium-red-dark);
+          color: #ffebee;
+        }
+        .text-status-completed {
+          color: var(--premium-green-dark);
+        }
+        .text-status-cancelled {
+          color: var(--premium-red-dark);
+        }
+        .bg-status-confirmed {
+          background-color: var(--premium-blue-dark);
+          color: #e1f5fe;
+        }
+        .bg-status-pending {
+          background-color: var(--premium-bronze-dark);
+          color: #fffde7;
+        }
+        .text-status-confirmed {
+          color: var(--premium-blue-dark);
+        }
+        .text-status-pending {
+          color: var(--premium-bronze-dark);
+        }
+        .btn-brown-premium {
+          background-color: var(--premium-brown);
+          color: white;
+          border: none;
+          transition: all 0.3s ease;
+        }
+        .btn-brown-premium:hover {
+          background-color: var(--premium-brown-dark);
+          color: white;
+          transform: translateY(-1px);
+        }
+        .btn-outline-brown {
+          border: 1px solid var(--premium-brown);
+          color: var(--premium-brown);
+          background: transparent;
+        }
+        .btn-outline-brown:hover {
+          background-color: var(--premium-brown);
+          color: white;
+        }
         .queue-status-card {
-          padding: 1rem;
-          background: #f8f9fa;
+          padding: 1.25rem;
+          background: var(--premium-gray-light);
           border-radius: 16px;
-          border-left: 5px solid #0d6efd;
+          border-left: 5px solid var(--premium-brown);
           box-shadow: 0 4px 12px rgba(0,0,0,0.03);
           transition: all 0.3s ease;
         }
@@ -1243,67 +1311,205 @@ const CustomerAppointments = () => {
           background: #ffffff;
         }
         .queue-mini-number {
-          width: 45px;
-          height: 45px;
-          background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+          width: 50px;
+          height: 50px;
+          background: linear-gradient(135deg, var(--premium-brown) 0%, var(--premium-brown-dark) 100%);
           color: white;
           border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
           font-weight: 800;
-          font-size: 1.1rem;
-          box-shadow: 0 4px 10px rgba(13, 110, 253, 0.2);
+          font-size: 1.2rem;
+          box-shadow: 0 4px 10px rgba(139, 94, 60, 0.2);
         }
         .appointment-card-premium {
-          border: 0;
-          border-radius: 20px;
+          border: 1px solid var(--premium-gray-medium);
+          border-radius: 16px;
           overflow: hidden;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.3s ease;
+          background: #fff;
+          cursor: default;
         }
         .appointment-card-premium:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 20px 40px rgba(0,0,0,0.08) !important;
+          transform: translateY(-4px);
+          box-shadow: 0 10px 25px rgba(0,0,0,0.06) !important;
+          border-color: var(--premium-brown-light);
+        }
+        .appointment-card-premium:active {
+          transform: translateY(-5px) scale(0.99);
+        }
+        .card-header-premium {
+          background: white;
+          border-bottom: 1px solid var(--premium-gray-light);
+          padding: 1.25rem;
         }
         .currency-amount {
           font-family: 'Inter', system-ui, -apple-system, sans-serif;
           letter-spacing: -0.5px;
+          color: var(--premium-brown-dark);
         }
         .extra-small {
           font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .pagination .page-link {
+          color: var(--premium-brown);
+          border-color: var(--premium-gray-medium);
+          transition: all 0.2s ease;
+        }
+        .pagination .page-link:hover {
+          background-color: var(--premium-gray-light);
+          color: var(--premium-brown-dark);
+        }
+        .pagination .page-item.active .page-link {
+          background-color: var(--premium-brown);
+          border-color: var(--premium-brown);
+        }
+        .filter-section {
+          background: var(--premium-gray-light);
+          border-radius: 15px;
+          border: 1px solid var(--premium-gray-medium);
+          transition: all 0.3s ease;
+        }
+        .badge-urgent {
+          background-color: #000;
+          color: var(--premium-brown-light);
+          border: 1px solid var(--premium-brown-light);
+        }
+        .stats-card-interactive {
+          cursor: pointer;
+          transition: all 0.3s ease;
+          border: 1px solid transparent;
+        }
+        .stats-card-interactive:hover {
+          background: #fff !important;
+          border-color: var(--premium-brown-light);
+          transform: translateY(-3px);
+          box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+        .stats-card-interactive.active {
+          background: #fff !important;
+          border-color: var(--premium-brown);
+          box-shadow: 0 5px 15px rgba(139, 94, 60, 0.1);
+        }
+        .pulse-ongoing {
+          animation: pulse-border 2s infinite;
+        }
+        @keyframes pulse-border {
+          0% { box-shadow: 0 0 0 0 rgba(139, 94, 60, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(139, 94, 60, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(139, 94, 60, 0); }
+        }
+        .pulse-badge {
+          animation: badge-flicker 2s infinite;
+        }
+        @keyframes badge-flicker {
+          0% { opacity: 1; }
+          50% { opacity: 0.8; }
+          100% { opacity: 1; }
+        }
+        .btn-action-micro {
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-action-micro:hover {
+          transform: scale(1.05);
+          letter-spacing: 0.2px;
+        }
+        .btn-action-micro:active {
+          transform: scale(0.95);
+        }
+        .hover-scale-110:hover {
+          transform: scale(1.1);
         }
       `}</style>
       <div className="d-flex flex-column gap-3 mb-4">
-        <div className="bg-dark text-white p-3 p-md-4 rounded-3 shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div className="bg-dark text-white p-4 rounded-4 shadow-lg d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3" style={{ background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)' }}>
           <div>
-            <h2 className="h3 h4-md mb-1 fw-bold text-white">My Appointments</h2>
-            <p className="text-white-50 mb-0 small">
-              <i className="bi bi-calendar-check me-1"></i>
-              Manage your bookings and track queue status
-            </p>
+            <h2 className="h3 h4-md mb-0 fw-bold text-white">Customer Appointments</h2>
           </div>
-          <div className="d-flex gap-2 w-100 w-md-auto">
+          <div className="d-flex gap-2 w-100 w-md-auto ms-md-auto justify-content-end">
             <button
-              className={`btn btn-sm w-100 w-md-auto ${showFilterDropdown ? 'btn-light text-dark fw-bold' : 'btn-outline-light'}`}
+              className={`btn px-3 py-2 rounded-pill fw-bold transition-all shadow-sm small ${showFilterDropdown ? 'btn-light text-dark' : 'btn-outline-light'}`}
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             >
-              <i className="bi bi-funnel me-2"></i>
-              Filters
+              <i className={`bi bi-${showFilterDropdown ? 'chevron-up' : 'sliders2'} me-2`}></i>
+              <span className="d-none d-sm-inline">{showFilterDropdown ? 'Close Filters' : 'Filters'}</span>
+              <span className="d-sm-none fs-7"><i className="bi bi-funnel"></i></span>
               {(filter !== 'all' || dateFilter !== 'all' || searchQuery) && (
-                <span className="badge bg-warning text-dark ms-2 rounded-pill">!</span>
+                <span className="ms-2 badge rounded-circle p-1 bg-brown-premium" style={{ width: '6px', height: '6px', display: 'inline-block' }}> </span>
               )}
             </button>
-            <Link to="/book" className="btn btn-primary btn-sm w-100 w-md-auto border-0 fw-bold">
+            <Link to="/book" className="btn btn-brown-premium px-3 py-2 rounded-pill fw-bold shadow-sm btn-action-micro small">
               <i className="bi bi-plus-lg me-2"></i>
-              New Appointment
+              Book session
             </Link>
+          </div>
+        </div>
+
+        {/* Dashboard Stats Summary (Desktop Interactive) */}
+        <div className="row g-3 mb-1">
+          <div className="col-6 col-md-3">
+            <div
+              className={`p-3 rounded-4 bg-light stats-card-interactive ${filter === 'all' ? 'active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <i className="bi bi-grid text-muted"></i>
+                <span className="fw-bold fs-5">{appointments.filter(a => a.status === 'completed').length}</span>
+              </div>
+              <p className="text-muted extra-small mb-0 fw-bold">Visits</p>
+            </div>
+          </div>
+          <div className="col-6 col-md-3">
+            <div
+              className={`p-3 rounded-4 bg-light stats-card-interactive ${filter === 'upcoming' ? 'active' : ''}`}
+              onClick={() => setFilter('upcoming')}
+            >
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <i className="bi bi-calendar-event text-status-confirmed"></i>
+                <span className="fw-bold fs-5 text-status-confirmed">
+                  {appointments.filter(apt => ['scheduled', 'confirmed', 'pending', 'ongoing'].includes(apt.status)).length}
+                </span>
+              </div>
+              <p className="text-muted extra-small mb-0 fw-bold">Active</p>
+            </div>
+          </div>
+          <div className="col-6 col-md-3">
+            <div
+              className={`p-3 rounded-4 bg-light stats-card-interactive ${filter === 'completed' ? 'active' : ''}`}
+              onClick={() => setFilter('completed')}
+            >
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <i className="bi bi-check-all text-status-completed"></i>
+                <span className="fw-bold fs-5 text-status-completed">
+                  {appointments.filter(apt => apt.status === 'completed').length}
+                </span>
+              </div>
+              <p className="text-muted extra-small mb-0 fw-bold">Completed</p>
+            </div>
+          </div>
+          <div className="col-6 col-md-3">
+            <div
+              className={`p-3 rounded-4 bg-light stats-card-interactive ${filter === 'cancelled' ? 'active' : ''}`}
+              onClick={() => setFilter('cancelled')}
+            >
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <i className="bi bi-dash-circle text-status-cancelled"></i>
+                <span className="fw-bold fs-5 text-status-cancelled">
+                  {appointments.filter(apt => apt.status === 'cancelled').length}
+                </span>
+              </div>
+              <p className="text-muted extra-small mb-0 fw-bold">Cancelled</p>
+            </div>
           </div>
         </div>
 
         {/* Collapsible Filter Section */}
         {showFilterDropdown && (
-          <div className="card border-0 shadow-sm bg-light">
-            <div className="card-body p-3">
+          <div className="card border-0 shadow-sm filter-section">
+            <div className="card-body p-4">
               <div className="row g-3">
                 {/* Search */}
                 <div className="col-12 col-md-4">
@@ -1393,9 +1599,9 @@ const CustomerAppointments = () => {
 
 
       {error && (
-        <div className="alert alert-danger alert-dismissible fade show" role="alert">
+        <div className="alert alert-dark border-0 shadow-sm alert-dismissible fade show" role="alert" style={{ borderLeft: '5px solid #000' }}>
           <div className="d-flex align-items-center">
-            <i className="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
+            <i className="bi bi-exclamation-triangle-fill me-2 fs-4 text-warning"></i>
             <div>{error}</div>
           </div>
           <button type="button" className="btn-close" onClick={() => setError(null)}></button>
@@ -1403,10 +1609,10 @@ const CustomerAppointments = () => {
       )}
 
       {success && (
-        <div className="alert alert-success alert-dismissible fade show" role="alert">
+        <div className="alert alert-white border-0 shadow-sm alert-dismissible fade show" role="alert" style={{ borderLeft: '5px solid var(--premium-brown)' }}>
           <div className="d-flex align-items-center">
-            <i className="bi bi-check-circle-fill me-2 fs-4"></i>
-            <div>{success}</div>
+            <i className="bi bi-check-circle-fill me-2 fs-4 text-brown-premium"></i>
+            <div className="fw-bold">{success}</div>
           </div>
           <button type="button" className="btn-close" onClick={() => setSuccess('')}></button>
         </div>
@@ -1414,11 +1620,12 @@ const CustomerAppointments = () => {
 
       {/* Pending Reschedule Requests */}
       {pendingRescheduleRequests.length > 0 && (
-        <div className="card mb-4 border-warning shadow-sm">
-          <div className="card-header bg-warning text-dark">
-            <h5 className="mb-0">
-              <i className="bi bi-exclamation-triangle me-2"></i>
-              Pending Reschedule Requests ({pendingRescheduleRequests.length})
+        <div className="card mb-4 border-0 shadow-lg overflow-hidden rounded-4">
+          <div className="card-header bg-dark text-white p-3">
+            <h5 className="mb-0 d-flex align-items-center">
+              <i className="bi bi-calendar2-range me-2 text-brown-premium"></i>
+              Pending Reschedule Requests
+              <span className="badge bg-brown-premium ms-auto">{pendingRescheduleRequests.length}</span>
             </h5>
           </div>
           <div className="card-body">
@@ -1439,11 +1646,11 @@ const CustomerAppointments = () => {
                       <div className="mb-3">
                         <div className="d-flex justify-content-between mb-2">
                           <small className="text-muted">Current Date:</small>
-                          <strong>
+                          <strong className="text-dark">
                             {new Date(request.current_appointment_data?.appointment_date || request.appointment?.appointment_date).toLocaleDateString('en-US', {
-                              weekday: 'long',
+                              weekday: 'short',
                               year: 'numeric',
-                              month: 'long',
+                              month: 'short',
                               day: 'numeric'
                             })}
                           </strong>
@@ -1451,7 +1658,7 @@ const CustomerAppointments = () => {
                         {request.current_appointment_data?.appointment_time && (
                           <div className="d-flex justify-content-between mb-2">
                             <small className="text-muted">Current Time:</small>
-                            <strong>
+                            <strong className="text-dark">
                               {new Date(`2000-01-01T${request.current_appointment_data.appointment_time}`).toLocaleTimeString('en-US', {
                                 hour: 'numeric',
                                 minute: '2-digit',
@@ -1462,19 +1669,19 @@ const CustomerAppointments = () => {
                         )}
                       </div>
 
-                      <div className="mb-3 p-2 bg-light rounded">
-                        <small className="text-muted d-block mb-1">New Proposed Schedule:</small>
+                      <div className="mb-3 p-3 border-start border-brown border-4 bg-light rounded-e-3">
+                        <small className="text-brown-premium fw-bold d-block mb-2">New Proposed Schedule:</small>
                         <div className="d-flex justify-content-between mb-2">
                           <small className="text-muted">New Date:</small>
-                          <strong className="text-success">
+                          <strong className="text-brown-premium">
                             {new Date(
                               request.new_appointment_data?.appointment_date ||
                               request.current_appointment_data?.new_appointment_date ||
                               request.appointment?.appointment_date
                             ).toLocaleDateString('en-US', {
-                              weekday: 'long',
+                              weekday: 'short',
                               year: 'numeric',
-                              month: 'long',
+                              month: 'short',
                               day: 'numeric'
                             })}
                           </strong>
@@ -1482,7 +1689,7 @@ const CustomerAppointments = () => {
                         {(request.new_appointment_data?.appointment_time || request.current_appointment_data?.new_appointment_time) && (
                           <div className="d-flex justify-content-between">
                             <small className="text-muted">New Time:</small>
-                            <strong className="text-success">
+                            <strong className="text-brown-premium">
                               {new Date(`2000-01-01T${request.new_appointment_data?.appointment_time || request.current_appointment_data?.new_appointment_time}`).toLocaleTimeString('en-US', {
                                 hour: 'numeric',
                                 minute: '2-digit',
@@ -1508,15 +1715,15 @@ const CustomerAppointments = () => {
 
                       <div className="d-flex gap-2">
                         <button
-                          className="btn btn-success btn-sm flex-fill"
+                          className="btn btn-brown-premium btn-sm flex-fill rounded-pill"
                           onClick={() => handleRescheduleResponse(request.id, 'confirm')}
                           disabled={loading}
                         >
                           <i className="bi bi-check-circle me-1"></i>
-                          Confirm
+                          Accept
                         </button>
                         <button
-                          className="btn btn-danger btn-sm flex-fill"
+                          className="btn btn-outline-dark btn-sm flex-fill rounded-pill"
                           onClick={() => handleRescheduleResponse(request.id, 'decline')}
                           disabled={loading}
                         >
@@ -1536,23 +1743,23 @@ const CustomerAppointments = () => {
 
 
       {filterAppointmentsByDate(filteredAppointments).length === 0 ? (
-        <div className="text-center py-5">
-          <div className="display-4 text-muted mb-3">
-            <i className="bi bi-calendar-x"></i>
+        <div className="text-center py-5 filter-section p-5 shadow-sm border-light">
+          <div className="display-4 text-brown-premium mb-4 animate-bounce">
+            <i className="bi bi-calendar2-x"></i>
           </div>
-          <h4 className="text-muted">
+          <h4 className="text-dark fw-bold mb-3">
             {filter !== 'all' ?
               `No ${filter} appointments found` :
-              "You don't have any appointments yet"}
+              "Your Journey Awaits"}
           </h4>
-          <p className="text-muted mb-4">
+          <p className="text-muted mb-4 max-w-md mx-auto fs-6">
             {filter !== 'all' ?
-              `Try adjusting your filter or search terms.` :
-              "Book your first appointment to get started."}
+              `Try adjusting your filter or search terms to rediscover your style history.` :
+              "Ready for a transformation? Book your first premium session today and step into a new look."}
           </p>
-          <Link to="/book" className="btn btn-primary btn-lg">
+          <Link to="/book" className="btn btn-brown-premium btn-lg px-5 rounded-pill shadow-lg btn-action-micro">
             <i className="bi bi-calendar-plus me-2"></i>
-            Book Your First Appointment
+            Book Now
           </Link>
         </div>
       ) : (
@@ -1560,65 +1767,55 @@ const CustomerAppointments = () => {
           <div className="row g-3 g-md-4">
             {getPaginatedAppointments().map((appointment) => (
               <div key={appointment.id} className="col-12 col-sm-6 col-lg-4">
-                <div className={`card appointment-card-premium h-100 shadow-sm ${appointment.status === 'ongoing' ? 'border-success border-2 shadow' : ''} ${appointment.is_urgent ? 'border-warning border-2' : ''}`}>
-                  <div className="card-header d-flex justify-content-between align-items-center">
-                    <div className="d-flex align-items-center">
-                      <i className={`bi ${getStatusIcon(appointment.status)} me-2`}></i>
-                      <span className={`badge ${getStatusBadgeClass(appointment.status)} me-2`}>
-                        {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                <div className={`card appointment-card-premium h-100 shadow-sm ${appointment.status === 'ongoing' ? 'pulse-ongoing border-brown border-2' : ''}`}>
+                  <div className="card-header-premium p-3 border-bottom border-light">
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <span className={`badge ${getStatusBadgeClass(appointment.status)} px-2 py-1 rounded-4 extra-small fw-bold`}>
+                        <i className={`bi ${getStatusIcon(appointment.status)} me-1`}></i>
+                        {appointment.status.toUpperCase()}
                       </span>
-                      {appointment.is_urgent && (
-                        <span className="badge bg-warning text-dark">
-                          <i className="bi bi-lightning-fill me-1"></i>URGENT
-                        </span>
-                      )}
+                      <div className="text-end">
+                        <div className="text-dark extra-small fw-bold mb-1">
+                          <i className="bi bi-calendar3 me-1 text-brown-premium"></i>
+                          {formatAppointmentDate(appointment.appointment_date)}
+                        </div>
+                        {appointment.appointment_type === 'scheduled' && appointment.appointment_time && (
+                          <div className="extra-small text-muted">
+                            <i className="bi bi-clock-fill me-1 text-brown-premium"></i>
+                            {new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <small className="text-muted">
-                      {formatAppointmentDate(appointment.appointment_date)}
-                      {appointment.appointment_type === 'scheduled' && appointment.appointment_time && (
-                        <>
-                          {' • '}
-                          {new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </>
-                      )}
-                    </small>
                   </div>
 
-                  <div className="card-body">
-                    <div className="d-flex mb-3">
-                      <div className="flex-shrink-0">
-                        <div className="bg-light rounded-circle p-3 text-center" style={{ width: '60px', height: '60px' }}>
-                          <i className="bi bi-scissors fs-4"></i>
-                        </div>
-                      </div>
-                      <div className="ms-3 flex-grow-1">
-                        <h5 className="card-title mb-1 d-flex align-items-center flex-wrap">
+                  <div className="card-body p-3">
+                    <div className="d-flex align-items-start justify-content-between mb-2">
+                      <div className="flex-grow-1">
+                        <h6 className="mb-1 d-flex align-items-center flex-wrap gap-1 fw-bold text-dark" style={{ fontSize: '0.9rem' }}>
                           {getServicesDisplay(appointment)}
                           <AddOnsDisplayInline appointment={appointment} />
-                        </h5>
-                        <p className="card-text text-muted mb-1">
-                          <i className="bi bi-person me-1"></i> {appointment.barber?.full_name}
-                        </p>
-                        <p className="card-text text-muted mb-1">
-                          <i className="bi bi-clock me-1"></i>
-                          {appointment.total_duration || appointment.service?.duration} min
-                        </p>
-                        <p className="card-text text-success mb-0 fw-bold text-end">
-                          <span className="currency-amount">₱{Number(getTotalPrice(appointment)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          {appointment.is_urgent && (
-                            <small className="text-muted d-block mt-1">
-                              <i className="bi bi-lightning-fill me-1 text-warning"></i>
-                              Includes ₱100 urgent fee
-                            </small>
-                          )}
-                        </p>
+                        </h6>
+                        <div className="d-flex align-items-center gap-2 extra-small text-muted">
+                          <span><i className="bi bi-person me-1"></i>{appointment.barber?.full_name}</span>
+                          <span>•</span>
+                          <span><i className="bi bi-clock me-1"></i>{appointment.total_duration || appointment.service?.duration}m</span>
+                        </div>
+                      </div>
+                      <div className="text-end ms-2">
+                        <div className="currency-amount fw-bold" style={{ fontSize: '1rem' }}>₱{Number(getTotalPrice(appointment)).toLocaleString('en-US')}</div>
+                        {appointment.is_urgent && (
+                          <span className="badge badge-urgent p-1 rounded-circle extra-small border-0 shadow-sm" title="Priority Access Managed" style={{ width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <i className="bi bi-lightning-charge-fill" style={{ fontSize: '0.6rem' }}></i>
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     {appointment.status === 'pending' && (
-                      <div className="alert alert-warning py-2 mb-2">
-                        <small>
-                          <i className="bi bi-clock me-1"></i>
+                      <div className="alert bg-light border-0 py-1 px-2 mb-2 rounded-3">
+                        <small className="extra-small fw-bold text-dark">
+                          <i className="bi bi-hourglass-split me-1 text-brown-premium"></i>
                           {getPendingStatusText(appointment)}
                         </small>
                       </div>
@@ -1638,11 +1835,11 @@ const CustomerAppointments = () => {
                           </div>
                           {getEstimatedWaitTime(appointment) && (
                             <div className="text-end">
-                              <p className="mb-0 fw-bold small text-primary">
-                                <i className="bi bi-clock-history me-1"></i>
+                              <p className="mb-0 fw-bold small text-brown-premium">
+                                <i className="bi bi-hourglass-bottom me-1"></i>
                                 {getEstimatedWaitTime(appointment)}
                               </p>
-                              <p className="mb-0 text-muted extra-small uppercase">Est. Wait</p>
+                              <p className="mb-0 text-muted extra-small uppercase">Wait Time</p>
                             </div>
                           )}
                         </div>
@@ -1650,37 +1847,35 @@ const CustomerAppointments = () => {
                     )}
 
                     {appointment.status === 'confirmed' && (
-                      <div className="alert alert-success py-2 mb-2">
-                        <small>
-                          <i className="bi bi-check-circle me-1"></i>
-                          Appointment confirmed! Please arrive on time.
-                        </small>
+                      <div className="alert bg-dark text-white py-1 px-2 mb-2 border-0 opacity-90 rounded-3 d-flex align-items-center">
+                        <i className="bi bi-calendar-check me-2 text-brown-premium"></i>
+                        <small className="extra-small">Confirmed for today</small>
                       </div>
                     )}
 
                     {appointment.status === 'ongoing' && (
-                      <div className="alert alert-success py-2 mb-2 border-0 bg-success bg-opacity-10 text-success fw-bold d-flex align-items-center">
-                        <div className="spinner-grow spinner-grow-sm me-2" role="status"></div>
-                        <span>Your appointment is in progress!</span>
+                      <div className="alert bg-dark text-white py-1 px-2 mb-2 border-0 d-flex align-items-center rounded-3">
+                        <div className="spinner-grow spinner-grow-sm me-2 text-brown-premium" style={{ width: '10px', height: '10px' }}></div>
+                        <span className="extra-small fw-bold">Live: In progress</span>
                       </div>
                     )}
 
                     {appointment.status === 'completed' && (
-                      <div className="alert alert-success py-2 mb-2">
-                        <small>
-                          <i className="bi bi-check-circle me-1"></i>
-                          Service completed successfully
+                      <div className="alert bg-light border-0 py-2 mb-2 d-flex align-items-center rounded-3">
+                        <i className="bi bi-check2-all me-2 text-brown-premium fs-5"></i>
+                        <small className="text-muted fw-semi-bold">
+                          Service completed
                         </small>
                       </div>
                     )}
 
                     {appointment.status === 'cancelled' && (
-                      <div className="alert alert-danger py-2 mb-2">
-                        <small>
-                          <i className="bi bi-x-circle me-1"></i>
-                          Appointment was cancelled
+                      <div className="alert bg-light py-2 mb-2 border-start border-dark border-3">
+                        <small className="text-muted">
+                          <i className="bi bi-dash-circle me-1"></i>
+                          Session cancelled
                           {appointment.cancellation_reason && (
-                            <><br />Reason: {appointment.cancellation_reason}</>
+                            <><br /><span className="extra-small">Reason: {appointment.cancellation_reason}</span></>
                           )}
                         </small>
                       </div>
@@ -1688,26 +1883,26 @@ const CustomerAppointments = () => {
 
                     {/* Priority Request Status */}
                     {appointment.priority_request_status === 'pending' && (
-                      <div className="alert alert-warning py-2 mb-2">
-                        <small>
-                          <i className="bi bi-clock-history me-1"></i>
-                          Priority request pending manager approval
+                      <div className="alert bg-dark text-brown-premium py-2 mb-2 border-0">
+                        <small className="fw-bold">
+                          <i className="bi bi-stars me-1"></i>
+                          Requesting Priority Access...
                         </small>
                       </div>
                     )}
                     {appointment.priority_request_status === 'approved' && appointment.is_urgent && (
-                      <div className="alert alert-success py-2 mb-2">
-                        <small>
-                          <i className="bi bi-check-circle me-1"></i>
-                          Priority approved! ₱100 urgent fee has been applied.
+                      <div className="alert bg-brown-premium text-white py-2 mb-2 border-0">
+                        <small className="fw-bold">
+                          <i className="bi bi-lightning-charge-fill me-1"></i>
+                          Priority Access Confirmed
                         </small>
                       </div>
                     )}
                     {appointment.priority_request_status === 'rejected' && (
-                      <div className="alert alert-secondary py-2 mb-2">
+                      <div className="alert bg-light text-muted py-2 mb-2 border-0">
                         <small>
-                          <i className="bi bi-x-circle me-1"></i>
-                          Priority request was declined
+                          <i className="bi bi-info-circle me-1"></i>
+                          Priority request unavailable
                         </small>
                       </div>
                     )}
@@ -1769,55 +1964,50 @@ const CustomerAppointments = () => {
                             appointment.priority_request_status === 'rejected') && // Allow showing again if rejected
                           appointment.queue_position !== null && (
                             <button
-                              className="btn btn-sm btn-warning"
+                              className="btn btn-sm btn-brown-premium px-3 rounded-pill fw-bold btn-action-micro"
                               onClick={() => openPriorityRequestModal(appointment)}
-                              title="Request Priority (₱100 fee if approved)"
                             >
-                              <i className="bi bi-lightning-fill me-1"></i>
-                              Request Priority
+                              <i className="bi bi-lightning-charge-fill me-1"></i>
+                              Get Priority
                             </button>
                           )}
 
                         {matchesStatus(appointment, 'scheduled', 'confirmed') && (
                           <button
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn btn-sm btn-outline-dark px-3 rounded-pill"
                             onClick={() => handleCancel(appointment)}
-                            title="Request Cancellation"
                           >
-                            <i className="bi bi-x-circle me-1"></i>
+                            <i className="bi bi-x me-1"></i>
                             Cancel
                           </button>
                         )}
 
                         {appointment.status === 'pending' && (
                           <button
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn btn-sm btn-outline-dark px-3 rounded-pill"
                             onClick={() => handleCancel(appointment)}
-                            title="Request Cancellation"
                           >
-                            <i className="bi bi-x-circle me-1"></i>
-                            Cancel Request
+                            <i className="bi bi-x me-1"></i>
+                            Retract Request
                           </button>
                         )}
 
                         {appointment.status === 'completed' && (
                           <>
                             <button
-                              className="btn btn-sm btn-outline-success"
+                              className="btn btn-sm btn-brown-premium px-3 rounded-pill fw-bold btn-action-micro"
                               onClick={() => handleCloneAppointment(appointment)}
-                              title="Book Same Service Again"
                             >
-                              <i className="bi bi-arrow-clockwise me-1"></i>
-                              Book Again
+                              <i className="bi bi-arrow-repeat me-1"></i>
+                              Rebook
                             </button>
                             {!appointment.is_reviewed ? (
                               <button
-                                className="btn btn-sm btn-outline-warning"
+                                className="btn btn-sm btn-outline-brown px-3 rounded-pill btn-action-micro"
                                 onClick={() => setRatingAppointment(appointment)}
-                                title="Rate & Review"
                               >
-                                <i className="bi bi-star me-1"></i>
-                                Rate
+                                <i className="bi bi-pencil-square me-1"></i>
+                                Rate Session
                               </button>
                             ) : (
                               <div className="d-flex align-items-center">
@@ -1825,9 +2015,9 @@ const CustomerAppointments = () => {
                                   {[...Array(5)].map((_, i) => (
                                     <i
                                       key={i}
-                                      className={`bi bi-star-fill ${i < (appointment.customer_rating || 0) ? 'text-warning' : 'text-muted'
+                                      className={`bi bi-star-fill ${i < (appointment.customer_rating || 0) ? 'text-brown-premium' : 'text-light'
                                         }`}
-                                      style={{ fontSize: '0.8rem' }}
+                                      style={{ fontSize: '0.9rem' }}
                                     ></i>
                                   ))}
                                 </div>
@@ -1840,20 +2030,19 @@ const CustomerAppointments = () => {
 
                         {appointment.status === 'cancelled' && (
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn btn-sm btn-brown-premium px-3 rounded-pill"
                             onClick={() => handleCloneAppointment(appointment)}
-                            title="Book Same Service Again"
                           >
-                            <i className="bi bi-arrow-clockwise me-1"></i>
-                            Book Again
+                            <i className="bi bi-arrow-repeat me-1"></i>
+                            Try Again
                           </button>
                         )}
 
                         {appointment.status === 'ongoing' && (
-                          <small className="text-primary">
-                            <i className="bi bi-info-circle me-1"></i>
-                            Service in progress...
-                          </small>
+                          <span className="text-brown-premium fw-bold small">
+                            <i className="bi bi-scissors me-1"></i>
+                            In Progress
+                          </span>
                         )}
                       </div>
 
@@ -2032,13 +2221,6 @@ const CustomerAppointments = () => {
         </div>
       )}
 
-      {/* Auto-refresh indicator */}
-      <div className="position-fixed bottom-0 start-0 p-3" style={{ zIndex: 1040 }}>
-        <small className="badge bg-secondary">
-          <i className="bi bi-arrow-clockwise me-1"></i>
-          Auto-updating
-        </small>
-      </div>
 
     </div>
   );

@@ -168,31 +168,33 @@ export const useProducts = (includeInactive = false, autoFetch = true) => {
   };
 
   /**
+   * Helper to get latest cart synchronously
+   */
+  const getLatestCart = () => {
+    try {
+      return JSON.parse(localStorage.getItem('cart')) || [];
+    } catch (error) {
+      return [];
+    }
+  };
+
+  /**
    * Add product to cart
    * @param {object} product - Product to add
    * @param {number} quantity - Quantity to add
    */
   const addToCart = (product, quantity = 1) => {
-    setCart(prev => {
-      // Check if product already exists in cart
-      const existingProductIndex = prev.findIndex(item => item.id === product.id);
-      
-      if (existingProductIndex >= 0) {
-        // Update quantity if product exists
-        const updatedCart = [...prev];
-        updatedCart[existingProductIndex] = {
-          ...updatedCart[existingProductIndex],
-          quantity: updatedCart[existingProductIndex].quantity + quantity
-        };
-        return updatedCart;
-      } else {
-        // Add new product to cart
-        return [...prev, { ...product, quantity }];
-      }
-    });
+    const currentCart = getLatestCart();
+    const existingProductIndex = currentCart.findIndex(item => item.id === product.id);
     
-    // Save cart to localStorage
-    saveCartToStorage();
+    if (existingProductIndex >= 0) {
+      currentCart[existingProductIndex].quantity += quantity;
+    } else {
+      currentCart.push({ ...product, quantity });
+    }
+    
+    localStorage.setItem('cart', JSON.stringify(currentCart));
+    setCart(currentCart);
   };
 
   /**
@@ -201,22 +203,17 @@ export const useProducts = (includeInactive = false, autoFetch = true) => {
    * @param {number} quantity - New quantity
    */
   const updateCartItem = (productId, quantity) => {
-    setCart(prev => {
-      if (quantity <= 0) {
-        // Remove item if quantity is zero or negative
-        return prev.filter(item => item.id !== productId);
-      } else {
-        // Update quantity
-        return prev.map(item => 
-          item.id === productId 
-            ? { ...item, quantity } 
-            : item
-        );
-      }
-    });
+    let currentCart = getLatestCart();
+    if (quantity <= 0) {
+      currentCart = currentCart.filter(item => item.id !== productId);
+    } else {
+      currentCart = currentCart.map(item => 
+        item.id === productId ? { ...item, quantity } : item
+      );
+    }
     
-    // Save cart to localStorage
-    saveCartToStorage();
+    localStorage.setItem('cart', JSON.stringify(currentCart));
+    setCart(currentCart);
   };
 
   /**
@@ -224,10 +221,10 @@ export const useProducts = (includeInactive = false, autoFetch = true) => {
    * @param {string} productId - ID of the product to remove
    */
   const removeFromCart = (productId) => {
-    setCart(prev => prev.filter(item => item.id !== productId));
-    
-    // Save cart to localStorage
-    saveCartToStorage();
+    let currentCart = getLatestCart();
+    currentCart = currentCart.filter(item => item.id !== productId);
+    localStorage.setItem('cart', JSON.stringify(currentCart));
+    setCart(currentCart);
   };
 
   /**
@@ -235,8 +232,6 @@ export const useProducts = (includeInactive = false, autoFetch = true) => {
    */
   const clearCart = () => {
     setCart([]);
-    
-    // Clear cart from localStorage
     localStorage.removeItem('cart');
   };
 
@@ -246,13 +241,6 @@ export const useProducts = (includeInactive = false, autoFetch = true) => {
    */
   const calculateCartTotal = () => {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  /**
-   * Save cart to localStorage
-   */
-  const saveCartToStorage = () => {
-    localStorage.setItem('cart', JSON.stringify(cart));
   };
 
   /**

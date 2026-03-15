@@ -113,468 +113,589 @@ const Navigation = ({ userRole }) => {
   console.log('Is admin?', isAdmin);
 
   return (
-    <nav
-      className={`navbar navbar-expand-lg navbar-dark ${scrolled ? 'scrolled' : ''}`}
-      style={{
-        background: 'linear-gradient(90deg, #1e1e1e 0%, #2c2c2c 100%)',
-        padding: scrolled ? '0.5rem 1rem' : '1rem',
-        transition: 'all 0.3s ease',
-        boxShadow: scrolled ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
-        zIndex: 1030 // Ensure navbar is above other elements
-      }}
-    >
-      <div className="container-fluid">
-        <Link
-          className="navbar-brand d-flex align-items-center"
-          to="/dashboard"
-          style={{
-            transition: 'transform 0.5s ease',
-            transform: scrolled ? 'scale(0.95)' : 'scale(1)'
-          }}
-        >
-          {/* Logo with text */}
-          <div className="d-flex align-items-center">
-            <img
-              src={logoImage}
-              alt="raf"
-              height="45"
-              className="navbar-logo"
-              style={{
-                transition: 'all 0.5s ease',
-                filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-                backgroundColor: '#ffffff',
-                padding: '3px',
-                borderRadius: '5px'
-              }}
-            />
-            <div className="d-flex flex-column ms-2">
-              <span
-                className="logo-text text-white fw-bold"
+    <>
+      <style>{`
+        .premium-navbar {
+          background: rgba(30, 30, 30, 0.98) !important;
+          backdrop-filter: blur(12px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          font-family: 'Outfit', sans-serif;
+        }
+        .premium-nav-link {
+          font-size: 0.95rem;
+          font-weight: 500;
+          letter-spacing: 0.3px;
+          transition: all 0.3s ease;
+          border-radius: 8px;
+          margin: 0 2px;
+          color: rgba(255, 255, 255, 0.8) !important;
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+        }
+        .premium-nav-link i {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .premium-nav-link:hover, .premium-nav-link.active {
+          color: #ffffff !important;
+          background: rgba(255, 255, 255, 0.1);
+          transform: translateY(-1px);
+        }
+        .custom-dropdown {
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          border-radius: 16px;
+          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+          padding: 0.5rem;
+          animation: dropdownFadeIn 0.2s ease forwards;
+        }
+        .dropdown-item {
+          border-radius: 8px;
+          padding: 0.6rem 1rem;
+          transition: all 0.2s ease;
+          font-weight: 500;
+          font-size: 0.9rem;
+          color: #333;
+        }
+        .dropdown-item:hover {
+          background: rgba(0, 0, 0, 0.04);
+          transform: translateX(4px);
+        }
+        @keyframes dropdownFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dropdownFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Desktop Navbar Enhancements */
+        @media (min-width: 992px) {
+          .premium-navbar {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+          }
+          .premium-nav-link {
+            position: relative;
+            padding: 0.5rem 0.8rem !important;
+            margin: 0 0.15rem;
+          }
+          .premium-nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: #ffffff;
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+            opacity: 0;
+          }
+          .premium-nav-link:hover::after, .premium-nav-link.active::after {
+            width: 70%;
+            opacity: 1;
+          }
+          .premium-nav-link.active {
+            background: transparent !important;
+          }
+          .premium-nav-link:hover {
+            background: rgba(255, 255, 255, 0.05) !important;
+          }
+          .nav-logout-container {
+            margin-right: 1.5rem !important;
+          }
+        }
+
+        /* Mobile Navbar Enhancements */
+        @media (max-width: 991.98px) {
+          .premium-navbar-collapse {
+            background: rgba(25, 25, 25, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 1rem;
+            margin-top: 1rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+          }
+          .premium-nav-link {
+            padding: 1rem 1.2rem !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            margin: 0;
+            border-radius: 10px;
+          }
+          .premium-nav-link:hover, .premium-nav-link.active {
+            background: rgba(255, 255, 255, 0.08);
+            transform: none;
+            padding-left: 1.5rem !important;
+          }
+          .nav-item:last-child .premium-nav-link {
+            border-bottom: none;
+          }
+          .navbar-toggler {
+            border: none;
+            padding: 8px;
+            border-radius: 12px;
+          }
+          .navbar-toggler:focus {
+            box-shadow: none;
+            background: rgba(255, 255, 255, 0.1);
+          }
+        }
+      `}</style>
+      <nav
+        className={`navbar navbar-expand-lg navbar-dark premium-navbar ${scrolled ? 'scrolled' : ''}`}
+        style={{
+          background: 'linear-gradient(90deg, #1e1e1e 0%, #2c2c2c 100%)',
+          padding: scrolled ? '0.5rem 1rem' : '1rem 1rem',
+          transition: 'all 0.3s ease',
+          boxShadow: scrolled ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
+          zIndex: 1030 // Ensure navbar is above other elements
+        }}
+      >
+        <div className="container-fluid px-lg-4">
+          <Link
+            className="navbar-brand d-flex align-items-center me-lg-5"
+            to="/dashboard"
+            style={{
+              transition: 'transform 0.5s ease',
+              transform: scrolled ? 'scale(0.95)' : 'scale(1)'
+            }}
+          >
+            {/* Logo with text */}
+            <div className="d-flex align-items-center">
+              <div
+                className="bg-white rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm flex-shrink-0"
                 style={{
-                  fontSize: scrolled ? '1.3rem' : '1.5rem',
-                  lineHeight: '1.1',
-                  letterSpacing: '1px',
-                  transition: 'all 0.3s ease',
-                  textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
+                  width: scrolled ? '45px' : '50px',
+                  height: scrolled ? '45px' : '50px',
+                  border: '1px solid #eee',
+                  transition: 'all 0.3s ease'
                 }}
               >
-                RAF & ROX
-              </span>
-              <span
-                className="logo-subtitle text-light"
-                style={{
-                  fontSize: '0.7rem',
-                  letterSpacing: '2px',
-                  opacity: scrolled ? '0.7' : '0.9',
-                  transition: 'all 0.3s ease',
-                  transform: scrolled ? 'translateY(-1px)' : 'translateY(0)'
-                }}
-              >
-                BARBERSHOP
-              </span>
+                <img
+                  src={logoImage}
+                  alt="Raf & Rox"
+                  className="navbar-logo"
+                  style={{
+                    width: scrolled ? '30px' : '35px',
+                    transition: 'all 0.3s ease',
+                    filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15))'
+                  }}
+                />
+              </div>
+              <div className="d-flex flex-column ms-2">
+                <span
+                  className="logo-text text-white fw-bold"
+                  style={{
+                    fontSize: scrolled ? '1.4rem' : '1.6rem',
+                    lineHeight: '1.1',
+                    letterSpacing: '1.5px',
+                    transition: 'all 0.3s ease',
+                    textShadow: '0 2px 8px rgba(255, 255, 255, 0.2)'
+                  }}
+                >
+                  RAF & ROX
+                </span>
+                <span
+                  className="logo-subtitle text-light"
+                  style={{
+                    fontSize: '0.7rem',
+                    letterSpacing: '2px',
+                    opacity: scrolled ? '0.7' : '0.9',
+                    transition: 'all 0.3s ease',
+                    transform: scrolled ? 'translateY(-1px)' : 'translateY(0)'
+                  }}
+                >
+                  BARBERSHOP
+                </span>
+              </div>
+            </div>
+          </Link>
+
+          {/* Mobile: show Notifications to the left of any dropdown/profile (top bar) */}
+          <div className="d-lg-none ms-auto me-2 d-flex align-items-center">
+            <div className="me-2">
+              <Notifications />
             </div>
           </div>
-        </Link>
 
-        {/* Mobile: show Notifications to the left of any dropdown/profile (top bar) */}
-        <div className="d-lg-none ms-auto me-2 d-flex align-items-center">
-          <div className="me-2">
-            <Notifications />
-          </div>
-        </div>
+          <button
+            className="navbar-toggler border-0"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded={expanded ? "true" : "false"}
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              transition: 'all 0.3s ease',
+              transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)'
+            }}
+          >
+            <span className="navbar-toggler-icon"></span>
+          </button>
 
-        <button
-          className="navbar-toggler border-0"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-          aria-controls="navbarNav"
-          aria-expanded={expanded ? "true" : "false"}
-          onClick={() => setExpanded(!expanded)}
-          style={{
-            transition: 'all 0.3s ease',
-            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)'
-          }}
-        >
-          <span className="navbar-toggler-icon"></span>
-        </button>
-
-        <div className={`collapse navbar-collapse ${expanded ? "show" : ""}`} id="navbarNav">
-          <ul className="navbar-nav ms-auto me-3">
-            <li
-              className={`nav-item ${animatedItems.includes(0) ? 'animated-item' : ''}`}
-              style={{ transform: animatedItems.includes(0) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(0) ? 1 : 0, transition: 'all 0.5s ease' }}
-            >
-              <Link
-                className={`nav-link ${location.pathname === ROUTES.DASHBOARD ? 'active' : ''}`}
-                to={ROUTES.DASHBOARD}
-                onClick={handleNavClick}
+          <div className={`collapse navbar-collapse premium-navbar-collapse ${expanded ? "show" : ""}`} id="navbarNav">
+            <ul className="navbar-nav ms-auto me-3">
+              <li
+                className={`nav-item ${animatedItems.includes(0) ? 'animated-item' : ''}`}
+                style={{ transform: animatedItems.includes(0) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(0) ? 1 : 0, transition: 'all 0.5s ease' }}
               >
-                <i className="bi bi-speedometer2 me-1"></i>
-                Dashboard
-              </Link>
-            </li>
-
-            {userRole === 'manager' && (
-              <>
-                <li
-                  className={`nav-item dropdown ${animatedItems.includes(1) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link dropdown-toggle ${location.pathname.startsWith('/manage') ? 'active' : ''}`}
-                    to="#"
-                    role="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                  >
-                    <i className="bi bi-gear me-1"></i>
-                    Manage
-                  </Link>
-                  <ul className="dropdown-menu custom-dropdown">
-                    <li>
-                      <Link className="dropdown-item" to={ROUTES.MANAGE_BARBERS} onClick={handleNavClick}>
-                        <i className="bi bi-scissors me-2"></i>
-                        Barbers
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to={ROUTES.MANAGE_SERVICES} onClick={handleNavClick}>
-                        <i className="bi bi-list-check me-2"></i>
-                        Services
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to={ROUTES.MANAGE_PRODUCTS} onClick={handleNavClick}>
-                        <i className="bi bi-box me-2"></i>
-                        Products
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="/manage/orders" onClick={handleNavClick}>
-                        <i className="bi bi-bag-check me-2"></i>
-                        Orders
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="/manage/users" onClick={handleNavClick}>
-                        <i className="bi bi-people me-2"></i>
-                        Users
-                      </Link>
-                    </li>
-                    <li><hr className="dropdown-divider" /></li>
-                    <li>
-                      <Link className="dropdown-item" to={ROUTES.MANAGE_APPOINTMENTS} onClick={handleNavClick}>
-                        <i className="bi bi-calendar-check me-2"></i>
-                        Appointments
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="/manage/queue-priority" onClick={handleNavClick}>
-                        <i className="bi bi-list-ol me-2"></i>
-                        Queue Priority
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to="/manage/notifications" onClick={handleNavClick}>
-                        <i className="bi bi-bell me-2"></i>
-                        Notifications
-                      </Link>
-                    </li>
-                    <li>
-                      <Link className="dropdown-item" to={ROUTES.REPORTS} onClick={handleNavClick}>
-                        <i className="bi bi-graph-up me-2"></i>
-                        Reports
-                      </Link>
-                    </li>
-                  </ul>
-                </li>
-              </>
-            )}
-
-            {userRole === 'barber' && (
-              <>
-                <li
-                  className={`nav-item ${animatedItems.includes(1) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.SCHEDULE ? 'active' : ''}`}
-                    to={ROUTES.SCHEDULE}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-calendar3 me-1"></i>
-                    My Schedule
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(2) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(2) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(2) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.QUEUE ? 'active' : ''}`}
-                    to={ROUTES.QUEUE}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-people me-1"></i>
-                    Queue
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.BARBER_REVENUE ? 'active' : ''}`}
-                    to={ROUTES.BARBER_REVENUE}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-cash-stack me-1"></i>
-                    Revenue
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.DAY_OFF_MANAGER ? 'active' : ''}`}
-                    to={ROUTES.DAY_OFF_MANAGER}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-calendar-x me-1"></i>
-                    Day-Off Manager
-                  </Link>
-                </li>
-              </>
-            )}
-
-            {userRole === 'customer' && (
-              <>
-                <li
-                  className={`nav-item ${animatedItems.includes(1) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.BOOK_APPOINTMENT ? 'active' : ''}`}
-                    to={ROUTES.BOOK_APPOINTMENT}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-calendar-plus me-1"></i>
-                    Book Appointment
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(2) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(2) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(2) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.MY_APPOINTMENTS ? 'active' : ''}`}
-                    to={ROUTES.MY_APPOINTMENTS}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-calendar-check me-1"></i>
-                    My Appointments
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.HAIRCUT_RECOMMENDER ? 'active' : ''}`}
-                    to={ROUTES.HAIRCUT_RECOMMENDER}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-magic me-1"></i>
-                    Haircut Recommender
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === ROUTES.SHOP_PRODUCTS ? 'active' : ''}`}
-                    to={ROUTES.SHOP_PRODUCTS}
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-shop me-1"></i>
-                    Shop Products
-                  </Link>
-                </li>
-                <li
-                  className={`nav-item ${animatedItems.includes(5) ? 'animated-item' : ''}`}
-                  style={{ transform: animatedItems.includes(5) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(5) ? 1 : 0, transition: 'all 0.5s ease' }}
-                >
-                  <Link
-                    className={`nav-link ${location.pathname === '/orders' ? 'active' : ''}`}
-                    to="/orders"
-                    onClick={handleNavClick}
-                  >
-                    <i className="bi bi-bag-check me-1"></i>
-                    Orders
-                  </Link>
-                </li>
-              </>
-            )}
-          </ul>
-
-          <ul className="navbar-nav navbar-right d-flex align-items-center">
-            {/* Desktop: Notifications next to Profile for role-specific views */}
-            {userRole === 'customer' && (
-              <li className="nav-item d-none d-lg-block me-2">
-                <Notifications />
-              </li>
-            )}
-            {(userRole === 'barber' || isAdmin) && (
-              <li className="nav-item d-none d-lg-block me-2">
-                <Notifications />
-              </li>
-            )}
-
-            {/* Cart Icon - for Customers */}
-            {userRole === 'customer' && (
-              <li className="nav-item d-none d-lg-block">
                 <Link
-                  className={`nav-link ${location.pathname === '/products' ? 'active' : ''}`}
-                  to="/products"
+                  className={`nav-link premium-nav-link ${location.pathname === ROUTES.DASHBOARD ? 'active' : ''}`}
+                  to={ROUTES.DASHBOARD}
                   onClick={handleNavClick}
                 >
-                  <i className="bi bi-shop me-1"></i>
-                  Shop
+                  <i className="bi bi-speedometer2 me-2"></i>
+                  Dashboard
                 </Link>
               </li>
-            )}
 
-            {/* Admin Logout Button - Fixed to ensure it's clickable */}
-            {isAdmin && (
-              <li className="nav-item nav-logout-container ms-lg-3 me-lg-2 d-flex align-items-center">
-                {/* Simple a tag to ensure maximum compatibility */}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleSignOut();
-                  }}
-
-                >
-
-
-                </a>
-              </li>
-            )}
-
-            {/* User Profile Dropdown */}
-            <li className="nav-item dropdown">
-              <Link
-                className="nav-link dropdown-toggle user-dropdown d-flex align-items-center"
-                to="#"
-                role="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-              >
-                <div className="d-flex align-items-center ms-1">
-                  {userProfile?.profile_picture_url ? (
-                    <img
-                      src={userProfile.profile_picture_url}
-                      alt="Profile"
-                      height="32"
-                      width="32"
-                      className="rounded-circle me-2"
-                      style={{
-                        objectFit: 'cover',
-                        border: '2px solid #ffffff'
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="rounded-circle me-2 d-flex align-items-center justify-content-center"
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        backgroundColor: '#6c757d',
-                        color: 'white',
-                        fontSize: '14px'
-                      }}
+              {userRole === 'manager' && (
+                <>
+                  <li
+                    className={`nav-item dropdown ${animatedItems.includes(1) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link dropdown-toggle ${location.pathname.startsWith('/manage') ? 'active' : ''}`}
+                      to="#"
+                      role="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
                     >
-                      <i className="bi bi-person-fill"></i>
-                    </div>
-                  )}
-                  <div className="d-flex flex-column">
-                    <span className="user-name" style={{ fontSize: '0.875rem', fontWeight: '500' }}>
-                      {userProfile?.full_name || currentUser?.user_metadata?.full_name || 'User'}
-                    </span>
-                    <span className="role-badge" style={{ fontSize: '0.75rem', opacity: '0.8' }}>
-                      {userRole || 'loading...'}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-              <ul className="dropdown-menu dropdown-menu-end custom-dropdown" style={{ zIndex: 1031 }}>
-                <li className="dropdown-header">
-                  <div className="d-flex align-items-center">
+                      <i className="bi bi-gear me-1"></i>
+                      Manage
+                    </Link>
+                    <ul className="dropdown-menu custom-dropdown">
+                      <li>
+                        <Link className="dropdown-item" to={ROUTES.MANAGE_BARBERS} onClick={handleNavClick}>
+                          <i className="bi bi-scissors me-2"></i>
+                          Barbers
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to={ROUTES.MANAGE_SERVICES} onClick={handleNavClick}>
+                          <i className="bi bi-list-check me-2"></i>
+                          Services
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to={ROUTES.MANAGE_PRODUCTS} onClick={handleNavClick}>
+                          <i className="bi bi-box me-2"></i>
+                          Products
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to="/manage/orders" onClick={handleNavClick}>
+                          <i className="bi bi-bag-check me-2"></i>
+                          Orders
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to="/manage/users" onClick={handleNavClick}>
+                          <i className="bi bi-people me-2"></i>
+                          Users
+                        </Link>
+                      </li>
+                      <li><hr className="dropdown-divider" /></li>
+                      <li>
+                        <Link className="dropdown-item" to={ROUTES.MANAGE_APPOINTMENTS} onClick={handleNavClick}>
+                          <i className="bi bi-calendar-check me-2"></i>
+                          Appointments
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to="/manage/queue-priority" onClick={handleNavClick}>
+                          <i className="bi bi-list-ol me-2"></i>
+                          Queue Priority
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to="/manage/notifications" onClick={handleNavClick}>
+                          <i className="bi bi-bell me-2"></i>
+                          Notifications
+                        </Link>
+                      </li>
+                      <li>
+                        <Link className="dropdown-item" to={ROUTES.REPORTS} onClick={handleNavClick}>
+                          <i className="bi bi-graph-up me-2"></i>
+                          Reports
+                        </Link>
+                      </li>
+                    </ul>
+                  </li>
+                </>
+              )}
+
+              {userRole === 'barber' && (
+                <>
+                  <li
+                    className={`nav-item ${animatedItems.includes(1) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.SCHEDULE ? 'active' : ''}`}
+                      to={ROUTES.SCHEDULE}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-calendar3 me-2"></i>
+                      Schedule
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(2) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(2) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(2) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.QUEUE ? 'active' : ''}`}
+                      to={ROUTES.QUEUE}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-people me-2"></i>
+                      Queue
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.BARBER_REVENUE ? 'active' : ''}`}
+                      to={ROUTES.BARBER_REVENUE}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-cash-stack me-2"></i>
+                      Revenue
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.DAY_OFF_MANAGER ? 'active' : ''}`}
+                      to={ROUTES.DAY_OFF_MANAGER}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-calendar-x me-2"></i>
+                      Day-Off Manager
+                    </Link>
+                  </li>
+                </>
+              )}
+
+              {userRole === 'customer' && (
+                <>
+                  <li
+                    className={`nav-item ${animatedItems.includes(1) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(1) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(1) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.BOOK_APPOINTMENT ? 'active' : ''}`}
+                      to={ROUTES.BOOK_APPOINTMENT}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-calendar-plus me-2"></i>
+                      Book
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(2) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(2) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(2) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.MY_APPOINTMENTS ? 'active' : ''}`}
+                      to={ROUTES.MY_APPOINTMENTS}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-calendar-check me-2"></i>
+                      Appointments
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(3) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(3) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(3) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.HAIRCUT_RECOMMENDER ? 'active' : ''}`}
+                      to={ROUTES.HAIRCUT_RECOMMENDER}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-magic me-2"></i>
+                      Style
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(4) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(4) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(4) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === ROUTES.SHOP_PRODUCTS ? 'active' : ''}`}
+                      to={ROUTES.SHOP_PRODUCTS}
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-shop me-2"></i>
+                      Shop
+                    </Link>
+                  </li>
+                  <li
+                    className={`nav-item ${animatedItems.includes(5) ? 'animated-item' : ''}`}
+                    style={{ transform: animatedItems.includes(5) ? 'translateY(0)' : 'translateY(20px)', opacity: animatedItems.includes(5) ? 1 : 0, transition: 'all 0.5s ease' }}
+                  >
+                    <Link
+                      className={`nav-link premium-nav-link ${location.pathname === '/orders' ? 'active' : ''}`}
+                      to="/orders"
+                      onClick={handleNavClick}
+                    >
+                      <i className="bi bi-bag-check me-2"></i>
+                      Orders
+                    </Link>
+                  </li>
+                </>
+              )}
+            </ul>
+
+            <ul className="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center">
+              {/* Desktop: Notifications next to Profile for role-specific views */}
+              {userRole === 'customer' && (
+                <li className="nav-item d-none d-lg-block me-3">
+                  <Notifications />
+                </li>
+              )}
+              {(userRole === 'barber' || isAdmin) && (
+                <li className="nav-item d-none d-lg-block me-3">
+                  <Notifications />
+                </li>
+              )}
+
+
+
+              {/* Admin Logout Button - Fixed to ensure it's clickable */}
+              {isAdmin && (
+                <li className="nav-item nav-logout-container ms-lg-3 me-lg-2 d-flex align-items-center">
+                  {/* Simple a tag to ensure maximum compatibility */}
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSignOut();
+                    }}
+
+                  >
+
+
+                  </a>
+                </li>
+              )}
+
+              {/* User Profile Dropdown */}
+              <li className="nav-item dropdown mt-3 mt-lg-0">
+                <Link
+                  className="nav-link premium-nav-link dropdown-toggle d-flex align-items-center"
+                  to="#"
+                  role="button"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                >
+                  <div className="d-flex align-items-center ms-1">
                     {userProfile?.profile_picture_url ? (
                       <img
                         src={userProfile.profile_picture_url}
                         alt="Profile"
-                        height="40"
-                        width="40"
-                        className="rounded-circle me-3"
+                        height="32"
+                        width="32"
+                        className="rounded-circle me-2"
                         style={{
                           objectFit: 'cover',
-                          border: '2px solid #dee2e6'
+                          border: '2px solid #ffffff'
                         }}
                       />
                     ) : (
                       <div
-                        className="rounded-circle me-3 d-flex align-items-center justify-content-center"
+                        className="rounded-circle me-2 d-flex align-items-center justify-content-center"
                         style={{
-                          width: '40px',
-                          height: '40px',
+                          width: '32px',
+                          height: '32px',
                           backgroundColor: '#6c757d',
                           color: 'white',
-                          fontSize: '16px'
+                          fontSize: '14px'
                         }}
                       >
                         <i className="bi bi-person-fill"></i>
                       </div>
                     )}
-                    <div>
-                      <div className="fw-bold">
+                    <div className="d-flex flex-column">
+                      <span className="user-name" style={{ fontSize: '0.875rem', fontWeight: '500' }}>
                         {userProfile?.full_name || currentUser?.user_metadata?.full_name || 'User'}
-                      </div>
-                      <small className="text-muted text-capitalize">
+                      </span>
+                      <span className="role-badge text-capitalize" style={{ fontSize: '0.75rem', opacity: '0.8' }}>
                         {userRole || 'loading...'}
-                      </small>
+                      </span>
                     </div>
                   </div>
-                </li>
-                <li><hr className="dropdown-divider" /></li>
-                <li>
-                  <Link className="dropdown-item" to={ROUTES.PROFILE} onClick={handleNavClick}>
-                    <i className="bi bi-person me-2"></i>
-                    My Profile
-                  </Link>
-                </li>
-                <li>
-                  <Link className="dropdown-item" to={ROUTES.SETTINGS} onClick={handleNavClick}>
-                    <i className="bi bi-gear me-2"></i>
-                    Settings
-                  </Link>
-                </li>
-                <li><hr className="dropdown-divider" /></li>
-                <li>
-                  <button className="dropdown-item logout-btn" onClick={handleSignOut}>
-                    <i className="bi bi-box-arrow-right me-2"></i>
-                    Sign Out
-                  </button>
-                </li>
-              </ul>
-            </li>
-          </ul>
+                </Link>
+                <ul className="dropdown-menu dropdown-menu-end custom-dropdown" style={{ zIndex: 1031 }}>
+                  <li className="dropdown-header">
+                    <div className="d-flex align-items-center">
+                      {userProfile?.profile_picture_url ? (
+                        <img
+                          src={userProfile.profile_picture_url}
+                          alt="Profile"
+                          height="40"
+                          width="40"
+                          className="rounded-circle me-3"
+                          style={{
+                            objectFit: 'cover',
+                            border: '2px solid #dee2e6'
+                          }}
+                        />
+                      ) : (
+                        <div
+                          className="rounded-circle me-3 d-flex align-items-center justify-content-center"
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            backgroundColor: '#6c757d',
+                            color: 'white',
+                            fontSize: '16px'
+                          }}
+                        >
+                          <i className="bi bi-person-fill"></i>
+                        </div>
+                      )}
+                      <div>
+                        <div className="fw-bold">
+                          {userProfile?.full_name || currentUser?.user_metadata?.full_name || 'User'}
+                        </div>
+                        <small className="text-muted text-capitalize">
+                          {userRole || 'loading...'}
+                        </small>
+                      </div>
+                    </div>
+                  </li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
+                    <Link className="dropdown-item" to={ROUTES.PROFILE} onClick={handleNavClick}>
+                      <i className="bi bi-person me-2"></i>
+                      My Profile
+                    </Link>
+                  </li>
+                  <li>
+                    <Link className="dropdown-item" to={ROUTES.SETTINGS} onClick={handleNavClick}>
+                      <i className="bi bi-gear me-2"></i>
+                      Settings
+                    </Link>
+                  </li>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
+                    <button className="dropdown-item logout-btn" onClick={handleSignOut}>
+                      <i className="bi bi-box-arrow-right me-2"></i>
+                      Sign Out
+                    </button>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 };
 

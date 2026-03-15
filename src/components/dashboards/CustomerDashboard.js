@@ -17,6 +17,69 @@ const convertTo12Hour = (time24) => {
 };
 
 const CustomerDashboard = () => {
+  const styles = {
+    card: {
+      borderRadius: '24px',
+      border: 'none',
+      overflow: 'hidden',
+    },
+    statsCardBlack: {
+      background: '#ffffff',
+      color: '#1a1a1a',
+      borderRadius: '24px',
+      border: '1px solid rgba(0,0,0,0.06)',
+    },
+    statsCardBrown: {
+      background: '#ffffff',
+      color: '#1a1a1a',
+      borderRadius: '24px',
+      border: '1px solid rgba(0,0,0,0.06)',
+    },
+    statsCardGray: {
+      background: '#ffffff',
+      color: '#1a1a1a',
+      borderRadius: '24px',
+      border: '1px solid rgba(0,0,0,0.06)',
+    },
+    statsCardWhite: {
+      background: '#ffffff',
+      color: '#1a1a1a',
+      borderRadius: '20px',
+      border: '1px solid #3d2b1f',
+    },
+    container: {
+      fontFamily: "'Outfit', 'Inter', sans-serif",
+      backgroundColor: '#fcfcfc',
+      minHeight: '100vh'
+    },
+    sectionTitle: {
+      fontSize: '0.85rem',
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: '1.5px',
+      color: '#1a1a1a',
+      marginBottom: '1.5rem',
+      display: 'flex',
+      alignItems: 'center',
+      fontFamily: "'Outfit', 'Inter', sans-serif"
+    },
+    appointmentCard: {
+      background: '#ffffff',
+      border: '1px solid #f0f0f0',
+      borderRadius: '20px',
+      transition: 'all 0.3s ease'
+    },
+    badgeOngoing: {
+      background: '#3d2b1f',
+      color: '#ffffff'
+    },
+    badgeUpcoming: {
+      background: '#f2f2f2',
+      color: '#1a1a1a',
+      border: '1px solid #dddddd'
+    }
+  };
+
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [queuePositions, setQueuePositions] = useState({});
   const [barberStatuses, setBarberStatuses] = useState({});
@@ -47,12 +110,13 @@ const CustomerDashboard = () => {
   useEffect(() => {
     getCurrentUser();
 
+    // Reduce delay for layout animations to improve perceived speed
     setTimeout(() => {
       setAnimateCards(true);
       setTimeout(() => {
         setAnimateActions(true);
-      }, 300);
-    }, 300);
+      }, 150);
+    }, 150);
   }, []);
 
   useEffect(() => {
@@ -94,8 +158,14 @@ const CustomerDashboard = () => {
   }, [user, realTimeUpdates]);
 
   const getCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    } finally {
+      // Set loading false as soon as we know the auth status
+      // This allows the shell of the page to render while data is still fetching
+      setLoading(false);
+    }
   };
 
   // Debounced refresh function to prevent rapid successive calls
@@ -321,7 +391,7 @@ const CustomerDashboard = () => {
       const favoriteBarberInfo = appointmentsByBarber.find(apt => apt.barber_id === favoriteBarber)?.barber;
 
       setUserStats({
-        totalAppointments,
+        totalAppointments: completedAppointments.length,
         favoriteBarber: favoriteBarberInfo,
         lastVisit: lastAppointment?.appointment_date,
         totalSpent,
@@ -656,8 +726,8 @@ const CustomerDashboard = () => {
 
   const getBarberStatusColor = (status) => {
     switch (status) {
-      case 'available': return 'success';
-      default: return 'secondary';
+      case 'available': return '#3d2b1f'; // Brown
+      default: return '#dddddd'; // Light Gray
     }
   };
 
@@ -668,18 +738,11 @@ const CustomerDashboard = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center min-vh-100">
-        <div className="spinner-grow text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    );
-  }
+  // The full page loading spinner is retired in favor of skeleton loading/progressive rendering
+  // for better LCP metrics. The header will render immediately.
 
   return (
-    <div className="container-fluid py-4 dashboard-container">
+    <div className="container-fluid py-4 dashboard-container" style={styles.container}>
       {/* Notification Permission Banner */}
       <div className="row mb-0">
         <div className="col">
@@ -702,7 +765,7 @@ const CustomerDashboard = () => {
       )}
 
       {/* Customer Welcome Header */}
-      <div className="row mb-0">
+      <div className="row mb-3">
         <div className="col">
           <div className="customer-welcome-header rounded shadow-sm d-flex align-items-center" style={{ padding: 'clamp(0.5rem, 2vw, 0.75rem)' }}>
             <div>
@@ -718,8 +781,12 @@ const CustomerDashboard = () => {
                     borderRadius: '5px'
                   }}
                 />
-                <h1 className="mb-0 text-white" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>
-                  Welcome back, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'}!
+                <h1 className="mb-0 text-white" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold', minHeight: '1.5em' }}>
+                  {loading ? (
+                    <span className="opacity-50">Welcome back...</span>
+                  ) : (
+                    `Welcome back, ${user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'}!`
+                  )}
                 </h1>
               </div>
             </div>
@@ -731,7 +798,7 @@ const CustomerDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="quick-actions-container mb-0">
+      <div className="quick-actions-container mb-3">
         <div className="quick-actions-grid">
           <Link
             to="/book"
@@ -796,74 +863,66 @@ const CustomerDashboard = () => {
       </div>
 
       {/* Stats Cards - 2x2 Grid */}
-      <div className="row mb-3 g-3">
-        <div className="col-6 col-md-6 mb-0">
+      <div className="row mb-4 g-3">
+        <div className="col-6 col-md-3">
           <div
-            className={`card stats-card bg-gradient-primary text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.1s' }}
+            className={`card h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
+            style={{ ...styles.statsCardBlack, animationDelay: '0.1s' }}
           >
-            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <div>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Total Visits</h6>
-                <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{userStats.totalAppointments}</h2>
-              </div>
-              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
-                <i className="bi bi-calendar-check"></i>
+            <div className="card-body d-flex flex-column justify-content-center p-3">
+              <div className="text-muted extra-small mb-1 fw-bold text-uppercase letter-spacing-1">Visits</div>
+              <h2 className="mb-0 fw-800 text-dark">{userStats.totalAppointments}</h2>
+              <div className="position-absolute end-0 bottom-0 p-2 opacity-10">
+                <i className="bi bi-calendar-check fs-1 text-dark"></i>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="col-6 col-md-6 mb-0">
+        <div className="col-6 col-md-3">
           <div
-            className={`card stats-card bg-gradient-success text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.2s' }}
+            className={`card h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
+            style={{ ...styles.statsCardBrown, animationDelay: '0.2s' }}
           >
-            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <div>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Total Spent</h6>
-                <h2 className="mb-0" style={{ fontSize: 'clamp(1rem, 3vw, 1.5rem)', fontWeight: 'bold', lineHeight: '1.2' }}>
-                  <span className="currency-amount-large">₱{userStats.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </h2>
-              </div>
-              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
-                <i className="bi bi-wallet2"></i>
+            <div className="card-body d-flex flex-column justify-content-center p-3">
+              <div className="text-muted extra-small mb-1 fw-bold text-uppercase letter-spacing-1">Spent</div>
+              <h2 className="mb-0 fw-800 text-dark" style={{ fontSize: '1.25rem' }}>
+                ₱{userStats.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </h2>
+              <div className="position-absolute end-0 bottom-0 p-2 opacity-10">
+                <i className="bi bi-wallet2 fs-1 text-dark"></i>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="col-6 col-md-6 mb-0">
+        <div className="col-6 col-md-3">
           <div
-            className={`card stats-card bg-gradient-info text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.3s' }}
+            className={`card h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
+            style={{ ...styles.statsCardGray, animationDelay: '0.3s' }}
           >
-            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <div>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Upcoming</h6>
-                <h2 className="mb-0" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', fontWeight: 'bold' }}>{userStats.upcomingCount}</h2>
-              </div>
-              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
-                <i className="bi bi-clock"></i>
+            <div className="card-body d-flex flex-column justify-content-center p-3">
+              <div className="text-muted small mb-1 fw-bold text-uppercase letter-spacing-1">Upcoming</div>
+              <h2 className="mb-0 fw-800 text-dark">{userStats.upcomingCount}</h2>
+              <div className="position-absolute end-0 bottom-0 p-2 opacity-10">
+                <i className="bi bi-clock fs-1 text-dark"></i>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="col-6 col-md-6 mb-0">
+        <div className="col-6 col-md-3">
           <div
-            className={`card stats-card bg-gradient-warning text-white h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
-            style={{ animationDelay: '0.4s' }}
+            className={`card h-100 shadow-sm ${animateCards ? 'card-animated' : ''}`}
+            style={{ ...styles.statsCardWhite, animationDelay: '0.4s' }}
           >
-            <div className="card-body d-flex align-items-center" style={{ padding: 'clamp(0.75rem, 2vw, 1rem)' }}>
-              <div>
-                <h6 className="card-title mb-1 mb-md-2" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.875rem)' }}>Favorite Barber</h6>
-                <h2 className="mb-0" style={{ fontSize: 'clamp(0.875rem, 2.5vw, 1.2rem)', fontWeight: 'bold', lineHeight: '1.2' }}>
-                  {userStats.favoriteBarber?.full_name || 'None yet'}
-                </h2>
-              </div>
-              <div className="ms-auto card-icon" style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)' }}>
-                <i className="bi bi-star"></i>
+            <div className="card-body d-flex flex-column justify-content-center p-3">
+              <div className="text-muted small mb-1 fw-bold text-uppercase letter-spacing-1">Favorite</div>
+              <h2 className="mb-0 fw-800 text-dark" style={{ fontSize: '0.9rem' }}>
+                {userStats.favoriteBarber?.full_name || 'None yet'}
+              </h2>
+              <div className="position-absolute end-0 bottom-0 p-2 opacity-10">
+                <i className="bi bi-star fs-1 text-dark"></i>
               </div>
             </div>
           </div>
@@ -872,147 +931,128 @@ const CustomerDashboard = () => {
 
       {/* Pending Requests Alert */}
       {pendingRequests.length > 0 && (
-        <div className="alert alert-warning shadow-sm mb-0" role="alert">
+        <div className="alert border-0 shadow-sm mb-4" style={{ background: '#f8f9fa', borderLeft: '4px solid #3d2b1f', borderRadius: '15px' }} role="alert">
           <div className="d-flex align-items-center">
             <div className="me-3">
-              <i className="bi bi-clock-fill fs-4"></i>
+              <i className="bi bi-clock-fill fs-4" style={{ color: '#3d2b1f' }}></i>
             </div>
             <div className="flex-grow-1">
-              <h5 className="alert-heading mb-1">Pending Requests</h5>
-              <p className="mb-0">
-                You have {pendingRequests.length} booking request{pendingRequests.length > 1 ? 's' : ''} waiting for barber confirmation.
+              <h6 className="mb-1 fw-800 text-dark">Pending Requests</h6>
+              <p className="mb-0 small text-muted">
+                You have {pendingRequests.length} booking request{pendingRequests.length > 1 ? 's' : ''} waiting for confirmation.
               </p>
             </div>
-            <Link to="/appointments" className="btn btn-warning">
-              View Details
+            <Link
+              to="/appointments"
+              className="btn btn-sm btn-premium-brown fw-bold"
+              style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '0.9rem' }}
+            >
+              View
             </Link>
           </div>
         </div>
       )}
 
-      <div className="row">
+      <div className="row g-4">
         {/* Upcoming Appointments */}
-        <div className="col-md-8 mb-0">
-          <div className="card shadow-sm appointments-card">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <div className="d-flex align-items-center">
-                <i className="bi bi-calendar-week me-2 header-icon"></i>
-                <h4 className="card-title mb-0">Upcoming Appointments</h4>
+        <div className="col-lg-8">
+          <div className="card shadow-sm border-0" style={{ borderRadius: '24px' }}>
+            <div className="card-header bg-white py-4 px-4 border-0 d-flex justify-content-between align-items-center">
+              <div style={styles.sectionTitle} className="mb-0">
+                <i className="bi bi-calendar-event me-2"></i>
+                Upcoming Appointments
               </div>
-              <Link to="/book" className="btn btn-primary btn-sm d-inline-flex align-items-center px-3">
-                <i className="bi bi-calendar-plus me-2"></i>
-                Create
+              <Link to="/book" className="btn btn-dark btn-sm rounded-pill px-4" style={{ backgroundColor: '#1a1a1a', display: 'flex', alignItems: 'center' }}>
+                <i className="bi bi-plus-lg me-2 text-white"></i>
+                <span style={{ color: '#ffffff' }}>New Booking</span>
               </Link>
             </div>
-            <div className="card-body">
+            <div className="card-body px-4 pb-4 pt-0">
               {upcomingAppointments.length === 0 ? (
                 <div className="empty-state text-center py-5">
-                  <div className="empty-icon mb-3">
-                    <i className="bi bi-calendar-x"></i>
+                  <div className="empty-icon mb-4">
+                    <i className="bi bi-calendar2-x text-muted" style={{ fontSize: '3rem opacity: 0.3' }}></i>
                   </div>
-                  <h5>No Upcoming Appointments</h5>
-                  <p className="text-muted mb-4">You don't have any appointments scheduled yet.</p>
-                  <Link to="/book" className="btn btn-primary me-2">
-                    <i className="bi bi-calendar-plus me-2"></i>
-                    Book An Appointment
+                  <h5 className="fw-800 text-dark">No Appointments</h5>
+                  <p className="text-muted mb-4 small">Your schedule is currently clear.</p>
+                  <Link to="/book" className="btn btn-dark rounded-pill px-4" style={{ backgroundColor: '#1a1a1a' }}>
+                    <span style={{ color: '#ffffff' }}>Book Now</span>
                   </Link>
                 </div>
               ) : (
                 <div className="row">
                   {upcomingAppointments.map((appointment) => (
                     <div key={appointment.id} className="col-md-6 mb-3">
-                      <div className={`card appointment-card h-100 ${appointment.status === 'ongoing' ? 'border-success border-2 shadow' : 'border-primary'}`}>
-                        <div className="card-body">
-                          <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div className="card h-100 shadow-sm" style={styles.appointmentCard}>
+                        <div className="card-body p-4">
+                          <div className="d-flex justify-content-between align-items-start mb-3">
                             <div>
-                              <h6 className="card-title mb-1">{getServicesDisplay(appointment)}</h6>
-                              <p className="text-muted mb-1">
-                                <i className="bi bi-person me-1"></i>
-                                {appointment.barber?.full_name}
-                              </p>
-                              <p className="text-muted mb-1">
-                                <i className="bi bi-calendar me-1"></i>
-                                {new Date(appointment.appointment_date).toLocaleDateString()}
-                              </p>
+                              <h6 className="fw-800 mb-1 text-dark">{getServicesDisplay(appointment)}</h6>
+                              <div className="d-flex flex-column gap-1">
+                                <span className="text-muted small">
+                                  <i className="bi bi-person me-2"></i>
+                                  {appointment.barber?.full_name}
+                                </span>
+                                <span className="text-muted small">
+                                  <i className="bi bi-calendar3 me-2"></i>
+                                  {new Date(appointment.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              </div>
                             </div>
                             <div className="text-end">
-                              <span className={`badge bg-${getBarberStatusColor(barberStatuses[appointment.barber_id])}`}>
-                                {getBarberStatusText(barberStatuses[appointment.barber_id])}
+                              <span className="badge rounded-pill" style={appointment.status === 'ongoing' ? styles.badgeOngoing : styles.badgeUpcoming}>
+                                {appointment.status === 'ongoing' ? 'In Progress' : 'Confirmed'}
                               </span>
-                              {appointment.is_urgent && (
-                                <div className="mt-1">
-                                  <span className="badge bg-warning">
-                                    <i className="bi bi-lightning-fill me-1"></i>URGENT
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           </div>
 
                           <div className="mb-2">
-                            <span className="text-success fw-bold">₱{getTotalPrice(appointment)}</span>
+                            <span className="fw-800 text-dark">₱{getTotalPrice(appointment)}</span>
                             <span className="text-muted ms-2">
                               ({appointment.total_duration || appointment.service?.duration} min)
                             </span>
                           </div>
 
                           {appointment.status === 'ongoing' && (
-                            <div className="alert alert-success py-2 mb-2 border-0 bg-success bg-opacity-10 text-success fw-bold d-flex align-items-center">
-                              <div className="spinner-grow spinner-grow-sm me-2" role="status"></div>
-                              <span>Your appointment is in progress!</span>
+                            <div className="py-2 px-3 mb-3 border-0 rounded-3 d-flex align-items-center" style={{ background: '#3d2b1f', color: '#ffffff' }}>
+                              <div className="spinner-grow spinner-grow-sm me-2 text-white" role="status"></div>
+                              <span className="small fw-bold">In Progress...</span>
                             </div>
                           )}
 
                           {['scheduled', 'confirmed'].includes(appointment.status) && queuePositions[appointment.id] && (
-                            <div className="alert alert-info py-2 mb-2 border-0 bg-info bg-opacity-10 text-info fw-bold">
-                              <small>
-                                <div className="d-flex align-items-center mb-1">
-                                  <i className="bi bi-people me-2"></i>
-                                  <span>Queue position: #{queuePositions[appointment.id].position} of {queuePositions[appointment.id].totalInQueue}</span>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                  <i className="bi bi-clock me-2"></i>
-                                  <span>Est. wait: {queuePositions[appointment.id].estimatedWait}</span>
-                                </div>
-                              </small>
+                            <div className="py-2 px-3 mb-3 border-0 rounded-3" style={{ background: '#f8f9fa', color: '#1a1a1a', border: '1px solid #eeeeee' }}>
+                              <div className="d-flex align-items-center mb-1">
+                                <i className="bi bi-people me-2" style={{ color: '#3d2b1f' }}></i>
+                                <span className="small fw-bold">Queue: #{queuePositions[appointment.id].position} / {queuePositions[appointment.id].totalInQueue}</span>
+                              </div>
+                              <div className="d-flex align-items-center">
+                                <i className="bi bi-clock me-2" style={{ color: '#3d2b1f' }}></i>
+                                <span className="small">Wait: {queuePositions[appointment.id].estimatedWait}</span>
+                              </div>
                             </div>
                           )}
 
-                          {/* Priority Request Status */}
                           {appointment.priority_request_status === 'pending' && (
-                            <div className="alert alert-warning py-2 mb-2">
-                              <small>
-                                <i className="bi bi-clock-history me-1"></i>
-                                Priority request pending manager approval
-                              </small>
+                            <div className="py-2 px-3 mb-2 rounded-3" style={{ background: '#f8f9fa', border: '1px solid #3d2b1f', color: '#3d2b1f' }}>
+                              <small className="fw-bold"><i className="bi bi-clock-history me-1"></i> Priority Pending</small>
                             </div>
                           )}
                           {appointment.priority_request_status === 'approved' && !appointment.is_urgent && (
-                            <div className="alert alert-info py-2 mb-2">
-                              <small>
-                                <i className="bi bi-check-circle me-1"></i>
-                                Priority approved! Fee will be applied.
-                              </small>
+                            <div className="py-2 px-3 mb-2 rounded-3" style={{ background: '#f2f2f2', border: '1px solid #dddddd', color: '#1a1a1a' }}>
+                              <small className="fw-bold"><i className="bi bi-check-circle-fill me-1"></i> Priority Approved</small>
                             </div>
                           )}
                           {appointment.priority_request_status === 'rejected' && (
-                            <div className="alert alert-secondary py-2 mb-2">
-                              <small>
-                                <i className="bi bi-x-circle me-1"></i>
-                                Priority request was declined
-                              </small>
+                            <div className="py-2 px-3 mb-2 rounded-3" style={{ background: '#f8f9fa', border: '1px solid #eeeeee', color: '#999' }}>
+                              <small><i className="bi bi-x-circle me-1"></i> Priority Declined</small>
                             </div>
                           )}
 
 
 
                           {/* Action Buttons */}
-                          <div className="d-flex gap-2">
-                            {/* Show Request Priority button if:
-                                - Status is scheduled, confirmed, or pending (not ongoing or cancelled)
-                                - Not already urgent
-                                - No pending/approved/rejected priority request exists
-                                - Has a queue position (is in queue) */}
+                          <div className="d-flex gap-2 mt-3">
                             {['scheduled', 'confirmed', 'pending'].includes(appointment.status) &&
                               !appointment.is_urgent &&
                               (appointment.priority_request_status === null ||
@@ -1020,21 +1060,21 @@ const CustomerDashboard = () => {
                                 appointment.priority_request_status === '') &&
                               appointment.queue_position !== null && (
                                 <button
-                                  className="btn btn-sm btn-warning"
+                                  className="btn btn-sm rounded-pill px-3"
+                                  style={{ background: '#3d2b1f' }}
                                   onClick={() => openPriorityRequestModal(appointment)}
-                                  title="Request Priority (₱100 fee if approved)"
                                 >
-                                  <i className="bi bi-lightning-fill me-1"></i>
-                                  Request Priority
+                                  <i className="bi bi-lightning-fill me-1 text-white"></i>
+                                  <span style={{ color: '#ffffff' }}>Priority</span>
                                 </button>
                               )}
                             {['scheduled', 'confirmed', 'pending'].includes(appointment.status) && (
                               <button
-                                className="btn btn-sm btn-outline-danger"
+                                className="btn btn-sm btn-outline-dark px-3 rounded-pill"
                                 onClick={() => handleCancelAppointment(appointment.id)}
-                                title="Cancel"
                               >
-                                <i className="bi bi-x-circle"></i>
+                                <i className="bi bi-x-lg me-1"></i>
+                                Cancel
                               </button>
                             )}
                           </div>
@@ -1049,21 +1089,23 @@ const CustomerDashboard = () => {
         </div>
 
         {/* Simplified Queue Status */}
-        <div className="col-md-4 mt-3">
-          <div className="card shadow-sm border-0">
-            <div className="card-header bg-white border-0">
-              <h6 className="mb-0 text-dark fw-bold">
-                <i className="bi bi-people me-2 text-primary"></i>
+        <div className="col-lg-4">
+          <div className="card shadow-sm border-0" style={{ borderRadius: '24px' }}>
+            <div className="card-header bg-white py-4 px-4 border-0">
+              <div style={styles.sectionTitle} className="mb-0">
+                <i className="bi bi-people me-2"></i>
                 Queue Status
-              </h6>
+              </div>
             </div>
-            <div className="card-body p-3">
+            <div className="card-body p-4 pt-0">
               {Object.keys(liveQueueStatus).length > 0 ? (
                 Object.entries(liveQueueStatus).map(([barberId, queueData]) => (
-                  <div key={barberId} className="mb-3">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="mb-0 fw-bold text-dark">{queueData.barber_name}</h6>
-                      <span className="badge bg-primary">{queueData.total} waiting</span>
+                  <div key={barberId} className="mb-4">
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                      <h6 className="mb-0 fw-800 text-dark">{queueData.barber_name}</h6>
+                      <span className="badge rounded-pill px-3" style={{ background: '#f2f2f2', color: '#1a1a1a', border: '1px solid #eeeeee' }}>
+                        {queueData.total} in queue
+                      </span>
                     </div>
 
                     <div className="queue-simple">
@@ -1084,14 +1126,14 @@ const CustomerDashboard = () => {
                         }
 
                         return (
-                          <div key={appointment.id} className={`d-flex align-items-center justify-content-between p-2 mb-2 rounded ${appointment.status === 'ongoing' ? 'bg-success text-white shadow-sm fw-bold border-start border-4 border-light' :
-                            ['scheduled', 'confirmed'].includes(appointment.status) ? 'bg-primary text-white' :
-                              'bg-light'
+                          <div key={appointment.id} className={`d-flex align-items-center justify-content-between p-3 mb-2 rounded-4 ${appointment.status === 'ongoing' ? 'bg-dark text-white shadow-sm fw-bold' :
+                            ['scheduled', 'confirmed'].includes(appointment.status) ? 'bg-white border border-secondary text-dark' :
+                              'bg-light border border-light'
                             }`}>
                             <div className="d-flex align-items-center">
                               <span className="fw-bold me-2">
                                 {upcomingAppointments.some(userApt => userApt.id === appointment.id) ? (
-                                  <span className="badge bg-warning text-dark border border-white shadow-sm pulse-badge me-1" style={{ fontSize: '0.75rem' }}>
+                                  <span className="badge bg-white text-dark border shadow-sm pulse-badge me-1" style={{ fontSize: '0.7rem' }}>
                                     YOU
                                   </span>
                                 ) : (
@@ -1103,13 +1145,8 @@ const CustomerDashboard = () => {
                               {appointment.is_urgent && (
                                 <i className="bi bi-lightning-fill text-warning me-1"></i>
                               )}
-                              {appointment.status === 'ongoing' && (
-                                <span className="badge bg-white text-success p-1 rounded-circle me-1" style={{ width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <i className="bi bi-scissors" style={{ fontSize: '0.6rem' }}></i>
-                                </span>
-                              )}
                             </div>
-                            <small className={appointment.status === 'ongoing' ? 'text-white' : ''}>
+                            <small className="opacity-75">
                               {displayTime}
                             </small>
                           </div>
@@ -1131,24 +1168,24 @@ const CustomerDashboard = () => {
 
       {/* Priority Request Confirmation Modal */}
       {priorityRequestModal.isOpen && priorityRequestModal.appointment && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)' }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header bg-warning text-dark">
-                <h5 className="modal-title">
-                  <i className="bi bi-lightning-fill me-2"></i>
-                  Request Priority Service
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '28px' }}>
+              <div className="modal-header border-0 pt-4 px-4">
+                <h5 className="modal-title fw-800 text-dark">
+                  <i className="bi bi-lightning-fill me-2" style={{ color: '#3d2b1f' }}></i>
+                  Priority Service
                 </h5>
                 <button
                   type="button"
-                  className="btn-close"
+                  className="btn-close shadow-none"
                   onClick={closePriorityRequestModal}
                 ></button>
               </div>
               <div className="modal-body">
-                <div className="alert alert-info mb-3">
-                  <i className="bi bi-info-circle me-2"></i>
-                  <strong>Priority service</strong> moves your appointment to the front of the queue. A ₱100 fee will be applied if approved by the manager.
+                <div className="alert border-0 mb-3" style={{ background: '#f2f2f2', color: '#1a1a1a', borderRadius: '15px' }}>
+                  <i className="bi bi-info-circle me-2" style={{ color: '#3d2b1f' }}></i>
+                  <small><strong>Priority service</strong> moves your appointment to the front of the queue. A ₱100 fee will be applied if approved.</small>
                 </div>
 
                 <div className="card border-0 bg-light mb-3">
@@ -1173,30 +1210,30 @@ const CustomerDashboard = () => {
                       </div>
                       <div className="col-12">
                         <small className="text-muted d-block">Current Price</small>
-                        <strong className="text-success">₱{getTotalPrice(priorityRequestModal.appointment)}</strong>
+                        <strong className="text-dark">₱{getTotalPrice(priorityRequestModal.appointment)}</strong>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="card border-warning mb-3">
+                <div className="card mb-3" style={{ border: '1px solid #3d2b1f', borderRadius: '15px' }}>
                   <div className="card-body">
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h6 className="mb-1">Priority Fee</h6>
+                        <h6 className="mb-0 fw-800">Priority Fee</h6>
                         <small className="text-muted">Applied if approved</small>
                       </div>
                       <div className="text-end">
-                        <h5 className="mb-0 text-warning">+₱100.00</h5>
+                        <h5 className="mb-0 fw-800" style={{ color: '#3d2b1f' }}>+₱100.00</h5>
                       </div>
                     </div>
                     <hr />
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h6 className="mb-0">Total (if approved)</h6>
+                        <h6 className="mb-0 fw-800">New Total</h6>
                       </div>
                       <div className="text-end">
-                        <h5 className="mb-0 text-success">
+                        <h5 className="mb-0 fw-800 text-dark">
                           ₱{getTotalPrice(priorityRequestModal.appointment) + 100}
                         </h5>
                       </div>
@@ -1204,29 +1241,28 @@ const CustomerDashboard = () => {
                   </div>
                 </div>
 
-                <div className="alert alert-warning mb-0">
+                <div className="alert border-0 mb-0" style={{ background: '#f8f9fa', color: '#666', borderRadius: '15px' }}>
                   <small>
-                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    <i className="bi bi-info-circle me-2"></i>
                     <strong>Note:</strong> Your request will be reviewed by a manager. You will be notified once a decision is made.
                   </small>
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="modal-footer border-0 pb-4 px-4 gap-2">
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-light rounded-pill px-4 fw-bold"
                   onClick={closePriorityRequestModal}
                 >
-                  <i className="bi bi-x-circle me-1"></i>
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="btn btn-warning"
+                  className="btn rounded-pill px-4 fw-bold shadow-sm"
+                  style={{ background: '#3d2b1f' }}
                   onClick={() => handleRequestPriority(priorityRequestModal.appointment.id)}
                 >
-                  <i className="bi bi-lightning-fill me-1"></i>
-                  Submit Request
+                  <span style={{ color: '#ffffff' }}>Confirm Request</span>
                 </button>
               </div>
             </div>
@@ -1238,8 +1274,40 @@ const CustomerDashboard = () => {
           animation: pulse-animation 2s infinite;
         }
         @keyframes pulse-animation {
-          0% { box-shadow: 0 0 0 0px rgba(255, 193, 7, 0.4); }
-          100% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+          0% { box-shadow: 0 0 0 0px rgba(61, 43, 31, 0.4); }
+          100% { box-shadow: 0 0 0 10px rgba(61, 43, 31, 0); }
+        }
+        .dashboard-container {
+          background-color: #f8f9fa;
+          min-vh: 100vh;
+        }
+        .fw-800 { font-weight: 800; }
+        .letter-spacing-1 { letter-spacing: 1px; }
+
+        /* Force white text on dark buttons and their spans */
+        .btn-dark, 
+        .btn-dark *,
+        .btn-dark:hover, 
+        .btn-dark:active, 
+        .btn-dark:focus,
+        .btn-premium-brown,
+        .btn-premium-brown *,
+        [style*="background: #3d2b1f"],
+        [style*="background: #3d2b1f"] *,
+        [style*="background:#3d2b1f"],
+        [style*="background:#3d2b1f"] * {
+          color: #ffffff !important;
+        }
+        .btn-premium-brown {
+          background-color: #3d2b1f !important;
+          color: #ffffff !important;
+          border: none;
+        }
+        .btn-premium-brown:hover {
+          background-color: #4d3b2f !important;
+          color: #ffffff !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
       `}</style>
     </div>

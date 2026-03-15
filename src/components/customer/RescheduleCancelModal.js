@@ -129,39 +129,39 @@ const RescheduleCancelModal = ({
   return (
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">
-              <i className={`bi bi-${action === 'reschedule' ? 'arrow-repeat' : 'x-circle'} me-2`}></i>
+        <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+          <div className="modal-header bg-dark text-white p-4">
+            <h5 className="modal-title fw-bold">
+              <i className={`bi bi-${action === 'reschedule' ? 'arrow-repeat' : 'x-circle'} me-2 text-brown-premium`}></i>
               {action === 'reschedule' ? 'Reschedule' : 'Cancel'} Appointment
             </h5>
             <button 
               type="button" 
-              className="btn-close" 
+              className="btn-close btn-close-white" 
               onClick={onClose}
               disabled={loading}
             ></button>
           </div>
           
           <form onSubmit={handleSubmit}>
-            <div className="modal-body">
+            <div className="modal-body p-4">
               <div className="mb-4">
-                <h6 className="text-primary mb-3">
-                  <i className="bi bi-calendar-event me-2"></i>
-                  Current Appointment Details
+                <h6 className="text-dark fw-bold mb-3 d-flex align-items-center">
+                  <i className="bi bi-calendar-event me-2 text-brown-premium"></i>
+                  Session Details
                 </h6>
                 <div className="card border-0 bg-light">
                   <div className="card-body p-3">
                     <div className="row g-3">
                       <div className="col-12 col-sm-6">
                         <div className="d-flex align-items-center">
-                          <i className="bi bi-calendar-date text-primary me-2"></i>
+                          <i className="bi bi-calendar-date text-brown-premium me-2"></i>
                           <div>
                             <small className="text-muted d-block">Date</small>
-                            <strong>{new Date(appointment.appointment_date).toLocaleDateString('en-US', { 
-                              weekday: 'long', 
+                            <strong className="text-dark small">{new Date(appointment.appointment_date).toLocaleDateString('en-US', { 
+                              weekday: 'short', 
                               year: 'numeric', 
-                              month: 'long', 
+                              month: 'short', 
                               day: 'numeric' 
                             })}</strong>
                           </div>
@@ -169,10 +169,10 @@ const RescheduleCancelModal = ({
                       </div>
                       <div className="col-12 col-sm-6">
                         <div className="d-flex align-items-center">
-                          <i className="bi bi-clock text-primary me-2"></i>
+                          <i className="bi bi-clock text-brown-premium me-2"></i>
                           <div>
                             <small className="text-muted d-block">Time</small>
-                            <strong>
+                            <strong className="text-dark small">
                               {appointment.appointment_time 
                                 ? new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', { 
                                     hour: 'numeric', 
@@ -187,19 +187,19 @@ const RescheduleCancelModal = ({
                       </div>
                       <div className="col-12 col-sm-6">
                         <div className="d-flex align-items-center">
-                          <i className="bi bi-person-badge text-primary me-2"></i>
+                          <i className="bi bi-person-badge text-brown-premium me-2"></i>
                           <div>
                             <small className="text-muted d-block">Barber</small>
-                            <strong>{appointment.barber?.full_name || 'N/A'}</strong>
+                            <strong className="text-dark small">{appointment.barber?.full_name || 'N/A'}</strong>
                           </div>
                         </div>
                       </div>
                       <div className="col-12 col-sm-6">
                         <div className="d-flex align-items-center">
-                          <i className="bi bi-tag text-primary me-2"></i>
+                          <i className="bi bi-tag text-brown-premium me-2"></i>
                           <div>
                             <small className="text-muted d-block">Type</small>
-                            <span className={`badge ${appointment.appointment_type === 'scheduled' ? 'bg-info' : 'bg-warning'}`}>
+                            <span className="badge bg-dark text-brown-light px-2 py-1 rounded-pill extra-small">
                               {appointment.appointment_type === 'scheduled' ? 'Scheduled' : 'Queue'}
                             </span>
                           </div>
@@ -244,16 +244,16 @@ const RescheduleCancelModal = ({
               <div className="d-flex gap-2 w-100">
                 <button 
                   type="button" 
-                  className="btn btn-outline-secondary flex-fill" 
+                  className="btn btn-outline-dark flex-fill rounded-pill py-2" 
                   onClick={onClose}
                   disabled={loading}
                 >
                   <i className="bi bi-x-lg me-2"></i>
-                  Cancel
+                  Close
                 </button>
                 <button 
                   type="submit" 
-                  className={`btn ${action === 'reschedule' ? 'btn-warning' : 'btn-danger'} flex-fill`}
+                  className="btn btn-brown-premium flex-fill rounded-pill py-2"
                   disabled={loading || !reason.trim()}
                 >
                   {loading ? (

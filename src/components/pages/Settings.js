@@ -319,34 +319,104 @@ const Settings = () => {
   }
 
   return (
-    <div className="container mt-4 mb-5">
+    <div className="container-fluid min-vh-100 py-4" style={{ background: '#fdfdfd', color: '#1a1a1a', fontFamily: "'Outfit', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        :root {
+          --premium-brown: #3d2c24;
+          --premium-dark: #1a1a1a;
+          --border-subtle: rgba(0,0,0,0.06);
+        }
+        .settings-card {
+          background: #fff;
+          border: 1px solid var(--border-subtle);
+          border-radius: 20px;
+          transition: all 0.3s ease;
+          overflow: hidden;
+          margin-bottom: 1.5rem;
+        }
+        .settings-card:hover {
+          box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        .settings-header {
+          border-bottom: 1px solid var(--border-subtle);
+          padding: 20px;
+          background: #fff;
+        }
+        .btn-premium {
+          background-color: var(--premium-dark);
+          color: white;
+          border-radius: 50px;
+          padding: 8px 24px;
+          font-weight: 600;
+          font-size: 0.85rem;
+          border: none;
+          transition: 0.3s ease;
+        }
+        .btn-premium:hover {
+          background-color: var(--premium-brown);
+          color: white;
+        }
+        .btn-premium-outline {
+          background-color: transparent;
+          color: var(--premium-dark);
+          border: 1px solid var(--border-subtle);
+          border-radius: 50px;
+          padding: 8px 24px;
+          font-weight: 600;
+          font-size: 0.85rem;
+          transition: 0.3s ease;
+        }
+        .btn-premium-outline:hover {
+          border-color: var(--premium-dark);
+          background-color: #f8f9fa;
+        }
+        .form-control, .form-select {
+          border-radius: 12px;
+          padding: 10px 15px;
+          border: 1px solid var(--border-subtle);
+          background-color: #f8f9fa;
+          font-size: 0.9rem;
+        }
+        .form-control:focus, .form-select:focus {
+          border-color: var(--premium-dark);
+          box-shadow: 0 0 0 0.2rem rgba(26, 26, 26, 0.1);
+          background-color: #fff;
+        }
+        .nav-tabs .nav-link {
+          color: #666;
+          border: none;
+          border-bottom: 2px solid transparent;
+          font-weight: 600;
+          padding: 12px 20px;
+          transition: all 0.3s ease;
+        }
+        .nav-tabs .nav-link:hover {
+          color: var(--premium-dark);
+          border-color: transparent;
+        }
+        .nav-tabs .nav-link.active {
+          color: var(--premium-dark);
+          background-color: transparent;
+          border-color: transparent;
+          border-bottom: 2px solid var(--premium-dark);
+        }
+        .nav-tabs {
+          border-bottom: 1px solid var(--border-subtle);
+          padding: 0 10px;
+          background-color: #fcfcfc;
+        }
+      `}</style>
       <div className="row justify-content-center">
-        <div className="col-md-10">
-          {/* Header Card */}
-          <div className="card shadow-sm mb-4">
-            <div className="card-header bg-dark text-white">
-              <div className="d-flex align-items-center">
-                <img
-                  src={logoImage}
-                  alt="RAF & ROX"
-                  height="40"
-                  className="me-3"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    padding: '5px',
-                    borderRadius: '8px'
-                  }}
-                />
-                <div>
-                  <h4 className="mb-0">
-                    <i className="bi bi-gear me-2"></i>
-                    Settings
-                  </h4>
-                  <small className="text-light opacity-75">
-                    Manage your account preferences
-                  </small>
-                </div>
-              </div>
+        <div className="col-md-9 col-lg-8">
+          {/* Header */}
+          <div className="d-flex align-items-center gap-3 mb-4">
+            <div className="bg-white rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm flex-shrink-0" style={{ width: '55px', height: '55px', border: '1px solid #eee' }}>
+               <img src={logoImage} alt="Raf & Rox" style={{ width: '40px' }} />
+            </div>
+            <div>
+              <h3 className="mb-0 fw-bold fs-4 fs-md-3">Settings</h3>
+              <p className="text-muted small mb-0">Manage your account preferences and security</p>
             </div>
           </div>
 
@@ -364,42 +434,42 @@ const Settings = () => {
           )}
 
           {/* Settings Navigation Tabs */}
-          <div className="card shadow-sm">
-            <div className="card-header">
-              <ul className="nav nav-tabs card-header-tabs" role="tablist">
+          <div className="settings-card pt-0">
+            <div>
+              <ul className="nav nav-tabs border-0" role="tablist">
                 <li className="nav-item" role="presentation">
                   <button
-                    className={`nav-link ${activeTab === 'notifications' ? 'active' : ''}`}
+                    className={`nav-link rounded-0 ${activeTab === 'notifications' ? 'active' : ''}`}
                     onClick={() => setActiveTab('notifications')}
                     type="button"
                   >
-                    <i className="bi bi-bell me-2"></i>
+                    <i className="bi bi-bell-fill me-2"></i>
                     Notifications
                   </button>
                 </li>
                 <li className="nav-item" role="presentation">
                   <button
-                    className={`nav-link ${activeTab === 'privacy' ? 'active' : ''}`}
+                    className={`nav-link rounded-0 ${activeTab === 'privacy' ? 'active' : ''}`}
                     onClick={() => setActiveTab('privacy')}
                     type="button"
                   >
-                    <i className="bi bi-shield-lock me-2"></i>
+                    <i className="bi bi-shield-lock-fill me-2"></i>
                     Privacy
                   </button>
                 </li>
                 <li className="nav-item" role="presentation">
                   <button
-                    className={`nav-link ${activeTab === 'security' ? 'active' : ''}`}
+                    className={`nav-link rounded-0 ${activeTab === 'security' ? 'active' : ''}`}
                     onClick={() => setActiveTab('security')}
                     type="button"
                   >
-                    <i className="bi bi-key me-2"></i>
+                    <i className="bi bi-key-fill me-2"></i>
                     Security
                   </button>
                 </li>
                 <li className="nav-item" role="presentation">
                   <button
-                    className={`nav-link ${activeTab === 'preferences' ? 'active' : ''}`}
+                    className={`nav-link rounded-0 ${activeTab === 'preferences' ? 'active' : ''}`}
                     onClick={() => setActiveTab('preferences')}
                     type="button"
                   >
@@ -410,32 +480,32 @@ const Settings = () => {
               </ul>
             </div>
 
-            <div className="card-body">
+            <div className="card-body p-4 p-md-5">
               {/* Notifications Tab */}
               {activeTab === 'notifications' && (
                 <div>
-                  <h5 className="mb-4">
-                    <i className="bi bi-bell me-2"></i>
+                  <h5 className="mb-4 fw-bold">
+                    <i className="bi bi-bell text-muted me-2"></i>
                     Notification Preferences
                   </h5>
 
-                  <div className="row">
-                    <div className="col-md-6 mb-4">
-                      <div className="card border-light h-100">
-                        <div className="card-body">
-                          <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h6 className="card-title mb-0">Push Notifications</h6>
+                  <div className="row g-4">
+                    <div className="col-12 mb-2">
+                      <div className="p-4 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div>
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <h6 className="mb-0 fw-bold">Push Notifications</h6>
                             {pushStatus.supported ? (
-                              <span className={`badge ${pushStatus.permission === 'granted' ? 'bg-success' : (pushStatus.permission === 'denied' ? 'bg-danger' : 'bg-warning')}`}>
+                              <span className="bg-dark text-white px-3 py-1 rounded-pill small fw-bold">
                                 {pushStatus.permission === 'granted' ? 'Enabled' : (pushStatus.permission === 'denied' ? 'Blocked' : 'Disabled')}
                               </span>
                             ) : (
-                              <span className="badge bg-secondary">Not Supported</span>
+                              <span className="bg-secondary text-white px-3 py-1 rounded-pill small fw-bold">Not Supported</span>
                             )}
                           </div>
 
-                          {pushStatus.permission === 'denied' && (
-                            <div className="alert alert-danger py-2 px-3 mb-3" style={{ fontSize: '0.8rem' }}>
+                              {pushStatus.permission === 'denied' && (
+                            <div className="alert bg-light border-dark text-dark py-2 px-3 mb-3 fw-medium rounded-3" style={{ fontSize: '0.8rem' }}>
                               <i className="bi bi-exclamation-octagon-fill me-2"></i>
                               Notifications are <strong>blocked</strong> by your browser.
                               <div className="mt-1">
@@ -450,30 +520,30 @@ const Settings = () => {
 
                           {/* iOS Specific Instructions */}
                           {/iPhone|iPad|iPod/i.test(navigator.userAgent) && (
-                            <div className={`alert ${window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches ? 'alert-success' : 'alert-warning'} py-2 px-3 mb-3`} style={{ fontSize: '0.85rem' }}>
-                              <h6 className="alert-heading mb-1" style={{ fontSize: '0.9rem' }}>
+                            <div className="alert bg-light border-dark py-2 px-3 mb-3 rounded-3" style={{ fontSize: '0.85rem' }}>
+                              <h6 className="alert-heading mb-1 fw-bold text-dark" style={{ fontSize: '0.9rem' }}>
                                 <i className="bi bi-apple me-2"></i>
                                 {window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches ? 'PWA Mode Active' : 'iOS Setup Required'}
                               </h6>
                               {!(window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) ? (
                                 <>
-                                  <p className="mb-2">Chrome on iOS only supports notifications when saved as an app:</p>
-                                  <ol className="mb-0 ps-3">
+                                  <p className="mb-2 text-dark">Chrome on iOS only supports notifications when saved as an app:</p>
+                                  <ol className="mb-0 ps-3 text-dark fw-medium">
                                     <li>Tap the <strong>Share</strong> icon (in the address bar or bottom bar).</li>
                                     <li>Select <strong>"Add to Home Screen"</strong>.</li>
                                     <li>Open the <strong>R&R Booker</strong> app from your home screen.</li>
                                   </ol>
                                 </>
                               ) : (
-                                <p className="mb-0">You are running in App mode! You can now enable push notifications below.</p>
+                                <p className="mb-0 text-dark fw-medium">You are running in App mode! You can now enable push notifications below.</p>
                               )}
                             </div>
                           )}
 
-                          <div className="d-grid gap-2">
+                          <div className="d-flex flex-wrap gap-2 mt-3">
                             {pushStatus.permission !== 'granted' ? (
                               <button
-                                className="btn btn-outline-primary btn-sm"
+                                className="btn-premium"
                                 onClick={handleEnablePush}
                                 disabled={saving}
                               >
@@ -483,7 +553,7 @@ const Settings = () => {
                             ) : (
                               <>
                                 <button
-                                  className="btn btn-outline-success btn-sm"
+                                  className="btn-premium flex-grow-1"
                                   onClick={handleTestNotification}
                                   disabled={saving}
                                 >
@@ -491,7 +561,7 @@ const Settings = () => {
                                   Send Test Notification
                                 </button>
                                 <button
-                                  className="btn btn-outline-info btn-sm"
+                                  className="btn-premium-outline flex-grow-1"
                                   onClick={handleBrowserTest}
                                   disabled={saving}
                                 >
@@ -505,24 +575,25 @@ const Settings = () => {
                       </div>
                     </div>
 
-                    <div className="col-md-6 mb-4">
-                      <div className="card border-light h-100">
-                        <div className="card-body">
-                          <h6 className="card-title">Email Notifications</h6>
-                          <p className="small text-muted mb-3">
+                    <div className="col-12 mb-2">
+                      <div className="p-4 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div>
+                          <h6 className="mb-0 fw-bold">Email Notifications</h6>
+                          <p className="small text-muted mb-3 mt-1">
                             Get appointment summaries and updates via email.
                           </p>
-                          <div className="form-check form-switch">
+                          <div className="form-check form-switch p-0 m-0 d-flex align-items-center justify-content-between">
+                            <label className="form-check-label fw-medium m-0" htmlFor="emailNotifications">
+                              Receive emails
+                            </label>
                             <input
-                              className="form-check-input"
+                              className="form-check-input m-0 custom-switch"
                               type="checkbox"
                               id="emailNotifications"
                               checked={settings.emailNotifications}
                               onChange={(e) => handleSettingChange('emailNotifications', e.target.checked)}
+                              style={{ transform: 'scale(1.2)' }}
                             />
-                            <label className="form-check-label" htmlFor="emailNotifications">
-                              Receive emails
-                            </label>
                           </div>
                         </div>
                       </div>
@@ -535,46 +606,51 @@ const Settings = () => {
               {/* Privacy Tab */}
               {activeTab === 'privacy' && (
                 <div>
-                  <h5 className="mb-4">
-                    <i className="bi bi-shield-lock me-2"></i>
+                  <h5 className="mb-4 fw-bold">
+                    <i className="bi bi-shield-lock text-muted me-2"></i>
                     Privacy Settings
                   </h5>
 
-                  <div className="card border-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title">Data Sharing</h6>
-                      <p className="card-text text-muted">
+                  <div className="p-4 bg-light rounded-4 border mb-4" style={{ backgroundColor: '#fcfcfc' }}>
+                    <div>
+                      <h6 className="mb-0 fw-bold">Data Sharing</h6>
+                      <p className="text-muted small mt-1 mb-4">
                         Control how your data is used and shared within the RAF & ROX system.
                       </p>
-                      <div className="form-check form-switch mb-3">
-                        <input className="form-check-input" type="checkbox" id="shareAnalytics" defaultChecked />
-                        <label className="form-check-label" htmlFor="shareAnalytics">
+                      
+                      <div className="form-check form-switch p-0 m-0 d-flex align-items-center justify-content-between mb-3 border-bottom pb-3">
+                        <label className="form-check-label fw-medium m-0" htmlFor="shareAnalytics">
                           Share anonymous usage analytics to improve services
                         </label>
+                        <input className="form-check-input m-0 flex-shrink-0" type="checkbox" id="shareAnalytics" defaultChecked style={{ transform: 'scale(1.2)' }} />
                       </div>
-                      <div className="form-check form-switch">
-                        <input className="form-check-input" type="checkbox" id="sharePreferences" />
-                        <label className="form-check-label" htmlFor="sharePreferences">
+                      
+                      <div className="form-check form-switch p-0 m-0 d-flex align-items-center justify-content-between">
+                        <label className="form-check-label fw-medium m-0" htmlFor="sharePreferences">
                           Share preferences with barbers for better recommendations
                         </label>
+                        <input className="form-check-input m-0 flex-shrink-0" type="checkbox" id="sharePreferences" style={{ transform: 'scale(1.2)' }} />
                       </div>
                     </div>
                   </div>
 
-                  <div className="card border-light">
-                    <div className="card-body">
-                      <h6 className="card-title">Account Data</h6>
-                      <p className="card-text text-muted">
+                  <div className="p-4 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                    <div>
+                      <h6 className="mb-0 fw-bold">Account Data</h6>
+                      <p className="text-muted small mt-1 mb-4">
                         Manage your personal data and account information.
                       </p>
-                      <button className="btn btn-outline-primary me-2">
-                        <i className="bi bi-download me-2"></i>
-                        Download My Data
-                      </button>
-                      <button className="btn btn-outline-danger">
-                        <i className="bi bi-trash me-2"></i>
-                        Request Account Deletion
-                      </button>
+                      
+                      <div className="d-flex flex-wrap gap-2">
+                        <button className="btn-premium">
+                          <i className="bi bi-download me-2"></i>
+                          Download My Data
+                        </button>
+                        <button className="btn-premium-outline">
+                          <i className="bi bi-trash me-2"></i>
+                          Request Account Deletion
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -583,21 +659,21 @@ const Settings = () => {
               {/* Security Tab */}
               {activeTab === 'security' && (
                 <div>
-                  <h5 className="mb-4">
-                    <i className="bi bi-key me-2"></i>
+                  <h5 className="mb-4 fw-bold">
+                    <i className="bi bi-key text-muted me-2"></i>
                     Security Settings
                   </h5>
 
                   {/* Change Password */}
-                  <div className="card border-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title">Change Password</h6>
+                  <div className="p-4 bg-light rounded-4 border mb-4" style={{ backgroundColor: '#fcfcfc' }}>
+                    <div>
+                      <h6 className="mb-4 fw-bold">Change Password</h6>
 
                       {passwordStep === 1 ? (
                         <form onSubmit={handleSendPasswordOTP}>
-                          <div className="row">
-                            <div className="col-md-6 mb-3">
-                              <label htmlFor="newPassword" className="form-label">New Password</label>
+                          <div className="row g-3">
+                            <div className="col-md-6">
+                              <label htmlFor="newPassword" className="form-label fw-medium small text-muted">New Password</label>
                               <div className="input-group">
                                 <input
                                   type={showPassword ? 'text' : 'password'}
@@ -610,17 +686,17 @@ const Settings = () => {
                                   minLength="8"
                                 />
                                 <button
-                                  className="btn btn-outline-secondary"
+                                  className="btn btn-light border"
                                   type="button"
                                   onClick={() => setShowPassword(!showPassword)}
                                 >
-                                  <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                                  <i className={`bi ${showPassword ? 'bi-eye-slash text-dark' : 'bi-eye text-dark'}`}></i>
                                 </button>
 
                               </div>
 
                               {passwordData.newPassword && checkPasswordStrength(passwordData.newPassword).score < 3 && (
-                                <div className="text-danger mt-1" style={{ fontSize: '0.8rem' }}>
+                                <div className="text-danger mt-1 fw-medium" style={{ fontSize: '0.8rem' }}>
                                   <i className="bi bi-exclamation-triangle-fill me-1"></i>
                                   Password is too weak
                                 </div>
@@ -632,7 +708,7 @@ const Settings = () => {
                                   <div className="password-strength-bar" style={{
                                     width: '100%',
                                     height: '4px',
-                                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                                    backgroundColor: 'rgba(0, 0, 0, 0.08)',
                                     borderRadius: '2px',
                                     overflow: 'hidden',
                                     marginBottom: '0.5rem'
@@ -647,20 +723,20 @@ const Settings = () => {
                                       }}
                                     ></div>
                                   </div>
-                                  <div className="password-strength-text d-flex justify-content-between" style={{ fontSize: '0.8rem', fontWeight: '600' }}>
+                                  <div className="password-strength-text d-flex justify-content-between" style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>
                                     <span style={{ color: checkPasswordStrength(passwordData.newPassword).color }}>
                                       {checkPasswordStrength(passwordData.newPassword).strength.toUpperCase()}
                                     </span>
-                                    <span className="text-muted" style={{ fontWeight: '400' }}>
-                                      ({checkPasswordStrength(passwordData.newPassword).score}/6)
+                                    <span className="text-muted">
+                                      {checkPasswordStrength(passwordData.newPassword).score}/6
                                     </span>
                                   </div>
                                 </div>
                               )}
                             </div>
 
-                            <div className="col-md-6 mb-3">
-                              <label htmlFor="confirmPassword" className="form-label">Confirm New Password</label>
+                            <div className="col-md-6">
+                              <label htmlFor="confirmPassword" className="form-label fw-medium small text-muted">Confirm Password</label>
                               <div className="input-group">
                                 <input
                                   type={showConfirmPassword ? 'text' : 'password'}
@@ -673,33 +749,31 @@ const Settings = () => {
                                   minLength="8"
                                 />
                                 <button
-                                  className="btn btn-outline-secondary"
+                                  className="btn btn-light border"
                                   type="button"
                                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
-                                  <i className={`bi ${showConfirmPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                                  <i className={`bi ${showConfirmPassword ? 'bi-eye-slash text-dark' : 'bi-eye text-dark'}`}></i>
                                 </button>
                               </div>
                               {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
-                                <div className="text-danger mt-1" style={{ fontSize: '0.8rem' }}>Passwords do not match</div>
+                                <div className="text-danger mt-1 fw-bold" style={{ fontSize: '0.8rem' }}>Passwords do not match</div>
                               )}
                               {passwordData.confirmPassword && passwordData.newPassword === passwordData.confirmPassword && (
-                                <div className="text-success mt-1" style={{ fontSize: '0.8rem' }}>✓ Passwords match</div>
+                                <div className="text-success mt-1 fw-bold" style={{ fontSize: '0.8rem' }}>✓ Passwords match</div>
                               )}
                             </div>
                           </div>
 
                           {/* Password Requirements */}
-                          {/* Password Requirements */}
-                          <div className="password-requirements mb-3 p-3 rounded" style={{
-                            backgroundColor: '#2c2c2c',
-                            border: '1px solid #d4b068',
-                            boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)'
+                          <div className="password-requirements mb-4 mt-3 p-3 rounded-4" style={{
+                            backgroundColor: '#1a1a1a',
+                            border: '1px solid #3d2c24',
                           }}>
-                            <div className="requirements-title mb-2" style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F8A34A' }}>
+                            <div className="requirements-title mb-3" style={{ fontSize: '0.85rem', fontWeight: '700', color: '#f8f9fa' }}>
                               Password Requirements:
                             </div>
-                            <div className="row">
+                            <div className="row g-2">
                               {[
                                 { key: 'length', text: 'At least 8 characters' },
                                 { key: 'lowercase', text: 'One lowercase letter (a-z)' },
@@ -708,14 +782,13 @@ const Settings = () => {
                                 { key: 'special', text: 'One special character (!@#$%^&*)' },
                                 { key: 'noSpaces', text: 'No spaces' }
                               ].map((req) => (
-                                <div key={req.key} className="col-12 col-md-6 mb-1">
+                                <div key={req.key} className="col-12 col-md-6">
                                   <div className="requirement d-flex align-items-center gap-2" style={{
                                     fontSize: '0.85rem',
                                     fontWeight: '600',
-                                    color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#28a745' : '#ffffff',
-                                    textShadow: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'none' : '0 0 2px rgba(0,0,0,0.5)'
+                                    color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#ffffff' : '#888888',
                                   }}>
-                                    <i className={`bi ${checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#28a745' : '#ffc107' }}></i>
+                                    <i className={`bi ${checkPasswordStrength(passwordData.newPassword).checks[req.key] ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: checkPasswordStrength(passwordData.newPassword).checks[req.key] ? '#51cf66' : '#666666' }}></i>
                                     {req.text}
                                   </div>
                                 </div>
@@ -725,7 +798,7 @@ const Settings = () => {
 
                           <button
                             type="submit"
-                            className="btn btn-primary"
+                            className="btn-premium"
                             disabled={saving || !passwordData.newPassword || checkPasswordStrength(passwordData.newPassword).score < 6 || passwordData.newPassword !== passwordData.confirmPassword}
                           >
                             {saving ? (
@@ -743,8 +816,8 @@ const Settings = () => {
                         </form>
                       ) : (
                         <form onSubmit={handleVerifyPasswordOTP}>
-                          <div className="mb-3">
-                            <label htmlFor="otpCode" className="form-label">OTP Code</label>
+                          <div className="mb-4">
+                            <label htmlFor="otpCode" className="form-label fw-medium small text-muted">OTP Code</label>
                             <input
                               type="text"
                               className="form-control"
@@ -754,13 +827,13 @@ const Settings = () => {
                               required
                               placeholder="Enter the OTP sent to your email"
                             />
-                            <div className="form-text">
-                              Sent to: <strong>{user?.email || 'your email'}</strong>
+                            <div className="form-text small mt-2">
+                              Sent to: <strong className="text-dark">{user?.email || 'your email'}</strong>
                             </div>
                           </div>
 
                           <div className="d-flex gap-2">
-                            <button type="submit" className="btn btn-primary" disabled={saving}>
+                            <button type="submit" className="btn-premium" disabled={saving}>
                               {saving ? (
                                 <>
                                   <span className="spinner-border spinner-border-sm me-2"></span>
@@ -768,14 +841,14 @@ const Settings = () => {
                                 </>
                               ) : (
                                 <>
-                                  <i className="bi bi-key me-2"></i>
+                                  <i className="bi bi-key-fill me-2"></i>
                                   Change Password
                                 </>
                               )}
                             </button>
                             <button
                               type="button"
-                              className="btn btn-outline-secondary"
+                              className="btn-premium-outline"
                               onClick={() => {
                                 setPasswordStep(1);
                                 setOtpCode('');
@@ -791,17 +864,19 @@ const Settings = () => {
                   </div>
 
                   {/* Two-Factor Authentication */}
-                  <div className="card border-light">
-                    <div className="card-body">
-                      <h6 className="card-title">Two-Factor Authentication</h6>
-                      <p className="card-text text-muted">
+                  <div className="p-4 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                    <div>
+                      <h6 className="mb-0 fw-bold">Two-Factor Authentication</h6>
+                      <p className="text-muted small mt-1 mb-3">
                         Add an extra layer of security to your account.
                       </p>
-                      <span className="badge bg-warning me-2">Not Enabled</span>
-                      <button className="btn btn-outline-success btn-sm">
-                        <i className="bi bi-shield-plus me-2"></i>
-                        Enable 2FA
-                      </button>
+                      <div className="d-flex align-items-center">
+                        <span className="bg-light text-muted border px-3 py-1 rounded-pill small fw-bold me-3">Not Enabled</span>
+                        <button className="btn-premium-outline">
+                          <i className="bi bi-shield-plus me-2"></i>
+                          Enable 2FA
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -810,19 +885,18 @@ const Settings = () => {
               {/* Preferences Tab */}
               {activeTab === 'preferences' && (
                 <div>
-                  <h5 className="mb-4">
-                    <i className="bi bi-sliders me-2"></i>
+                  <h5 className="mb-4 fw-bold">
+                    <i className="bi bi-sliders text-muted me-2"></i>
                     Application Preferences
                   </h5>
 
-                  <div className="row">
-
-                    <div className="col-md-6 mb-4">
-                      <div className="card border-light">
-                        <div className="card-body">
-                          <h6 className="card-title">Localization</h6>
+                  <div className="row g-4">
+                    <div className="col-md-6">
+                      <div className="p-4 bg-light rounded-4 border h-100" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div>
+                          <h6 className="mb-4 fw-bold">Localization</h6>
                           <div className="mb-3">
-                            <label htmlFor="language" className="form-label">Language</label>
+                            <label htmlFor="language" className="form-label fw-medium small text-muted">Language</label>
                             <select
                               className="form-select"
                               id="language"
@@ -833,8 +907,8 @@ const Settings = () => {
                               <option value="fil">Filipino</option>
                             </select>
                           </div>
-                          <div className="mb-3">
-                            <label htmlFor="timezone" className="form-label">Timezone</label>
+                          <div className="mb-0">
+                            <label htmlFor="timezone" className="form-label fw-medium small text-muted">Timezone</label>
                             <select
                               className="form-select"
                               id="timezone"
@@ -854,9 +928,9 @@ const Settings = () => {
 
               {/* Save Button */}
               {activeTab !== 'security' && (
-                <div className="d-flex justify-content-end mt-4">
+                <div className="d-flex justify-content-end mt-4 pt-3 border-top">
                   <button
-                    className="btn btn-primary"
+                    className="btn-premium"
                     onClick={saveSettings}
                     disabled={saving}
                   >

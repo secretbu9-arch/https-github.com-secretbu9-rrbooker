@@ -3,6 +3,211 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import BarberAvailabilityService from '../../services/booking/BarberAvailabilityService';
 
+const barberDayOffStyles = `
+  :root {
+    --day-black: #000000;
+    --day-brown: #2c1810;
+    --day-white: #ffffff;
+    --day-light-gray: #f8f9fa;
+    --day-gray: #e9ecef;
+    --day-dark-gray: #6c757d;
+  }
+
+  .day-off-container {
+    background-color: var(--day-light-gray);
+    min-height: 100vh;
+    padding-bottom: 5rem;
+  }
+
+  .premium-header {
+    background: var(--day-white);
+    border-bottom: 1px solid var(--day-gray);
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+  }
+
+  .title-h1 {
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+    color: var(--day-black);
+  }
+
+  /* Form Styling */
+  .add-form-card {
+    background: var(--day-white);
+    border-radius: 24px;
+    border: 1px solid rgba(0,0,0,0.05);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+    overflow: hidden;
+    margin-bottom: 2.5rem;
+  }
+
+  .form-header {
+    background: var(--day-black);
+    color: var(--day-white);
+    padding: 1.25rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .form-body {
+    padding: 2rem;
+  }
+
+  .minimal-input {
+    background: var(--day-light-gray);
+    border: 1px solid var(--day-gray);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .minimal-input:focus {
+    border-color: var(--day-brown);
+    background: var(--day-white);
+    box-shadow: 0 0 0 4px rgba(44, 24, 16, 0.05);
+    outline: none;
+  }
+
+  /* Day-Off Card Item */
+  .day-off-card {
+    background: var(--day-white);
+    border-radius: 20px;
+    padding: 1.5rem;
+    border: 1px solid rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .day-off-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    border-color: var(--day-brown);
+  }
+
+  .type-badge {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-active { background: var(--day-black); color: var(--day-white); }
+  .badge-cancelled { background: var(--day-gray); color: var(--day-dark-gray); }
+
+  .date-display {
+    font-weight: 900;
+    font-size: 1.1rem;
+    letter-spacing: -0.5px;
+    margin-bottom: 0.5rem;
+    color: var(--day-black);
+  }
+
+  .reason-text {
+    color: var(--day-dark-gray);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+    flex-grow: 1;
+  }
+
+  /* Buttons */
+  .btn-premium {
+    background: var(--day-black);
+    color: var(--day-white);
+    border: none;
+    border-radius: 14px;
+    padding: 0.8rem 1.5rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  .btn-premium:hover {
+    background: var(--day-brown);
+    transform: scale(1.02);
+  }
+
+  .btn-outline-minimal {
+    background: transparent;
+    border: 2px solid var(--day-gray);
+    color: var(--day-black);
+    border-radius: 14px;
+    padding: 0.8rem 1.5rem;
+    font-weight: 700;
+  }
+
+  .btn-cancel-card {
+    background: #fff;
+    border: 1px solid #fee2e2;
+    color: #dc2626;
+    padding: 0.6rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    width: 100%;
+    transition: all 0.2s ease;
+  }
+
+  .btn-cancel-card:hover {
+    background: #dc2626;
+    color: #fff;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 5rem 2rem;
+    background: var(--day-white);
+    border-radius: 30px;
+    border: 2px dashed var(--day-gray);
+  }
+
+  .fab-add {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 60px;
+    height: 60px;
+    background: var(--day-black);
+    color: var(--day-white);
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 100;
+    border: none;
+  }
+
+  .fab-add:hover {
+    background: var(--day-brown);
+    transform: rotate(90deg);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spin { animation: spin 1s linear infinite; }
+`;
+
 const BarberDayOffManager = ({ user }) => {
   const [dayOffs, setDayOffs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,9 +281,6 @@ const BarberDayOffManager = ({ user }) => {
         });
         setShowAddForm(false);
         await fetchDayOffs();
-
-        // Show success message
-        alert('Day-off scheduled successfully! Existing appointments have been cancelled and customers notified.');
       } else {
         setError(result.error || 'Failed to schedule day-off');
       }
@@ -106,7 +308,6 @@ const BarberDayOffManager = ({ user }) => {
       if (error) throw error;
 
       await fetchDayOffs();
-      alert('Day-off cancelled successfully!');
     } catch (err) {
       console.error('Error cancelling day-off:', err);
       setError(`Failed to cancel day-off: ${err.message}`);
@@ -162,253 +363,182 @@ const BarberDayOffManager = ({ user }) => {
   }
 
   return (
-    <div className="container-fluid py-3">
-      {/* Header */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+    <div className="day-off-container">
+      <style>{barberDayOffStyles}</style>
+
+      {/* Premium Header */}
+      <header className="premium-header">
+        <div className="container">
+          <div className="d-flex justify-content-between align-items-end">
             <div>
-              <h2 className="mb-1">
-                <i className="bi bi-calendar-x me-2 text-primary"></i>
-                Day-Off Management
-              </h2>
-              <p className="text-muted mb-0">Schedule your unavailable dates and manage your availability</p>
+              <h1 className="title-h1">DAY-OFF</h1>
+              <p className="text-muted small mb-0 fw-bold">SCHEDULE & AVAILABILITY MANAGER</p>
             </div>
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowAddForm(true)}
-            >
-              <i className="bi bi-plus-circle me-2"></i>
-              Schedule Day-Off
+            <button className="btn-premium d-none d-md-flex" onClick={() => setShowAddForm(true)}>
+              <i className="bi bi-calendar-plus"></i> NEW REQUEST
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {error && (
-        <div className="alert alert-danger">
-          <i className="bi bi-exclamation-triangle me-2"></i>
-          {error}
-        </div>
-      )}
+      <div className="container">
+        {error && (
+          <div className="alert alert-dark border-0 rounded-4 shadow-sm mb-4 d-flex align-items-center gap-3">
+            <i className="bi bi-exclamation-triangle-fill fs-5"></i>
+            <div className="small fw-bold">{error}</div>
+            <button className="btn-close ms-auto" onClick={() => setError('')}></button>
+          </div>
+        )}
 
-      {/* Add Day-Off Form */}
-      {showAddForm && (
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-primary text-white">
-                <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">
-                    <i className="bi bi-calendar-plus me-2"></i>
-                    Schedule New Day-Off
-                  </h5>
-                  <button
-                    className="btn btn-outline-light btn-sm"
-                    onClick={() => setShowAddForm(false)}
-                  >
-                    <i className="bi bi-x"></i>
-                  </button>
-                </div>
-              </div>
-              <div className="card-body">
-                <form onSubmit={handleSubmit}>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label htmlFor="start_date" className="form-label">
-                        Start Date <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        id="start_date"
-                        value={formData.start_date}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        min={new Date().toISOString().split('T')[0]}
-                        required
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="end_date" className="form-label">
-                        End Date <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        id="end_date"
-                        value={formData.end_date}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                        min={formData.start_date || new Date().toISOString().split('T')[0]}
-                        required
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="type" className="form-label">
-                        Type <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        className="form-select"
-                        id="type"
-                        value={formData.type}
-                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                        required
-                      >
-                        <option value="day_off">Day Off</option>
-                        <option value="sick_leave">Sick Leave</option>
-                        <option value="vacation">Vacation</option>
-                        <option value="emergency">Emergency</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="reason" className="form-label">
-                        Reason (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="reason"
-                        value={formData.reason}
-                        onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                        placeholder="Brief reason for unavailability"
-                      />
-                    </div>
-                    <div className="col-12">
-                      <div className="alert alert-info">
-                        <i className="bi bi-info-circle me-2"></i>
-                        <strong>Important:</strong> Scheduling a day-off will automatically cancel all existing appointments during this period and notify customers. They will be able to reschedule or book with another barber.
-                      </div>
-                    </div>
-                    <div className="col-12">
-                      <div className="d-flex gap-2">
-                        <button
-                          type="submit"
-                          className="btn btn-primary"
-                          disabled={submitting}
-                        >
-                          {submitting ? (
-                            <>
-                              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                              Scheduling...
-                            </>
-                          ) : (
-                            <>
-                              <i className="bi bi-calendar-check me-2"></i>
-                              Schedule Day-Off
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary"
-                          onClick={() => setShowAddForm(false)}
-                        >
-                          Cancel
-                        </button>
-                      </div>
+        {/* Add Form Section */}
+        {showAddForm && (
+          <div className="add-form-card">
+            <div className="form-header">
+              <h5 className="mb-0 fw-black small">SCHEDULE NEW ABSENCE</h5>
+              <button className="btn p-0 text-white opacity-50" onClick={() => setShowAddForm(false)}>
+                <i className="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <div className="form-body">
+              <form onSubmit={handleSubmit}>
+                <div className="row g-4">
+                  <div className="col-md-6">
+                    <label className="rev-label d-block mb-2">Duration Start</label>
+                    <input
+                      type="date"
+                      className="minimal-input w-100"
+                      value={formData.start_date}
+                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="rev-label d-block mb-2">Duration End</label>
+                    <input
+                      type="date"
+                      className="minimal-input w-100"
+                      value={formData.end_date}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      min={formData.start_date || new Date().toISOString().split('T')[0]}
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="rev-label d-block mb-2">Absence Type</label>
+                    <select
+                      className="minimal-input w-100"
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      required
+                    >
+                      <option value="day_off">Regular Day Off</option>
+                      <option value="sick_leave">Sick Leave</option>
+                      <option value="vacation">Vacation</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="rev-label d-block mb-2">Reason (Optional)</label>
+                    <input
+                      type="text"
+                      className="minimal-input w-100"
+                      value={formData.reason}
+                      onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                      placeholder="Medical, Personal, etc."
+                    />
+                  </div>
+                  <div className="col-12">
+                    <div className="p-3 rounded-4" style={{ background: 'rgba(0,0,0,0.03)', border: '1px dashed var(--day-gray)' }}>
+                      <p className="small mb-0 text-muted">
+                        <strong>NOTE:</strong> Existing appointments in this period will be 
+                        <span className="text-dark fw-black"> AUTO-CANCELLED</span> and customers notified.
+                      </p>
                     </div>
                   </div>
-                </form>
-              </div>
+                  <div className="col-12 d-flex gap-3">
+                    <button type="submit" className="btn-premium flex-grow-1" disabled={submitting}>
+                      {submitting ? <i className="bi bi-arrow-repeat spin"></i> : <i className="bi bi-check2-circle"></i>}
+                      {submitting ? 'PROCESSING...' : 'CONFIRM ABSENCE'}
+                    </button>
+                    <button type="button" className="btn-outline-minimal" onClick={() => setShowAddForm(false)}>
+                      CANCEL
+                    </button>
+                  </div>
+                </div>
+              </form>
             </div>
           </div>
+        )}
+
+        {/* Day-Offs List */}
+        <div className="section-header">
+          <i className="bi bi-clock-history"></i> SCHEDULED ABSENCES
         </div>
-      )}
 
-      {/* Day-Offs List */}
-      <div className="row">
-        <div className="col-12">
-          {dayOffs.length === 0 ? (
-            <div className="text-center py-5">
-              <div className="card border-0 bg-light">
-                <div className="card-body py-5">
-                  <i className="bi bi-calendar-x display-1 text-muted mb-3"></i>
-                  <h4 className="text-muted">No day-offs scheduled</h4>
-                  <p className="text-muted">
-                    You haven't scheduled any day-offs yet. Click "Schedule Day-Off" to set your unavailable dates.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="row g-3">
-              {dayOffs.map((dayOff) => (
-                <div key={dayOff.id} className="col-12 col-md-6 col-lg-4">
-                  <div className="card h-100 shadow-sm border-0">
-                    <div className="card-header bg-white border-bottom">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center">
-                          <div className={`p-2 rounded-circle me-3 bg-${getTypeColor(dayOff.type)} bg-opacity-10`}>
-                            <i className={`bi bi-${getTypeIcon(dayOff.type)} text-${getTypeColor(dayOff.type)}`}></i>
-                          </div>
-                          <div>
-                            <h6 className="mb-0 text-capitalize">{dayOff.type.replace('_', ' ')}</h6>
-                            <small className="text-muted">
-                              {dayOff.start_date === dayOff.end_date
-                                ? formatDate(dayOff.start_date)
-                                : `${formatDate(dayOff.start_date)} - ${formatDate(dayOff.end_date)}`
-                              }
-                            </small>
-                          </div>
-                        </div>
-                        <span className={`badge bg-${dayOff.is_active ? 'success' : 'secondary'}`}>
-                          {dayOff.is_active ? 'Active' : 'Cancelled'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="card-body">
-                      {dayOff.reason && (
-                        <div className="mb-3">
-                          <h6 className="text-muted mb-1">Reason:</h6>
-                          <p className="small mb-0">{dayOff.reason}</p>
-                        </div>
-                      )}
-
-                      <div className="mb-3">
-                        <h6 className="text-muted mb-1">Duration:</h6>
-                        <p className="small mb-0">
-                          {dayOff.start_date === dayOff.end_date
-                            ? '1 day'
-                            : `${Math.ceil((new Date(dayOff.end_date) - new Date(dayOff.start_date)) / (1000 * 60 * 60 * 24)) + 1} days`
-                          }
-                        </p>
-                      </div>
-
-                      <div className="mb-3">
-                        <h6 className="text-muted mb-1">Scheduled:</h6>
-                        <p className="small mb-0">
-                          {new Date(dayOff.created_at).toLocaleString()}
-                        </p>
-                      </div>
-
-                      {isPast(dayOff.end_date) && (
-                        <div className="alert alert-info py-2 mb-0">
-                          <small>
-                            <i className="bi bi-info-circle me-1"></i>
-                            This day-off period has ended
-                          </small>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="card-footer bg-light border-0">
-                      {dayOff.is_active && !isPast(dayOff.end_date) && (
-                        <button
-                          className="btn btn-outline-danger btn-sm"
-                          onClick={() => handleCancelDayOff(dayOff.id)}
-                        >
-                          <i className="bi bi-x-circle me-1"></i>
-                          Cancel Day-Off
-                        </button>
-                      )}
+        {dayOffs.length === 0 ? (
+          <div className="empty-state">
+            <i className="bi bi-calendar-check-fill display-1 opacity-10 mb-4 d-block"></i>
+            <h4 className="fw-black mb-2">NO ABSENCES PLANNED</h4>
+            <p className="text-muted">You are currently fully available for bookings.</p>
+            <button className="btn-premium mx-auto mt-4" onClick={() => setShowAddForm(true)}>
+              SET UNAVAILABLE
+            </button>
+          </div>
+        ) : (
+          <div className="row g-4">
+            {dayOffs.map((dayOff) => (
+              <div key={dayOff.id} className="col-md-6 col-lg-4">
+                <div className="day-off-card">
+                  <span className={`type-badge ${dayOff.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                    {dayOff.is_active ? dayOff.type.replace('_', ' ') : 'CANCELLED'}
+                  </span>
+                  
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <div className="p-2 bg-light rounded-3">
+                      <i className={`bi bi-${getTypeIcon(dayOff.type)} text-dark`}></i>
                     </div>
                   </div>
+
+                  <div className="date-display">
+                    {dayOff.start_date === dayOff.end_date
+                      ? formatDate(dayOff.start_date)
+                      : `${new Date(dayOff.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${new Date(dayOff.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+                    }
+                  </div>
+
+                  <div className="reason-text">
+                    {dayOff.reason || "Scheduled maintenance/day off."}
+                    <div className="mt-2 small opacity-50">
+                      Duration: {dayOff.start_date === dayOff.end_date
+                        ? '1 day'
+                        : `${Math.ceil((new Date(dayOff.end_date) - new Date(dayOff.start_date)) / (1000 * 60 * 60 * 24)) + 1} days`
+                      }
+                    </div>
+                  </div>
+
+                  {dayOff.is_active && !isPast(dayOff.end_date) && (
+                    <button className="btn-cancel-card" onClick={() => handleCancelDayOff(dayOff.id)}>
+                      CANCEL ABSENCE
+                    </button>
+                  )}
+                  
+                  {isPast(dayOff.end_date) && (
+                    <div className="small fw-bold opacity-30 text-uppercase letter-spacing-1">
+                      Absence Period Ended
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Mobile Floating Action Button */}
+      <button className="fab-add d-md-none" onClick={() => setShowAddForm(!showAddForm)}>
+        <i className={`bi bi-${showAddForm ? 'x-lg' : 'plus-lg'}`}></i>
+      </button>
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { sessionManager } from './services/auth/SessionManager';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ResetPassword from './components/auth/ResetPassword';
+import LandingPage from './components/landing/LandingPage';
 // Note: We don't need to import OnboardingSlides here anymore - it's inside Login.js
 
 // Dashboard components
@@ -391,6 +392,10 @@ function App() {
             path="/reset-password"
             element={!session ? <ResetPassword /> : <Navigate to="/dashboard" replace />}
           />
+          <Route
+            path="/home"
+            element={<LandingPage />}
+          />
 
           {/* Dashboard Route */}
           <Route
@@ -608,7 +613,7 @@ function App() {
             element={
               session ?
                 <Navigate to="/dashboard" replace /> :
-                <Navigate to="/login" replace />
+                <LandingPage />
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

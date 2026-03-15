@@ -15,14 +15,30 @@ const ManageOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const getTodayString = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(now - offset)).toISOString().split('T')[0];
+    return localISOTime;
+  };
 
   // Filters
   const [filters, setFilters] = useState({
     status: 'all',
-    dateFrom: '',
+    dateFrom: getTodayString(),
     dateTo: '',
     customerName: ''
   });
+
+  const [activeTab, setActiveTab] = useState('today');
 
   // Selected order for details
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -36,11 +52,148 @@ const ManageOrders = () => {
     isLoading: false
   });
 
-  // New modal states
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState(null);
   const [showWalkInProductModal, setShowWalkInProductModal] = useState(false);
+
+  // Premium Styles
+  const styles = {
+    container: {
+      padding: windowWidth < 576 ? '1.5rem 1rem' : '2rem 1.5rem',
+      backgroundColor: '#fcfcfc',
+      minHeight: '100vh',
+      fontFamily: "'Outfit', 'Inter', sans-serif"
+    },
+    headerCard: {
+      background: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+      border: '1px solid #f0f0f0',
+      marginBottom: '1.5rem',
+      display: 'flex',
+      flexDirection: windowWidth < 650 ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: windowWidth < 650 ? 'stretch' : 'center',
+      gap: '1rem'
+    },
+    statCard: {
+      backgroundColor: '#fff',
+      padding: '1.5rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
+      height: '100%',
+      transition: 'transform 0.3s ease'
+    },
+    filterCard: {
+      backgroundColor: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      marginBottom: '1.5rem',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.02)'
+    },
+    orderCard: {
+      backgroundColor: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      marginBottom: '1rem',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      cursor: 'pointer',
+      position: 'relative',
+      overflow: 'hidden'
+    },
+    badge: (status) => {
+      const colors = {
+        pending: { bg: '#FFF3E0', text: '#E65100' },
+        confirmed: { bg: '#E3F2FD', text: '#0D47A1' },
+        ready_for_pickup: { bg: '#E8F5E9', text: '#1B5E20' },
+        picked_up: { bg: '#F3E5F5', text: '#4A148C' },
+        cancelled: { bg: '#FFEBEE', text: '#B71C1C' },
+        refunded: { bg: '#ECEFF1', text: '#263238' }
+      };
+      const color = colors[status] || { bg: '#f5f5f5', text: '#666' };
+      return {
+        padding: '0.4rem 0.8rem',
+        borderRadius: '10px',
+        fontSize: '0.75rem',
+        fontWeight: '700',
+        backgroundColor: color.bg,
+        color: color.text,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      };
+    },
+    primaryBtn: {
+      backgroundColor: '#1a1a1a',
+      color: '#fff',
+      border: 'none',
+      padding: '0.8rem 1.25rem',
+      borderRadius: '16px',
+      fontWeight: '600',
+      fontSize: '0.9rem',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.6rem',
+      transition: 'all 0.3s'
+    },
+    modal: {
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      backdropFilter: 'blur(10px)',
+      padding: '0',
+      zIndex: 1050
+    },
+    modalContent: {
+      borderRadius: windowWidth < 576 ? '32px 32px 0 0' : '24px',
+      border: windowWidth < 576 ? 'none' : '1px solid #eee',
+      boxShadow: '0 20px 50px rgba(0,0,0,0.1)',
+      marginTop: windowWidth < 576 ? 'auto' : '0'
+    },
+    tab: (active) => ({
+      padding: '0.6rem 1.25rem',
+      borderRadius: '14px',
+      fontSize: '0.85rem',
+      fontWeight: '700',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      backgroundColor: active ? '#1a1a1a' : 'transparent',
+      color: active ? '#fff' : '#888',
+      border: active ? 'none' : '1px solid transparent'
+    })
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    const today = getTodayString();
+    
+    switch (tab) {
+      case 'today':
+        setFilters(prev => ({ ...prev, dateFrom: today, dateTo: today }));
+        break;
+      case 'upcoming':
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        setFilters(prev => ({ ...prev, dateFrom: tomorrowStr, dateTo: '' }));
+        break;
+      case 'previous':
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        setFilters(prev => ({ ...prev, dateFrom: '', dateTo: yesterdayStr }));
+        break;
+      case 'all':
+        setFilters(prev => ({ ...prev, dateFrom: '', dateTo: '' }));
+        break;
+      default:
+        break;
+    }
+  };
 
   useEffect(() => {
     console.log('ManageOrders - User:', user);
@@ -214,588 +367,242 @@ const ManageOrders = () => {
     setShowWalkInProductModal(false);
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return 'warning';
-      case 'confirmed': return 'primary';
-      case 'ready_for_pickup': return 'success';
-      case 'picked_up': return 'success';
-      case 'cancelled': return 'danger';
-      case 'refunded': return 'secondary';
-      default: return 'secondary';
-    }
-  };
+  const formatPrice = (price) => `₱${parseFloat(price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'pending': return 'Pending';
-      case 'confirmed': return 'Confirmed';
-      case 'ready_for_pickup': return 'Ready for Pickup';
-      case 'picked_up': return 'Picked Up';
-      case 'cancelled': return 'Cancelled';
-      case 'refunded': return 'Refunded';
-      default: return status;
-    }
-  };
-
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  const formatDate = (dateString, style = 'short') => {
+    const options = style === 'long' 
+      ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
+      : { month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
   const formatTime = (timeString) => {
     return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
+      hour: '2-digit', minute: '2-digit', hour12: true
     });
   };
 
-  if (loading && !stats) {
-    return <LoadingSpinner />;
-  }
-
   return (
-    <div className="container-fluid py-4">
-      <div className="row">
-        <div className="col">
-          <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-            <div>
-              <h2 className="mb-1 fw-bold">
-                <i className="bi bi-bag-check me-2"></i>
-                Manage Orders
-              </h2>
-              <p className="text-muted mb-0">Monitor and manage product orders</p>
-            </div>
-            <div className="d-flex gap-2">
-              <button
-                className="btn btn-primary"
-                onClick={handleWalkInProductPurchase}
-              >
-                <i className="bi bi-cart-plus me-2"></i>
-                Walk-in Product Purchase
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              <i className="bi bi-exclamation-triangle me-2"></i>
-              {error}
-            </div>
-          )}
-
-          {/* Statistics Cards */}
-          {stats && (
-            <div className="row mb-4">
-              <div className="col-md-3 mb-3">
-                <div className="card bg-primary text-white">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <h6 className="card-title mb-1">Total Orders</h6>
-                        <h3 className="mb-0">{stats.total}</h3>
-                      </div>
-                      <div className="ms-auto">
-                        <i className="bi bi-bag display-6"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-md-3 mb-3">
-                <div className="card bg-success text-white">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <h6 className="card-title mb-1">Total Revenue</h6>
-                        <h3 className="mb-0">₱{stats.totalRevenue.toFixed(0)}</h3>
-                      </div>
-                      <div className="ms-auto">
-                        <span className="display-6" style={{ fontSize: '3.5rem', lineHeight: '1' }}>₱</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-md-3 mb-3">
-                <div className="card bg-info text-white">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <h6 className="card-title mb-1">Avg Order Value</h6>
-                        <h3 className="mb-0">₱{stats.averageOrderValue.toFixed(0)}</h3>
-                      </div>
-                      <div className="ms-auto">
-                        <i className="bi bi-graph-up display-6"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* Filters */}
-          <div className="card mb-4">
-            <div className="card-body">
-              <div className="row g-3">
-                <div className="col-md-2">
-                  <label className="form-label">Status</label>
-                  <select
-                    className="form-select"
-                    value={filters.status}
-                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  >
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="ready_for_pickup">Ready for Pickup</option>
-                    <option value="picked_up">Picked Up</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-
-
-                <div className="col-md-2">
-                  <label className="form-label">From Date</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={filters.dateFrom}
-                    onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                  />
-                </div>
-
-                <div className="col-md-2">
-                  <label className="form-label">To Date</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={filters.dateTo}
-                    onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                  />
-                </div>
-
-                <div className="col-md-2">
-                  <label className="form-label">Customer Name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Search name..."
-                    value={filters.customerName}
-                    onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
-                  />
-                </div>
-
-                <div className="col-md-2 d-flex align-items-end">
-                  <button
-                    className="btn btn-outline-secondary w-100"
-                    onClick={() => setFilters({
-                      status: 'all',
-                      dateFrom: '',
-                      dateTo: '',
-                      customerName: ''
-                    })}
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Orders Table */}
-          <div className="card">
-            <div className="card-header">
-              <h5 className="mb-0">Orders ({orders.length})</h5>
-            </div>
-            <div className="card-body p-0">
-              {loading ? (
-                <div className="text-center py-4">
-                  <LoadingSpinner />
-                </div>
-              ) : orders.length === 0 ? (
-                <div className="text-center py-5">
-                  <i className="bi bi-bag display-1 text-muted mb-3"></i>
-                  <h5>No orders found</h5>
-                  <p className="text-muted">No orders match your current filters.</p>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Order #</th>
-                        <th>Customer</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th>Pickup</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.map((order) => (
-                        <tr key={order.id}>
-                          <td>
-                            <div>
-                              <div className="fw-bold">#{order.order_number}</div>
-                              <small className="text-muted">
-                                {formatDate(order.created_at)}
-                              </small>
-                            </div>
-                          </td>
-                          <td>
-                            <div>
-                              <div className="fw-bold">{order.customer?.full_name || 'Unknown'}</div>
-                              <small className="text-muted">{order.customer?.email}</small>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="badge bg-light text-dark">
-                              {order.order_items?.length || 0} items
-                            </span>
-                          </td>
-                          <td>
-                            <span className="fw-bold currency-amount">₱{parseFloat(order.total_amount).toFixed(2)}</span>
-                          </td>
-                          <td>
-                            <div>
-                              <div className="small">{formatDate(order.pickup_date)}</div>
-                              <div className="small text-muted">{formatTime(order.pickup_time)}</div>
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`badge bg-${getStatusColor(order.status)}`}>
-                              {getStatusText(order.status)}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="btn-group btn-group-sm">
-                              <button
-                                className="btn btn-outline-primary"
-                                onClick={() => handleViewDetails(order)}
-                                title="View Details"
-                              >
-                                <i className="bi bi-eye"></i>
-                              </button>
-
-                              {order.status === 'pending' && (
-                                <button
-                                  className="btn btn-outline-success"
-                                  onClick={() => openModal('confirm', order)}
-                                  title="Confirm Order"
-                                >
-                                  <i className="bi bi-check"></i>
-                                </button>
-                              )}
-
-                              {order.status === 'confirmed' && (
-                                <button
-                                  className="btn btn-outline-success"
-                                  onClick={() => handleStatusUpdate(order.id, 'ready_for_pickup')}
-                                  title="Mark Ready for Pickup"
-                                >
-                                  <i className="bi bi-bag-check"></i>
-                                </button>
-                              )}
-
-                              {order.status === 'ready_for_pickup' && (
-                                <button
-                                  className="btn btn-outline-success"
-                                  onClick={() => handleStatusUpdate(order.id, 'picked_up')}
-                                  title="Mark Picked Up"
-                                >
-                                  <i className="bi bi-check2-all"></i>
-                                </button>
-                              )}
-
-                              {!['picked_up', 'cancelled', 'refunded'].includes(order.status) && (
-                                <button
-                                  className="btn btn-outline-danger"
-                                  onClick={() => openModal('cancel', order)}
-                                  title="Cancel Order"
-                                >
-                                  <i className="bi bi-x"></i>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+    <div style={styles.container}>
+      {/* Header Section */}
+      <div style={styles.headerCard}>
+        <div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+            <i className="bi bi-bag-check me-2" style={{ color: '#5D4037' }}></i>
+            Manage Orders
+          </h2>
+          <p className="text-muted small mb-0">Track and fulfill product sales</p>
         </div>
+        <button 
+          style={styles.primaryBtn} 
+          className="touch-btn"
+          onClick={() => setShowWalkInProductModal(true)}
+        >
+          <i className="bi bi-plus-lg"></i>
+          WALK-IN PURCHASE
+        </button>
       </div>
 
-      {/* Order Details Modal */}
-      {selectedOrder && orderDetails && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-xl">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  Order #{selectedOrder.order_number} - {orderDetails.order.customer?.full_name || orderDetails.order.customer_name || 'Unknown Customer'}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => {
-                    setSelectedOrder(null);
-                    setOrderDetails(null);
-                  }}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <div className="row">
-                  {/* Order Information */}
-                  <div className="col-md-6">
-                    <h6>Order Information</h6>
-                    <table className="table table-sm">
-                      <tbody>
-                        <tr>
-                          <td><strong>Order Number:</strong></td>
-                          <td>#{orderDetails.order.order_number}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Status:</strong></td>
-                          <td>
-                            <span className={`badge bg-${getStatusColor(orderDetails.order.status)}`}>
-                              {getStatusText(orderDetails.order.status)}
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td><strong>Total Amount:</strong></td>
-                          <td className="currency-table-cell">₱{parseFloat(orderDetails.order.total_amount).toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Pickup Date:</strong></td>
-                          <td>{formatDate(orderDetails.order.pickup_date)}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Pickup Time:</strong></td>
-                          <td>{formatTime(orderDetails.order.pickup_time)}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Pickup Location:</strong></td>
-                          <td>{orderDetails.order.pickup_location}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Created:</strong></td>
-                          <td>{new Date(orderDetails.order.created_at).toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+      {/* Quick Access Tabs */}
+      <div className="d-flex gap-2 mb-4 overflow-auto pb-2" style={{ whiteSpace: 'nowrap' }}>
+        <div style={styles.tab(activeTab === 'today')} onClick={() => handleTabChange('today')}>TODAY</div>
+        <div style={styles.tab(activeTab === 'upcoming')} onClick={() => handleTabChange('upcoming')}>UPCOMING</div>
+        <div style={styles.tab(activeTab === 'previous')} onClick={() => handleTabChange('previous')}>PREVIOUS</div>
+        <div style={styles.tab(activeTab === 'all')} onClick={() => handleTabChange('all')}>VIEW ALL</div>
+      </div>
 
-                  {/* Customer Information */}
-                  <div className="col-md-6">
-                    <h6>Customer Information</h6>
-                    <div className="d-flex align-items-center mb-3">
-                      {orderDetails.order.customer?.profile_picture_url ? (
-                        <img
-                          src={orderDetails.order.customer.profile_picture_url}
-                          alt="Customer Profile"
-                          className="rounded-circle me-3"
-                          style={{ width: '50px', height: '50px', objectFit: 'cover' }}
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/50x50?text=No+Photo';
-                          }}
-                        />
-                      ) : (
-                        <div
-                          className="rounded-circle me-3 d-flex align-items-center justify-content-center bg-light"
-                          style={{ width: '50px', height: '50px' }}
-                        >
-                          <i className="bi bi-person-fill text-muted"></i>
-                        </div>
-                      )}
-                      <div>
-                        <h6 className="mb-0">{orderDetails.order.customer?.full_name || 'Unknown Customer'}</h6>
-                        <small className="text-muted">
-                          {orderDetails.order.customer?.role || 'Customer'}
-                        </small>
-                      </div>
-                    </div>
-                    <table className="table table-sm">
-                      <tbody>
-                        <tr>
-                          <td><strong>Name:</strong></td>
-                          <td>{orderDetails.order.customer?.full_name || orderDetails.order.customer_name || 'Unknown'}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Email:</strong></td>
-                          <td>{orderDetails.order.customer?.email || orderDetails.order.customer_email || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Phone:</strong></td>
-                          <td>{orderDetails.order.customer?.phone || orderDetails.order.customer_phone || 'N/A'}</td>
-                        </tr>
-                        <tr>
-                          <td><strong>Customer Since:</strong></td>
-                          <td>
-                            {orderDetails.order.customer?.created_at
-                              ? new Date(orderDetails.order.customer.created_at).toLocaleDateString()
-                              : 'N/A'
-                            }
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+      {error && (
+        <div className="alert alert-danger rounded-4 border-0 shadow-sm d-flex align-items-center mb-4">
+          <i className="bi bi-exclamation-circle-fill me-2"></i>
+          <span className="small fw-bold">{error}</span>
+          <button className="btn-close ms-auto" onClick={() => setError('')}></button>
+        </div>
+      )}
 
-                {/* Order Items */}
-                <div className="mt-4">
-                  <h6>Order Items</h6>
-                  <div className="table-responsive">
-                    <table className="table table-sm">
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Quantity</th>
-                          <th>Unit Price</th>
-                          <th>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orderDetails.order.order_items?.map((item, index) => (
-                          <tr key={index}>
-                            <td>
-                              <div className="d-flex align-items-center">
-                                {(item.product?.image_url || item.product_image_url) && (
-                                  <img
-                                    src={item.product?.image_url || item.product_image_url}
-                                    alt={item.product?.name || item.product_name || 'Product'}
-                                    className="me-2"
-                                    style={{ width: '40px', height: '40px', objectFit: 'cover' }}
-                                    onError={(e) => {
-                                      e.target.src = 'https://via.placeholder.com/40x40?text=No+Image';
-                                    }}
-                                  />
-                                )}
-                                <div>
-                                  <div className="fw-bold">{item.product?.name || item.product_name || 'N/A'}</div>
-                                  {(item.product?.description || item.product_description) && (
-                                    <small className="text-muted">{item.product?.description || item.product_description}</small>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td>{item.quantity}</td>
-                            <td className="currency-table-cell">₱{parseFloat(item.unit_price).toFixed(2)}</td>
-                            <td className="currency-table-cell">₱{parseFloat(item.total_price).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-
-                {/* Notes */}
-                <div className="mt-4">
-                  <h6>Special Instructions</h6>
-                  <div className="card">
-                    <div className="card-body">
-                      <p className="mb-0">
-                        {orderDetails.order.notes && orderDetails.order.notes.trim() !== '' ? (
-                          orderDetails.order.notes
-                        ) : (
-                          <span style={{
-                            color: '#ff8c00',
-                            fontStyle: 'italic',
-                            fontWeight: '500'
-                          }}>
-                            No additional order request
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setSelectedOrder(null);
-                    setOrderDetails(null);
-                  }}
-                >
-                  Close
-                </button>
-
-                {/* Status Update Buttons */}
-                {selectedOrder.status === 'pending' && (
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={() => {
-                      handleStatusUpdate(selectedOrder.id, 'confirmed');
-                      setSelectedOrder({ ...selectedOrder, status: 'confirmed' });
-                    }}
-                  >
-                    Confirm Order
-                  </button>
-                )}
-
-                {selectedOrder.status === 'confirmed' && (
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={() => {
-                      handleStatusUpdate(selectedOrder.id, 'ready_for_pickup');
-                      setSelectedOrder({ ...selectedOrder, status: 'ready_for_pickup' });
-                    }}
-                  >
-                    Mark Ready for Pickup
-                  </button>
-                )}
-
-                {selectedOrder.status === 'ready_for_pickup' && (
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={() => {
-                      handleStatusUpdate(selectedOrder.id, 'picked_up');
-                      setSelectedOrder({ ...selectedOrder, status: 'picked_up' });
-                    }}
-                  >
-                    Mark Picked Up
-                  </button>
-                )}
-
-                {!['picked_up', 'cancelled', 'refunded'].includes(selectedOrder.status) && (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() => openModal('cancel', selectedOrder)}
-                  >
-                    Cancel Order
-                  </button>
-                )}
+      {/* Stats Summary */}
+      {stats && (
+        <div className="row g-3 mb-4">
+          <div className="col-md-4">
+            <div style={styles.statCard} className="hover-lift">
+              <div className="text-muted small fw-bold text-uppercase mb-1">Total Sales</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#5D4037' }}>{formatPrice(stats.totalRevenue)}</div>
+              <div className="small text-muted mt-1">From {stats.total} successful orders</div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div style={styles.statCard} className="hover-lift">
+              <div className="text-muted small fw-bold text-uppercase mb-1">Avg Ticket</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#1a1a1a' }}>{formatPrice(stats.averageOrderValue)}</div>
+              <div className="small text-muted mt-1">Value per transaction</div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div style={styles.statCard} className="hover-lift">
+              <div className="text-muted small fw-bold text-uppercase mb-1">Status Mix</div>
+              <div className="d-flex gap-2 mt-2">
+                <span className="badge rounded-pill bg-warning text-dark px-2 py-1" style={{ fontSize: '0.65rem' }}>{orders.filter(o => o.status === 'pending').length} PENDING</span>
+                <span className="badge rounded-pill bg-success px-2 py-1" style={{ fontSize: '0.65rem' }}>{orders.filter(o => o.status === 'ready_for_pickup').length} READY</span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirmation Modal */}
+      {/* Modern Filters */}
+      <div style={styles.filterCard}>
+        <div className="row g-3 align-items-center">
+          <div className="col-md-4">
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-white border-end-0 rounded-start-4">
+                <i className="bi bi-search text-muted"></i>
+              </span>
+              <input 
+                type="text" 
+                className="form-control border-start-0 rounded-end-4 bg-white" 
+                placeholder="Search customer name..."
+                value={filters.customerName}
+                onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="col-md-3">
+            <select 
+              className="form-select form-select-sm rounded-4" 
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="ready_for_pickup">Ready for Pickup</option>
+              <option value="picked_up">Picked Up</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div className="col-md-3">
+            <input 
+              type="date" 
+              className="form-control form-control-sm rounded-4"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+            />
+          </div>
+          <div className="col-md-2">
+            <button 
+              className="btn btn-light btn-sm w-100 rounded-4 fw-bold"
+              onClick={() => setFilters({ status: 'all', dateFrom: '', dateTo: '', customerName: '' })}
+            >
+              RESET
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Orders List */}
+      <div className="orders-container">
+        {loading ? (
+          <div className="text-center py-5"><div className="spinner-border text-dark"></div></div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-5 bg-white rounded-5 border">
+            <i className="bi bi-bag-x fs-1 text-muted opacity-25"></i>
+            <p className="text-muted mt-3 fw-bold">No orders found matching your criteria</p>
+          </div>
+        ) : (
+          <div className="row g-3">
+            {orders.map(order => (
+              <div key={order.id} className="col-12">
+                <div 
+                  style={styles.orderCard} 
+                  className="order-card-hover"
+                >
+                  <div className="row g-0 align-items-center">
+                    <div className="col-12 col-md-9" onClick={() => handleViewDetails(order)} style={{ cursor: 'pointer' }}>
+                      <div className="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                          <span className="text-muted small fw-bold">#{order.order_number}</span>
+                          <h5 className="fw-800 m-0 mb-2">{order.customer?.full_name || 'Walk-in Guest'}</h5>
+                          <div className="d-flex flex-column gap-1">
+                            <span className="small text-muted" style={{ fontSize: '0.75rem' }}>
+                              <i className="bi bi-calendar-plus me-1"></i>
+                              Order Date: {formatDate(order.created_at, 'long')}
+                            </span>
+                            <span className="small fw-bold" style={{ color: '#5D4037', fontSize: '0.8rem' }}>
+                              <i className="bi bi-calendar-check me-1"></i>
+                              Pickup Date: {formatDate(order.pickup_date, 'long')} at {order.pickup_time ? formatTime(order.pickup_time) : 'TBD'}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={styles.badge(order.status)}>
+                          {order.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      <div className="d-flex justify-content-between align-items-end pt-3 border-top">
+                        <div>
+                          <div className="small text-muted mb-1" style={{ fontSize: '0.7rem' }}>ITEMS</div>
+                          <div className="d-flex gap-1 overflow-auto pb-1" style={{ maxWidth: '400px' }}>
+                            {order.order_items?.map((item, idx) => (
+                              <div key={idx} className="bg-light px-2 py-1 rounded-3 small fw-bold" style={{ fontSize: '0.75rem' }}>
+                                {item.quantity}x {item.product?.name.split(' ')[0]}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="text-end">
+                          <div className="small text-muted" style={{ fontSize: '0.7rem' }}>TOTAL</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#5D4037' }}>{formatPrice(order.total_amount)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-12 col-md-3 border-start-md ps-md-3 mt-3 mt-md-0">
+                      <div className="d-flex flex-column gap-1">
+                        <div className="text-muted fw-bold mb-1" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>QUICK ACTION</div>
+                        {order.status === 'pending' && (
+                          <button 
+                            className="btn btn-sm btn-primary rounded-3 fw-bold touch-btn"
+                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, 'confirmed'); }}
+                            style={{ backgroundColor: '#0D47A1', border: 'none', padding: '0.4rem', fontSize: '0.75rem' }}
+                          >
+                            <i className="bi bi-check-circle me-1"></i> CONFIRM
+                          </button>
+                        )}
+                        {order.status === 'confirmed' && (
+                          <button 
+                            className="btn btn-sm btn-success rounded-3 fw-bold touch-btn"
+                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, 'ready_for_pickup'); }}
+                            style={{ backgroundColor: '#1B5E20', border: 'none', padding: '0.4rem', fontSize: '0.75rem' }}
+                          >
+                            <i className="bi bi-box-seam me-1"></i> READY
+                          </button>
+                        )}
+                        {order.status === 'ready_for_pickup' && (
+                          <button 
+                            className="btn btn-sm btn-dark rounded-3 fw-bold touch-btn"
+                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, 'picked_up'); }}
+                            style={{ backgroundColor: '#4A148C', border: 'none', padding: '0.4rem', fontSize: '0.75rem' }}
+                          >
+                            <i className="bi bi-bag-check me-1"></i> PICKED UP
+                          </button>
+                        )}
+                        <button 
+                          className="btn btn-sm btn-light rounded-3 fw-bold touch-btn text-muted"
+                          onClick={() => handleViewDetails(order)}
+                          style={{ padding: '0.4rem', fontSize: '0.75rem' }}
+                        >
+                          <i className="bi bi-eye me-1"></i> DETAILS
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
       <OrderConfirmationModal
         isOpen={modalState.isOpen}
         onClose={closeModal}
@@ -805,7 +612,6 @@ const ManageOrders = () => {
         isLoading={modalState.isLoading}
       />
 
-      {/* Order Details Modal */}
       {showDetailsModal && (
         <OrderDetailsModal
           order={selectedOrder}
@@ -816,7 +622,6 @@ const ManageOrders = () => {
         />
       )}
 
-      {/* Order Cancellation Modal */}
       {showCancellationModal && (
         <OrderCancellationModal
           order={orderToCancel}
@@ -825,13 +630,47 @@ const ManageOrders = () => {
         />
       )}
 
-      {/* Walk-in Product Purchase Modal */}
       {showWalkInProductModal && (
         <WalkInProductPurchase
-          onClose={closeWalkInProductModal}
+          onClose={() => setShowWalkInProductModal(false)}
           onSuccess={handleProductPurchaseSuccess}
         />
       )}
+
+      <style>{`
+        .order-card-hover:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 30px rgba(0,0,0,0.06) !important;
+          border-color: #5D403744 !important;
+        }
+        .order-card-hover:active {
+          transform: scale(0.98);
+        }
+        .hover-lift:hover { transform: translateY(-3px); }
+        .fw-800 { font-weight: 800; }
+        .touch-btn:active { transform: scale(0.9); }
+        @media (max-width: 575.98px) {
+          .modal-dialog {
+            display: flex !important;
+            align-items: flex-end !important;
+            margin: 0 !important;
+            height: 100% !important;
+          }
+          .modal-content {
+            border-radius: 32px 32px 0 0 !important;
+            animation: slideUp 0.4s cubic-bezier(0, 0, 0.2, 1);
+          }
+        }
+        @media (min-width: 768px) {
+          .border-start-md {
+            border-left: 1px solid #f0f0f0 !important;
+          }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 };

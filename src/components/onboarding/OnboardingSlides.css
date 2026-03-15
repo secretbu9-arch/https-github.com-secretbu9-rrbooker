@@ -1,13 +1,13 @@
 /* components/onboarding/OnboardingSlides.css */
 
 :root {
-  --primary-accent: #FFFFFF;
-  --secondary-bg: #2C2C2C;
-  --dark-bg: #121212;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --text-primary: #FFFFFF;
-  --text-secondary: rgba(255, 255, 255, 0.6);
+  --ob-primary-accent: #FFFFFF;
+  --ob-secondary-bg: #2C2C2C;
+  --ob-dark-bg: #121212;
+  --ob-glass-bg: rgba(0, 0, 0, 0.45);
+  --ob-glass-border: rgba(255, 255, 255, 0.08);
+  --ob-text-primary: #FFFFFF;
+  --ob-text-secondary: rgba(255, 255, 255, 0.7);
 }
 
 .onboarding-container {
@@ -21,7 +21,7 @@
   justify-content: flex-end;
   overflow: hidden;
   z-index: 9999;
-  background-color: var(--dark-bg);
+  background-color: var(--ob-dark-bg);
 }
 
 .onboarding-background {
@@ -69,12 +69,12 @@
 }
 
 .content-glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
-  border: 1px solid var(--glass-border);
-  border-radius: 32px;
-  padding: 2.5rem 2rem;
+  background: var(--ob-glass-bg);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid var(--ob-glass-border);
+  border-radius: 40px;
+  padding: 3rem 2.5rem;
   width: 100%;
   text-align: center;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
@@ -94,30 +94,30 @@
 }
 
 .onboarding-title {
-  font-size: 2.2rem;
+  font-size: 3rem;
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--ob-text-primary);
   margin-bottom: 0.75rem;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
 }
 
 .onboarding-subtitle {
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: var(--primary-accent);
-  margin-bottom: 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ob-primary-accent);
+  margin-bottom: 1.5rem;
   text-transform: uppercase;
-  letter-spacing: 3px;
-  opacity: 0.8;
+  letter-spacing: 4px;
+  opacity: 0.6;
 }
 
 .onboarding-description {
-  font-size: 1rem;
+  font-size: 1.1rem;
   line-height: 1.6;
-  color: var(--text-secondary);
-  max-width: 300px;
-  margin: 0 auto 2.5rem auto;
+  color: var(--ob-text-secondary);
+  max-width: 400px;
+  margin: 0 auto 3rem auto;
 }
 
 .onboarding-nav {
@@ -128,23 +128,23 @@
 }
 
 .main-action-btn {
-  background-color: var(--primary-accent);
+  background-color: var(--ob-primary-accent);
   color: #000000;
   border: none;
-  border-radius: 12px;
-  padding: 1.1rem;
+  border-radius: 100px;
+  padding: 1.2rem;
   font-size: 1rem;
   font-weight: 800;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.15);
+  transition: all 0.4s var(--ease-premium);
+  box-shadow: 0 15px 35px rgba(255, 255, 255, 0.15);
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.8rem;
   width: 100%;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 .main-action-btn:hover {
@@ -159,21 +159,21 @@
 
 .secondary-action-btn {
   background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  padding: 1rem;
+  color: var(--ob-text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 100px;
+  padding: 1.1rem;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s var(--ease-premium);
   width: 100%;
 }
 
 .secondary-action-btn:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--ob-text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .onboarding-indicators {
@@ -194,7 +194,7 @@
 .onboarding-dot.active {
   width: 32px;
   border-radius: 10px;
-  background-color: var(--primary-accent);
+  background-color: var(--ob-primary-accent);
 }
 
 .skip-onboarding {
@@ -224,11 +224,11 @@
 /* Notification Illustration */
 .notification-bell-anim {
   font-size: 4rem;
-  color: var(--primary-accent);
-  margin-bottom: 1.5rem;
+  color: var(--ob-primary-accent);
+  margin-bottom: 2rem;
   animation: bellRing 2s ease infinite;
   display: inline-block;
-  filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.5));
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
 }
 
 @keyframes bellRing {

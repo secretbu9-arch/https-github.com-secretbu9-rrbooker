@@ -1,4 +1,4 @@
-// components/barber/BarberQueue.js (Complete Enhanced Version)
+// components/barber/BarberQueue.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
@@ -11,8 +11,207 @@ import appointmentTypeManager from '../../services/booking/AppointmentTypeManage
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import RescheduleModal from './RescheduleModal';
-import '../../styles/barber-appointments.css';
-import '../../styles/hybrid-queue.css';
+
+const barberQueueStyles = `
+  :root {
+    --barber-black: #000000;
+    --barber-brown: #2c1810;
+    --barber-light-brown: #4d3a31;
+    --barber-white: #ffffff;
+    --barber-light-gray: #f8f9fa;
+    --barber-gray: #e9ecef;
+    --barber-dark-gray: #6c757d;
+  }
+
+  .queue-container {
+    background-color: var(--barber-light-gray);
+    min-height: 100vh;
+    padding-bottom: 5rem;
+  }
+
+  /* Premium Cards */
+  .premium-card {
+    background: var(--barber-white);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  /* Stat Cards - Interactive */
+  .stat-card-modern {
+    background: var(--barber-white);
+    border-radius: 20px;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 100%;
+    min-width: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    user-select: none;
+    scroll-snap-align: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .stat-card-modern:hover {
+    transform: translateY(-2px);
+    border-color: var(--barber-brown);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+  }
+
+  .stat-card-modern:active {
+    transform: scale(0.96);
+    background: var(--barber-gray);
+  }
+
+  .stat-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    transition: all 0.3s ease;
+  }
+
+  /* Serving Card - High Focus */
+  .serving-card-premium {
+    background: var(--barber-black);
+    color: var(--barber-white);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  }
+
+  .serving-card-premium::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    background: linear-gradient(135deg, transparent, rgba(255,255,255,0.05));
+    border-radius: 0 0 0 100%;
+  }
+
+  .serving-label {
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--barber-dark-gray);
+    margin-bottom: 0.5rem;
+  }
+
+  /* Queue Item - Minimalist */
+  .queue-item-minimal {
+    background: var(--barber-white);
+    border-radius: 16px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    border: 1px solid rgba(0,0,0,0.03);
+    transition: all 0.2s ease;
+  }
+
+  .queue-item-minimal:hover {
+    transform: translateX(5px);
+    border-color: var(--barber-brown);
+  }
+
+  .queue-number-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--barber-light-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    color: var(--barber-black);
+    font-size: 1.1rem;
+  }
+
+  /* Buttons */
+  .btn-premium-primary {
+    background: var(--barber-brown);
+    color: var(--barber-white);
+    border: none;
+    border-radius: 12px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+  }
+
+  .btn-premium-primary:hover {
+    background: var(--barber-black);
+    transform: translateY(-2px);
+    color: var(--barber-white);
+  }
+
+  .btn-premium-finish {
+    background: var(--barber-white);
+    color: var(--barber-black);
+    border: none;
+    border-radius: 14px;
+    padding: 1rem 2rem;
+    font-weight: 800;
+    width: 100%;
+    margin-top: 1rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+
+  .btn-premium-finish:hover {
+    background: var(--barber-gray);
+    transform: translateY(-2px);
+  }
+
+  .section-title {
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .empty-state-minimal {
+    padding: 3rem;
+    text-align: center;
+    background: rgba(0,0,0,0.02);
+    border-radius: 20px;
+    border: 2px dashed rgba(0,0,0,0.05);
+  }
+
+  /* New 2x2 Grid for Mobile */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    padding: 0 0 1.5rem;
+  }
+
+  .stats-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .stats-row {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.5rem;
+    }
+  }
+`;
 
 const BarberQueue = () => {
   const [currentAppointment, setCurrentAppointment] = useState(null);
@@ -619,556 +818,309 @@ const BarberQueue = () => {
   }, 0);
 
   return (
-    <div className="container py-4" style={{ maxWidth: '1200px' }}>
-      {/* Header */}
-      <div
-        className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 bg-white p-3 p-md-4 rounded-4 shadow-sm border"
-      >
-        <div className="d-flex align-items-center gap-3 mb-3 mb-md-0">
-          <div
-            className="d-flex align-items-center justify-content-center bg-primary bg-opacity-10 text-primary"
-            style={{
-              width: '45px',
-              height: '45px',
-              borderRadius: '12px',
-            }}
-          >
-            <i className="bi bi-list-ol fs-4"></i>
-          </div>
-          <div>
-            <h3
-              className="mb-0 fw-bold text-dark"
-              style={{ fontSize: '1.25rem', letterSpacing: '-0.5px' }}
-            >
-              {new Date(selectedDate).toDateString() === new Date().toDateString() ? "Queue Management" : "Daily Queue"}
-            </h3>
-            <p className="text-muted small mb-0">
-              {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-        </div>
-
-        {/* Date Selector Navigation */}
-        <div className="d-flex align-items-center gap-2 bg-light p-1 rounded-pill border">
-          <button
-            className="btn btn-white btn-sm rounded-circle shadow-sm border-0"
-            style={{ width: '32px', height: '32px', padding: 0 }}
-            onClick={() => {
-              const d = new Date(selectedDate);
-              d.setDate(d.getDate() - 1);
-              setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-            }}
-          >
-            <i className="bi bi-chevron-left"></i>
-          </button>
-
-          <div className="px-3">
-            <span className="fw-bold text-dark small" style={{ minWidth: '100px', display: 'inline-block', textAlign: 'center' }}>
-              {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          </div>
-
-          <button
-            className="btn btn-white btn-sm rounded-circle shadow-sm border-0"
-            style={{ width: '32px', height: '32px', padding: 0 }}
-            onClick={() => {
-              const d = new Date(selectedDate);
-              d.setDate(d.getDate() + 1);
-              setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-            }}
-          >
-            <i className="bi bi-chevron-right"></i>
-          </button>
-        </div>
-
-        <button
-          className="btn btn-outline-light text-dark border-0 hover-bg-light btn-sm ms-md-3 d-none d-md-block"
-          onClick={fetchQueueData}
-          title="Refresh queue"
-        >
-          <i className="bi bi-arrow-clockwise"></i>
-        </button>
-      </div>
-
-      {error && (
-        <div className="alert alert-danger alert-dismissible fade show" role="alert">
-          {error}
-          <button
-            type="button"
-            className="btn-close"
-            onClick={() => setError(null)}
-            aria-label="Close"
-          ></button>
-        </div>
-      )}
-
-      {/* Stats Cards */}
-      <div className="row mb-4 g-2 g-md-3">
-        <div className="col-6 col-md-3 mb-2 mb-md-3">
-          <div className="queue-stat-card h-100">
-            <div className="d-flex flex-column align-items-center text-center">
-              <div className="mb-1">
-                <i
-                  className="bi bi-check-circle-fill text-success"
-                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
-                ></i>
+    <div className="queue-container">
+      <style>{barberQueueStyles}</style>
+      
+      {/* Premium Header */}
+      <div className="bg-white border-bottom mb-4">
+        <div className="container py-4">
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h1 className="h3 fw-black mb-1" style={{ letterSpacing: '-1px' }}>QUEUE</h1>
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-black rounded-pill px-3 py-1" style={{ fontSize: '0.7rem' }}>
+                  {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                </span>
+                {efficiency > 0 && (
+                  <span className="text-muted small fw-bold">
+                    <i className="bi bi-lightning-charge-fill text-warning me-1"></i>
+                    {efficiency}% Efficiency
+                  </span>
+                )}
               </div>
-              <div className="queue-stat-number">{stats.completed || 0}</div>
-              <div className="queue-stat-label">Completed Today</div>
             </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-3 mb-2 mb-md-3">
-          <div className="queue-stat-card h-100">
-            <div className="d-flex flex-column align-items-center text-center">
-              <div className="mb-1">
-                <i
-                  className="bi bi-people-fill text-primary"
-                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
-                ></i>
-              </div>
-              <div className="queue-stat-number">{stats.remaining || 0}</div>
-              <div className="queue-stat-label">In Queue</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-3 mb-2 mb-md-3">
-          <div className="queue-stat-card h-100">
-            <div className="d-flex flex-column align-items-center text-center">
-              <div className="mb-1">
-                <i
-                  className="bi bi-bell-fill text-warning"
-                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
-                ></i>
-              </div>
-              <div className="queue-stat-number">{stats.pendingRequests || 0}</div>
-              <div className="queue-stat-label">Pending Requests</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6 col-md-3 mb-2 mb-md-3">
-          <div className="queue-stat-card h-100">
-            <div className="d-flex flex-column align-items-center text-center">
-              <div className="mb-1">
-                <i
-                  className="bi bi-clock-history text-info"
-                  style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)' }}
-                ></i>
-              </div>
-              <div className="queue-stat-number">{totalServiceTime}</div>
-              <div className="queue-stat-label">Total Service Time (min)</div>
+            <div className="d-flex gap-2">
+              <button 
+                className="btn btn-light rounded-circle p-0 d-flex align-items-center justify-content-center" 
+                style={{ width: '45px', height: '45px' }}
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() - 1);
+                  setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+                }}
+              >
+                <i className="bi bi-chevron-left"></i>
+              </button>
+              <button 
+                className="btn btn-light rounded-circle p-0 d-flex align-items-center justify-content-center" 
+                style={{ width: '45px', height: '45px' }}
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() + 1);
+                  setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+                }}
+              >
+                <i className="bi bi-chevron-right"></i>
+              </button>
+              <button className="btn btn-black text-white rounded-circle ms-2" style={{ width: '45px', height: '45px' }} onClick={fetchQueueData}>
+                <i className="bi bi-arrow-clockwise"></i>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Customer to Service Section */}
-      {queuedAppointments.length > 0 && !currentAppointment && (
-        <div className="mb-3 mb-md-4">
-          <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Customer to Service</h5>
-          <div className="d-flex align-items-center mb-2 mb-md-3" style={{
-            background: '#e5e7eb',
-            borderRadius: '12px',
-            padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
-            gap: 'clamp(0.5rem, 2vw, 1rem)'
-          }}>
-            {/* Queue Number Badge */}
-            <div className="d-flex align-items-center justify-content-center flex-shrink-0" style={{
-              width: 'clamp(35px, 8vw, 40px)',
-              height: 'clamp(35px, 8vw, 40px)',
-              background: '#d1d5db',
-              borderRadius: '50%',
-              color: '#16a34a',
-              fontWeight: 'bold',
-              fontSize: 'clamp(1rem, 3vw, 1.2rem)'
-            }}>
-              {queuedAppointments[0].queue_position || 1}
+      <div className="container">
+        {error && (
+          <div className="alert alert-dark border-0 rounded-4 shadow-sm mb-4 d-flex align-items-center gap-3">
+            <i className="bi bi-exclamation-octagon-fill fs-4"></i>
+            <div>
+              <div className="fw-bold">Something went wrong</div>
+              <div className="small opacity-75">{error}</div>
             </div>
+            <button className="btn-close ms-auto" onClick={() => setError(null)}></button>
+          </div>
+        )}
 
-            {/* Customer Info */}
-            <div className="flex-grow-1" style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 'clamp(0.95rem, 3vw, 1.1rem)', fontWeight: '500', marginBottom: '0.25rem' }}>
-                {queuedAppointments[0].customer?.full_name || 'Unknown Customer'}
-              </div>
-              <div style={{ fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)', color: '#6b7280' }}>
-                Services: {getServicesDisplay(queuedAppointments[0]) || 'Classic'}
-              </div>
+        {/* Minimalist Stats */}
+        <div className="stats-row mb-5">
+          <div className="stat-card-modern">
+            <div className="stat-icon-box bg-success bg-opacity-10 text-success">
+              <i className="bi bi-check2-circle"></i>
             </div>
-
-            {/* Duration */}
-            <div className="flex-shrink-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#4b5563' }}>
-              {queuedAppointments[0].total_duration || queuedAppointments[0].service?.duration || 30} min
+            <div>
+              <div className="text-muted small fw-bold text-uppercase">Finished</div>
+              <div className="h4 mb-0 fw-black">{stats.completed || 0}</div>
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="d-flex gap-2 mb-4">
-            <button
-              className="btn text-white flex-fill"
-              onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
-              disabled={!!currentAppointment} // Strict restriction
-              style={{
-                background: '#16a34a',
-                borderRadius: '8px',
-                padding: 'clamp(0.625rem, 2vw, 0.75rem)',
-                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
-                fontWeight: '500',
-                border: 'none',
-                opacity: currentAppointment ? 0.6 : 1
-              }}
-            >
-              {currentAppointment ? 'Barber Busy' : 'Start Service'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Current Customer Being Served */}
-      {currentAppointment && (
-        <div className="mb-3 mb-md-4">
-          <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Customer to Service</h5>
-          <div className="d-flex align-items-center mb-2 mb-md-3" style={{
-            background: '#e5e7eb',
-            borderRadius: '12px',
-            padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
-            gap: 'clamp(0.5rem, 2vw, 1rem)'
-          }}>
-            {/* Queue Number Badge */}
-            <div className="d-flex align-items-center justify-content-center flex-shrink-0" style={{
-              width: 'clamp(35px, 8vw, 40px)',
-              height: 'clamp(35px, 8vw, 40px)',
-              background: '#d1d5db',
-              borderRadius: '50%',
-              color: '#16a34a',
-              fontWeight: 'bold',
-              fontSize: 'clamp(1rem, 3vw, 1.2rem)'
-            }}>
-              {currentAppointment.queue_position || 1}
+          <div className="stat-card-modern">
+            <div className="stat-icon-box bg-primary bg-opacity-10 text-primary">
+              <i className="bi bi-people"></i>
             </div>
-
-            {/* Customer Info */}
-            <div className="flex-grow-1" style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 'clamp(0.95rem, 3vw, 1.1rem)', fontWeight: '500', marginBottom: '0.25rem' }}>
-                {currentAppointment.customer?.full_name || 'Unknown Customer'}
-              </div>
-              <div style={{ fontSize: 'clamp(0.8rem, 2.5vw, 0.9rem)', color: '#6b7280' }}>
-                Services: {getServicesDisplay(currentAppointment) || 'Classic'}
-              </div>
-            </div>
-
-            {/* Duration */}
-            <div className="flex-shrink-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#4b5563' }}>
-              {currentAppointment.total_duration || currentAppointment.service?.duration || 30} min
+            <div>
+              <div className="text-muted small fw-bold text-uppercase">Waiting</div>
+              <div className="h4 mb-0 fw-black">{stats.remaining || 0}</div>
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="d-flex gap-2 mb-4">
-            <button
-              className="btn text-white flex-fill"
-              onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
-              style={{
-                background: '#16a34a',
-                borderRadius: '8px',
-                padding: 'clamp(0.625rem, 2vw, 0.75rem)',
-                fontSize: 'clamp(0.9rem, 2.5vw, 1rem)',
-                fontWeight: '500',
-                border: 'none'
-              }}
-            >
-              Mark as Completed
-            </button>
+          <div className="stat-card-modern">
+            <div className="stat-icon-box bg-warning bg-opacity-10 text-warning">
+              <i className="bi bi-hourglass-split"></i>
+            </div>
+            <div>
+              <div className="text-muted small fw-bold text-uppercase">Pending</div>
+              <div className="h4 mb-0 fw-black">{stats.pendingRequests || 0}</div>
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Waiting List Section */}
-      <div className="mb-3 mb-md-4">
-        <div className="d-flex justify-content-between align-items-center mb-2 mb-md-3 flex-wrap gap-2">
-          <h5 className="mb-0" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Waiting List</h5>
-          <div className="d-flex align-items-center gap-2">
-            <span className="d-none d-md-inline" style={{ fontSize: 'clamp(0.8rem, 2vw, 0.9rem)', color: '#6b7280' }}>Customer Waiting</span>
-            <span className="badge" style={{
-              background: '#bfdbfe',
-              color: '#fff',
-              borderRadius: '50%',
-              width: 'clamp(28px, 6vw, 32px)',
-              height: 'clamp(28px, 6vw, 32px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 'clamp(0.8rem, 2vw, 0.9rem)',
-              fontWeight: '600'
-            }}>
-              {(() => {
-                if (currentAppointment) {
-                  return queuedAppointments.length;
-                } else {
-                  return Math.max(0, queuedAppointments.length - 1);
-                }
-              })()}
-            </span>
+          <div className="stat-card-modern">
+            <div className="stat-icon-box bg-info bg-opacity-10 text-info">
+              <i className="bi bi-clock"></i>
+            </div>
+            <div>
+              <div className="text-muted small fw-bold text-uppercase">Work Time</div>
+              <div className="h4 mb-0 fw-black">{stats.totalTime}m</div>
+            </div>
           </div>
         </div>
 
-        {(() => {
-          const waitingList = currentAppointment
-            ? queuedAppointments
-            : queuedAppointments.slice(1);
-
-          return waitingList.length === 0 ? (
-            <div className="text-center py-5" style={{
-              background: '#f9fafb',
-              borderRadius: '12px',
-              border: '1px solid #e5e7eb'
-            }}>
-              <p className="text-muted mb-0">No customers waiting</p>
+        <div className="row g-4">
+          {/* Main Column */}
+          <div className="col-lg-8">
+            {/* CURRENTLY SERVING */}
+            <div className="section-title text-black">
+              <i className="bi bi-scissors"></i> NOW SERVING
             </div>
-          ) : (
-            <div className="d-flex flex-column gap-2">
-              {waitingList.map((appointment, displayIndex) => {
-                const actualIndex = currentAppointment ? displayIndex + 1 : displayIndex + 2;
-                return (
-                  <div
-                    key={appointment.id}
-                    className="d-flex align-items-center"
-                    style={{
-                      background: '#e5e7eb',
-                      borderRadius: '12px',
-                      padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
-                      gap: 'clamp(0.5rem, 2vw, 1rem)'
-                    }}
-                  >
-                    {/* Queue Number Badge */}
-                    <div className="d-flex align-items-center justify-content-center flex-shrink-0" style={{
-                      width: 'clamp(35px, 8vw, 40px)',
-                      height: 'clamp(35px, 8vw, 40px)',
-                      background: '#d1d5db',
-                      borderRadius: '50%',
-                      color: '#16a34a',
-                      fontWeight: 'bold',
-                      fontSize: 'clamp(0.95rem, 3vw, 1.1rem)'
-                    }}>
-                      {appointment.queue_position || (actualIndex + 1)}
+            
+            {currentAppointment ? (
+              <div className="serving-card-premium">
+                <div className="serving-label">Active Session</div>
+                <div className="d-flex justify-content-between align-items-start mb-4">
+                  <div>
+                    <h2 className="display-6 fw-black mb-1">{currentAppointment.customer?.full_name}</h2>
+                    <div className="d-flex align-items-center gap-2 opacity-75">
+                      <i className="bi bi-clock"></i>
+                      <span>Started {formatTime(currentAppointment.appointment_time)}</span>
                     </div>
+                  </div>
+                  <div className="text-end">
+                    <div className="h2 mb-0 fw-black text-white">₱{Number(getTotalPrice(currentAppointment)).toLocaleString()}</div>
+                    <div className="small opacity-50 fw-bold">TOTAL PRICE</div>
+                  </div>
+                </div>
+                
+                <div className="p-3 bg-white bg-opacity-10 rounded-4 mb-4">
+                  <div className="small fw-bold text-uppercase opacity-50 mb-2" style={{ letterSpacing: '1px' }}>Requested Services</div>
+                  <div className="h5 mb-2">{getServicesDisplay(currentAppointment)}</div>
+                  <AddOnsDisplay appointment={currentAppointment} />
+                </div>
 
-                    {/* Customer Info */}
+                <button 
+                  className="btn-premium-finish"
+                  onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
+                >
+                  FINISH SESSION <i className="bi bi-check-all ms-2"></i>
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state-minimal mb-5">
+                <i className="bi bi-cup-hot display-4 text-muted opacity-25 mb-3 d-block"></i>
+                <h5 className="fw-bold text-muted">No active customer</h5>
+                <p className="text-muted small">Select a customer from the waiting list to start serving.</p>
+                {queuedAppointments.length > 0 && (
+                  <button 
+                    className="btn btn-premium-primary mt-3"
+                    onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
+                  >
+                    START NEXT CUSTOMER
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* WAITING LIST */}
+            <div className="section-title mt-5">
+              <i className="bi bi-list-task"></i> WAITING LIST
+              <span className="badge bg-light text-dark ms-auto border rounded-pill px-3">
+                {queuedAppointments.length} Total
+              </span>
+            </div>
+
+            {queuedAppointments.length === 0 ? (
+              <div className="empty-state-minimal">
+                <p className="text-muted mb-0">No one is waiting in the queue.</p>
+              </div>
+            ) : (
+              <div className="queue-list-container">
+                {queuedAppointments.map((apt, index) => (
+                  <div key={apt.id} className={`queue-item-minimal ${apt.is_urgent ? 'border-danger border-opacity-50' : ''}`}>
+                    <div className={`queue-number-badge ${apt.is_urgent ? 'bg-danger text-white' : ''}`}>
+                      {apt.queue_position || (index + 1)}
+                    </div>
+                    <div className="flex-grow-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <h6 className="mb-0 fw-black">{apt.customer?.full_name}</h6>
+                        {apt.is_urgent && <span className="badge bg-danger rounded-pill" style={{ fontSize: '0.6rem' }}>URGENT</span>}
+                        {apt.is_rebooking && <span className="badge bg-info rounded-pill" style={{ fontSize: '0.6rem' }}>REBOOK</span>}
+                      </div>
+                      <div className="text-muted small truncate" style={{ maxWidth: '200px' }}>
+                        {getServicesDisplay(apt)}
+                      </div>
+                    </div>
+                    <div className="text-end me-3 d-none d-md-block">
+                      <div className="fw-bold text-dark">₱{Number(getTotalPrice(apt)).toLocaleString()}</div>
+                      <div className="small text-muted">{apt.total_duration || 30}m</div>
+                    </div>
+                    <div className="d-flex gap-2">
+                      {!currentAppointment && index === 0 && (
+                        <button 
+                          className="btn btn-premium-primary btn-sm rounded-pill px-3"
+                          onClick={() => handleAppointmentStatus(apt.id, 'ongoing')}
+                        >
+                          Start
+                        </button>
+                      )}
+                      <button 
+                        className="btn btn-light btn-sm rounded-circle" 
+                        style={{ width: '32px', height: '32px' }}
+                        onClick={() => setRescheduleModal({ isOpen: true, appointment: apt })}
+                      >
+                        <i className="bi bi-clock-history"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Side Column */}
+          <div className="col-lg-4">
+            {/* PENDING REQUESTS */}
+            <div className="section-title">
+              <i className="bi bi-bell-fill"></i> RECENT REQUESTS
+            </div>
+
+            {pendingRequests.length === 0 ? (
+              <div className="empty-state-minimal p-4 mb-4">
+                <p className="text-muted small mb-0">No pending requests</p>
+              </div>
+            ) : (
+              <div className="mb-4">
+                {pendingRequests.map(request => (
+                  <div key={request.id} className="premium-card p-3 mb-3 border">
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <h6 className="fw-bold mb-0">{request.customer?.full_name}</h6>
+                      <span className="badge bg-warning bg-opacity-20 text-warning-emphasis">NEW</span>
+                    </div>
+                    <div className="text-muted small mb-3">
+                      {getServicesDisplay(request)}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button 
+                        className="btn btn-black text-white btn-sm flex-grow-1 fw-bold py-2 rounded-3"
+                        onClick={() => handleBookingResponse(request.id, 'accept')}
+                      >
+                        Accept
+                      </button>
+                      <button 
+                        className="btn btn-light btn-sm px-3 rounded-3"
+                        onClick={() => {
+                          const reason = prompt('Decline reason (optional):');
+                          if (reason !== null) handleBookingResponse(request.id, 'decline', reason);
+                        }}
+                      >
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* QUICK HISTORY */}
+            <div className="section-title mt-4">
+              <i className="bi bi-clock-history"></i> COMPLETED TODAY
+            </div>
+            
+            <div className="premium-card p-0" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {completedAppointments.length === 0 ? (
+                <div className="p-4 text-center text-muted small">
+                  Your work history will appear here.
+                </div>
+              ) : (
+                completedAppointments.slice(0, 10).map(apt => (
+                  <div key={apt.id} className="p-3 border-bottom d-flex align-items-center gap-2">
+                    <div className="bg-success bg-opacity-10 text-success p-2 rounded-circle">
+                      <i className="bi bi-check-lg"></i>
+                    </div>
                     <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', marginBottom: '0.25rem', color: '#1f2937' }}>
-                        {appointment.customer?.full_name || 'Customer'}
-                      </div>
-                      <div style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: '#6b7280' }}>
-                        {getServicesDisplay(appointment) || 'Service'}
-                      </div>
+                      <div className="fw-bold small truncate">{apt.customer?.full_name}</div>
+                      <div className="text-muted" style={{ fontSize: '0.6rem' }}>{formatTime(apt.appointment_time)}</div>
                     </div>
+                    <div className="fw-black small text-dark">₱{Number(getTotalPrice(apt)).toLocaleString()}</div>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
-          );
-        })()}
-      </div>
 
-      {/* Completed Today Section */}
-      <div className="mb-3 mb-md-4">
-        <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Completed Today</h5>
-        {completedAppointments.length === 0 ? (
-          <div className="text-center py-4" style={{
-            background: '#f9fafb',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb',
-            opacity: 0.6
-          }}>
-            <p className="text-muted mb-0 small">No completed services yet</p>
-          </div>
-        ) : (
-          <div className="d-flex flex-column gap-2">
-            {completedAppointments.map((appointment) => (
-              <div
-                key={appointment.id}
-                className="d-flex align-items-center"
-                style={{
-                  background: '#f3f4f6',
-                  borderRadius: '12px',
-                  padding: 'clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
-                  gap: 'clamp(0.5rem, 2vw, 1rem)',
-                  borderLeft: '4px solid #10b981',
-                  opacity: 0.8
-                }}
-              >
-                {/* Icon */}
-                <div className="d-flex align-items-center justify-content-center flex-shrink-0 text-success" style={{
-                  width: 'clamp(30px, 7vw, 35px)',
-                  height: 'clamp(30px, 7vw, 35px)',
-                  background: '#d1fae5',
-                  borderRadius: '50%',
-                  fontSize: 'clamp(0.8rem, 2vw, 0.9rem)'
-                }}>
-                  <i className="bi bi-check-lg"></i>
-                </div>
-
-                {/* Customer Info */}
-                <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 'clamp(0.85rem, 2.2vw, 0.95rem)', fontWeight: '500', color: '#374151' }}>
-                    {appointment.customer?.full_name}
-                  </div>
-                  <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', color: '#6b7280' }}>
-                    {getServicesDisplay(appointment)}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', fontWeight: 'bold', color: '#059669' }}>
-                  DONE
-                </div>
+            {/* SYSTEM ACTIONS */}
+            <div className="mt-5 p-4 bg-black text-white rounded-4 shadow-sm">
+              <h6 className="mb-3 fw-black" style={{ letterSpacing: '1px' }}>QUEUE INFO</h6>
+              <div className="d-flex justify-content-between mb-2 small opacity-75">
+                <span>Total Workload</span>
+                <span>{stats.totalTime} min</span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Pending Requests Section */}
-      <div>
-        <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Pending Requests</h5>
-        {pendingRequests.length === 0 ? (
-          <div className="text-center py-4" style={{
-            background: '#f9fafb',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb'
-          }}>
-            <p className="text-muted mb-0">No pending requests</p>
-          </div>
-        ) : (
-          <div className="d-flex flex-column gap-2">
-            {pendingRequests.map((request) => (
-              <div
-                key={request.id}
-                className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 gap-md-0"
-                style={{
-                  background: '#f3f4f6',
-                  borderRadius: '12px',
-                  padding: 'clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem)',
-                  border: request.is_urgent ? '2px solid #ef4444' : '1px solid #e5e7eb'
-                }}
-              >
-                <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                  <div className="d-flex align-items-center gap-2 mb-1 mb-md-2 flex-wrap">
-                    <div style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)', fontWeight: '500', color: '#1f2937' }}>
-                      {request.customer?.full_name || 'Unknown Customer'}
-                    </div>
-                    {request.is_urgent && (
-                      <span className="badge bg-danger" style={{ fontSize: 'clamp(0.7rem, 2vw, 0.75rem)' }}>
-                        URGENT
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: '#6b7280', marginBottom: '0.5rem' }}>
-                    Services: {getServicesDisplay(request) || 'Classic'}
-                  </div>
-                  <div style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: '#6b7280' }}>
-                    Total: <span className="text-success fw-bold">₱{getTotalPrice(request)}</span>
-                    {' '}({request.total_duration || (request.service?.duration || 30)} min)
-                  </div>
-                </div>
-
-                <div className="d-flex gap-2 w-100 w-md-auto">
-                  <button
-                    className="btn btn-sm flex-fill flex-md-initial"
-                    onClick={() => handleBookingResponse(request.id, 'accept')}
-                    style={{
-                      background: request.is_urgent ? '#ef4444' : '#16a34a',
-                      color: '#fff',
-                      borderRadius: '8px',
-                      border: 'none',
-                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
-                      fontWeight: '500',
-                      fontSize: 'clamp(0.85rem, 2vw, 0.9rem)'
-                    }}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    className="btn btn-sm btn-outline-danger flex-fill flex-md-initial"
-                    onClick={() => {
-                      const reason = prompt('Reason for declining (optional):');
-                      if (reason !== null) {
-                        handleBookingResponse(request.id, 'decline', reason);
-                      }
-                    }}
-                    style={{
-                      borderRadius: '8px',
-                      padding: 'clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem)',
-                      fontWeight: '500',
-                      fontSize: 'clamp(0.85rem, 2vw, 0.9rem)'
-                    }}
-                  >
-                    Decline
-                  </button>
-                </div>
+              <div className="d-flex justify-content-between mb-2 small opacity-75">
+                <span>Avg. Duration</span>
+                <span>30 min</span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-
-      {/* Cancelled Today Section */}
-      <div className="mb-3 mb-md-4">
-        <h5 className="mb-2 mb-md-3" style={{ fontWeight: '600', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>Cancelled Today</h5>
-        {cancelledAppointments.length === 0 ? (
-          <div className="text-center py-4" style={{
-            background: '#f9fafb',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb',
-            opacity: 0.6
-          }}>
-            <p className="text-muted mb-0 small">No cancelled appointments yet</p>
-          </div>
-        ) : (
-          <div className="d-flex flex-column gap-2">
-            {cancelledAppointments.map((appointment) => (
-              <div
-                key={appointment.id}
-                className="d-flex align-items-center"
-                style={{
-                  background: '#fef2f2',
-                  borderRadius: '12px',
-                  padding: 'clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)',
-                  gap: 'clamp(0.5rem, 2vw, 1rem)',
-                  borderLeft: '4px solid #ef4444',
-                  opacity: 0.8
-                }}
-              >
-                {/* Icon */}
-                <div className="d-flex align-items-center justify-content-center flex-shrink-0 text-danger" style={{
-                  width: 'clamp(30px, 7vw, 35px)',
-                  height: 'clamp(30px, 7vw, 35px)',
-                  background: '#fee2e2',
-                  borderRadius: '50%',
-                  fontSize: 'clamp(0.8rem, 2vw, 0.9rem)'
-                }}>
-                  <i className="bi bi-x-lg"></i>
-                </div>
-
-                {/* Customer Info */}
-                <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 'clamp(0.85rem, 2.2vw, 0.95rem)', fontWeight: '500', color: '#374151' }}>
-                    {appointment.customer?.full_name}
-                  </div>
-                  <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', color: '#6b7280' }}>
-                    {getServicesDisplay(appointment)}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.8rem)', fontWeight: 'bold', color: '#b91c1c' }}>
-                  CANCELLED
-                </div>
+              <div className="border-top border-white border-opacity-10 pt-3 mt-3">
+                <Link to="/schedule" className="btn btn-white w-100 fw-bold rounded-pill text-black text-decoration-none text-center d-block">
+                  View Full Schedule
+                </Link>
               </div>
-            ))}
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Reschedule Modal */}
@@ -1176,10 +1128,9 @@ const BarberQueue = () => {
         isOpen={rescheduleModal.isOpen}
         onClose={() => setRescheduleModal({ isOpen: false, appointment: null })}
         appointment={rescheduleModal.appointment}
-        onSuccess={(request) => {
-          console.log('✅ Reschedule request created:', request);
+        onSuccess={() => {
           setRescheduleModal({ isOpen: false, appointment: null });
-          fetchQueueData(); // Refresh the queue after reschedule request
+          fetchQueueData();
         }}
       />
     </div>

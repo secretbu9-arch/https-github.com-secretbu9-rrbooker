@@ -1,4 +1,3 @@
-// components/products/ProductDetails.js
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
@@ -25,7 +24,6 @@ const ProductDetails = () => {
       setLoading(true);
       setError(null);
       
-      // Fetch product details
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -33,14 +31,10 @@ const ProductDetails = () => {
         .single();
       
       if (error) throw error;
-      
-      if (!data) {
-        throw new Error('Product not found');
-      }
+      if (!data) throw new Error('Product not found');
       
       setProduct(data);
       
-      // Fetch related products (products in the same category)
       if (data.category) {
         const { data: relatedData, error: relatedError } = await supabase
           .from('products')
@@ -52,243 +46,152 @@ const ProductDetails = () => {
           .limit(4);
         
         if (relatedError) throw relatedError;
-        
         setRelatedProducts(relatedData || []);
       }
-      
     } catch (error) {
-      console.error('Error fetching product details:', error);
-      setError('Failed to load product details. Please try again.');
+      setError('Failed to load product details.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQuantityChange = (e) => {
-    const value = parseInt(e.target.value);
-    if (value > 0 && value <= product.stock_quantity) {
-      setQuantity(value);
-    }
-  };
-
-  const incrementQuantity = () => {
-    if (quantity < product.stock_quantity) {
-      setQuantity(prev => prev + 1);
-    }
-  };
-
-  const decrementQuantity = () => {
-    if (quantity > 1) {
-      setQuantity(prev => prev - 1);
-    }
-  };
-
   const handleAddToCart = () => {
     if (!product) return;
-    
-    // Find if product is already in cart
     const existingItem = cart.find(item => item.id === product.id);
-    
     if (existingItem) {
-      // Update quantity if already in cart
       updateCartItem(product.id, existingItem.quantity + quantity);
     } else {
-      // Add new item to cart
       addToCart(product, quantity);
     }
-    
-    // Show confirmation and reset quantity
-    alert(`Added ${quantity} ${product.name} to your cart.`);
     setQuantity(1);
   };
 
-  const handleBuyNow = () => {
-    handleAddToCart();
-    navigate('/cart');
-  };
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (error || !product) {
-    return (
-      <div className="container py-5">
-        <div className="alert alert-danger">
-          {error || 'Product not found'}
-        </div>
-        <button 
-          className="btn btn-primary" 
-          onClick={() => navigate('/products')}
-        >
-          Back to Products
-        </button>
-      </div>
-    );
-  }
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="container py-4">
-      <div className="mb-4">
-        <button 
-          className="btn btn-outline-secondary" 
-          onClick={() => navigate('/products')}
-        >
-          <i className="bi bi-arrow-left me-2"></i>
-          Back to Products
+    <div className="container-fluid py-4 min-vh-100" style={{ background: '#fdfdfd', color: '#1a1a1a', fontFamily: "'Outfit', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        :root {
+          --premium-brown: #3d2c24;
+          --bg-card: #ffffff;
+          --border-subtle: rgba(0,0,0,0.06);
+        }
+        .detail-card {
+          background: #fff;
+          border-radius: 30px;
+          border: 1px solid var(--border-subtle);
+          overflow: hidden;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.03);
+        }
+        .img-zoom {
+          transition: transform 0.5s ease;
+        }
+        .img-zoom:hover {
+          transform: scale(1.05);
+        }
+        .rel-card {
+          border-radius: 20px;
+          border: 1px solid var(--border-subtle);
+          transition: 0.3s;
+        }
+        .rel-card:hover {
+          transform: translateY(-5px);
+          border-color: var(--premium-brown);
+        }
+        .btn-premium {
+          background: var(--premium-brown);
+          color: #fff;
+          border: none;
+          padding: 14px 28px;
+          border-radius: 14px;
+          font-weight: 700;
+          transition: 0.2s;
+        }
+        .btn-premium:hover {
+          background: #000;
+          color: #fff;
+        }
+        .btn-outline-premium {
+          border: 2px solid var(--premium-brown);
+          color: var(--premium-brown);
+          background: transparent;
+          padding: 12px 28px;
+          border-radius: 14px;
+          font-weight: 700;
+        }
+      `}</style>
+
+      <div className="container py-lg-5">
+        <button onClick={() => navigate('/products')} className="btn btn-link text-dark text-decoration-none fw-bold mb-4 p-0">
+          <i className="bi bi-arrow-left me-2"></i> BACK TO SHOP
         </button>
-      </div>
 
-      <div className="card">
-        <div className="card-body">
-          <div className="row">
-            {/* Product Image */}
-            <div className="col-md-5 mb-4 mb-md-0">
-              {product.image_url ? (
-                <img 
-                  src={product.image_url} 
-                  className="img-fluid rounded"
-                  alt={product.name}
-                />
-              ) : (
-                <div 
-                  className="bg-light d-flex align-items-center justify-content-center rounded"
-                  style={{ height: '300px' }}
-                >
-                  <i className="bi bi-image text-muted fs-1"></i>
-                </div>
-              )}
+        <div className="detail-card row g-0">
+          <div className="col-lg-6 bg-light d-flex align-items-center justify-content-center overflow-hidden" style={{ minHeight: '400px' }}>
+            <img 
+              src={product.image_url || 'https://via.placeholder.com/600x600'} 
+              className="w-100 h-100 object-fit-cover img-zoom" 
+              alt={product.name} 
+            />
+          </div>
+          <div className="col-lg-6 p-4 p-md-5 d-flex flex-column">
+            <div className="mb-auto">
+              <span className="badge rounded-pill bg-dark py-2 px-3 mb-3" style={{ fontSize: '0.7rem', letterSpacing: '1px' }}>{product.category?.toUpperCase() || 'ESSENTIAL'}</span>
+              <h1 className="fw-bold display-6 mb-2">{product.name}</h1>
+              <p className="text-muted mb-4">{product.description || 'Premium grooming element crafted for style and sustainability.'}</p>
+              
+              <div className="d-flex align-items-baseline gap-3 mb-4">
+                <h2 className="fw-bold mb-0">{formatPrice(product.price)}</h2>
+                {product.stock_quantity > 0 ? (
+                  <span className="text-success small fw-bold"><i className="bi bi-check2-circle me-1"></i> {product.stock_quantity} IN STOCK</span>
+                ) : (
+                  <span className="text-danger small fw-bold">OUT OF STOCK</span>
+                )}
+              </div>
             </div>
-            
-            {/* Product Details */}
-            <div className="col-md-7">
-              {product.category && (
-                <div className="mb-2">
-                  <span className="badge bg-primary">{product.category}</span>
-                </div>
-              )}
-              
-              <h2 className="mb-3">{product.name}</h2>
-              
-              <h3 className="text-primary mb-3">
-                {formatPrice(product.price)}
-              </h3>
-              
-              <div className="mb-4">
-                <p>{product.description || 'No description available.'}</p>
-              </div>
-              
-              <div className="mb-4">
-                <div className={`alert ${product.stock_quantity > 0 ? 'alert-success' : 'alert-danger'}`}>
-                  {product.stock_quantity > 0 ? (
-                    <>
-                      <i className="bi bi-check-circle me-2"></i>
-                      In Stock ({product.stock_quantity} available)
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-x-circle me-2"></i>
-                      Out of Stock
-                    </>
-                  )}
-                </div>
-              </div>
-              
+
+            <div className="mt-4">
               {product.stock_quantity > 0 && (
-                <div className="mb-4">
-                  <label htmlFor="quantity" className="form-label">Quantity</label>
-                  <div className="input-group">
-                    <button 
-                      className="btn btn-outline-secondary" 
-                      type="button"
-                      onClick={decrementQuantity}
-                    >
-                      <i className="bi bi-dash"></i>
-                    </button>
-                    
-                    <input
-                      type="number"
-                      className="form-control text-center"
-                      id="quantity"
-                      value={quantity}
-                      onChange={handleQuantityChange}
-                      min="1"
-                      max={product.stock_quantity}
-                    />
-                    
-                    <button 
-                      className="btn btn-outline-secondary" 
-                      type="button"
-                      onClick={incrementQuantity}
-                    >
-                      <i className="bi bi-plus"></i>
-                    </button>
+                <>
+                  <div className="d-flex align-items-center gap-3 mb-4">
+                    <span className="fw-bold small text-muted">QUANTITY</span>
+                    <div className="d-flex align-items-center bg-light rounded-pill p-1">
+                      <button className="btn btn-sm btn-white rounded-circle shadow-sm" onClick={() => setQuantity(q => Math.max(1, q-1))}>-</button>
+                      <span className="px-4 fw-bold">{quantity}</span>
+                      <button className="btn btn-sm btn-white rounded-circle shadow-sm" onClick={() => setQuantity(q => Math.min(product.stock_quantity, q+1))}>+</button>
+                    </div>
                   </div>
-                </div>
+                  <div className="d-flex gap-3">
+                    <button className="btn-premium flex-grow-1" onClick={handleAddToCart}>ADD TO BAG</button>
+                    <button className="btn-outline-premium" onClick={() => { handleAddToCart(); navigate('/products'); }}>BUY NOW</button>
+                  </div>
+                </>
               )}
-              
-              <div className="d-grid gap-2 d-md-flex">
-                <button
-                  className="btn btn-primary btn-lg flex-grow-1"
-                  disabled={product.stock_quantity <= 0}
-                  onClick={handleAddToCart}
-                >
-                  <i className="bi bi-cart-plus me-2"></i>
-                  Add to Cart
-                </button>
-                
-                <button
-                  className="btn btn-success btn-lg flex-grow-1"
-                  disabled={product.stock_quantity <= 0}
-                  onClick={handleBuyNow}
-                >
-                  Buy Now
-                </button>
-              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Related Products */}
-      {relatedProducts.length > 0 && (
-        <div className="mt-5">
-          <h3 className="mb-4">Related Products</h3>
-          
-          <div className="row row-cols-2 row-cols-md-4 g-4">
-            {relatedProducts.map(relatedProduct => (
-              <div key={relatedProduct.id} className="col">
-                <div 
-                  className="card h-100 cursor-pointer"
-                  onClick={() => navigate(`/products/${relatedProduct.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {relatedProduct.image_url ? (
-                    <img 
-                      src={relatedProduct.image_url} 
-                      className="card-img-top" 
-                      alt={relatedProduct.name}
-                      style={{ height: '160px', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div 
-                      className="bg-light d-flex align-items-center justify-content-center"
-                      style={{ height: '160px' }}
-                    >
-                      <i className="bi bi-image text-muted fs-1"></i>
+        {/* Related */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-5 pt-4">
+            <h4 className="fw-bold mb-4">RELATED PRODUCTS</h4>
+            <div className="row g-4">
+              {relatedProducts.map(rel => (
+                <div key={rel.id} className="col-6 col-md-3">
+                  <div className="rel-card h-100 p-2 bg-white cursor-pointer" onClick={() => navigate(`/products/${rel.id}`)} style={{ cursor: 'pointer' }}>
+                    <img src={rel.image_url || 'https://via.placeholder.com/200x200'} className="w-100 rounded-4 object-fit-cover mb-3" style={{ height: '180px' }} />
+                    <div className="px-2">
+                       <h6 className="small fw-bold mb-1 text-truncate">{rel.name}</h6>
+                       <span className="fw-bold small text-muted">{formatPrice(rel.price)}</span>
                     </div>
-                  )}
-                  
-                  <div className="card-body">
-                    <h6 className="card-title">{relatedProduct.name}</h6>
-                    <p className="card-text text-primary">{formatPrice(relatedProduct.price)}</p>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

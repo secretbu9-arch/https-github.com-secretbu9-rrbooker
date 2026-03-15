@@ -47,6 +47,50 @@ const convertTo12Hour = (time24) => {
 
 
 const BookAppointment = () => {
+  const styles = {
+    colors: {
+      black: '#000000',
+      brown: '#5D4037', // Premium Brown
+      white: '#FFFFFF',
+      lightGray: '#F5F5F5',
+      accentBrown: '#8B4513',
+      textSecondary: '#6c757d'
+    },
+    cards: {
+      base: {
+        background: '#FFFFFF',
+        borderRadius: '24px',
+        border: '1px solid #E0E0E0',
+        transition: 'all 0.3s ease',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.02)'
+      },
+      hover: {
+        transform: 'translateY(-5px)',
+        boxShadow: '0 12px 20px rgba(0,0,0,0.08)',
+        borderColor: '#5D4037'
+      }
+    },
+    buttons: {
+      primary: {
+        background: '#000000',
+        color: '#FFFFFF',
+        borderRadius: '50px',
+        padding: '12px 24px',
+        fontWeight: '700',
+        border: 'none',
+        transition: 'all 0.3s ease'
+      },
+      secondary: {
+        background: '#5D4037',
+        color: '#FFFFFF',
+        borderRadius: '50px',
+        padding: '12px 24px',
+        fontWeight: '700',
+        border: 'none'
+      }
+    }
+  };
+
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
   const [bookingData, setBookingData] = useState({
@@ -77,6 +121,7 @@ const BookAppointment = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [animateForm, setAnimateForm] = useState(false);
 
   // Rebooking states
@@ -86,6 +131,8 @@ const BookAppointment = () => {
   // Additional states
   const [existingAppointment, setExistingAppointment] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedDetails, setSubmittedDetails] = useState(null);
 
 
   const [friendVerification, setFriendVerification] = useState(() => createInitialFriendVerificationState());
@@ -224,7 +271,13 @@ const BookAppointment = () => {
   };
 
   const goToStep = (step) => {
-    setCurrentStep(step);
+    // Prevent synthetic events from being set as the step
+    if (typeof step === 'number') {
+      setCurrentStep(step);
+    } else if (typeof step === 'string') {
+      const parsed = parseInt(step);
+      if (!isNaN(parsed)) setCurrentStep(parsed);
+    }
   };
 
   const updateBookingData = (updates) => {
@@ -452,8 +505,15 @@ const BookAppointment = () => {
   // Fetch data on component mount
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      try {
+        setAuthLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+      } catch (err) {
+        console.error('Error fetching user:', err);
+      } finally {
+        setAuthLoading(false);
+      }
     };
 
     fetchUser();
@@ -2606,22 +2666,18 @@ const BookAppointment = () => {
       const result = await AdvancedHybridQueueService.smartInsertAppointment(appointmentData);
 
       if (result.success) {
-        // Show success message with position and estimated time (skip for friend bookings)
-        if (!bookingData.bookForFriend) {
-          let successMessage;
-
-          if (bookingData.appointmentType === 'queue') {
-            successMessage = `✅ Appointment queued successfully!\n` +
-              `Queue Position: ${result.queue_position || 'TBD'}\n` +
-              `⏳ Status: Pending confirmation by barber/manager`;
-          } else {
-            successMessage = `✅ Queue appointment request submitted successfully!\n` +
-              `⏳ Status: Pending barber approval\n` +
-              `📋 You will receive a notification once approved`;
-          }
-
-          setSuccess(successMessage);
-        }
+        // Skip generic alert message and set up the details for the Success Modal
+        setSubmittedDetails({
+          barberName: barbers.find(b => b.id === bookingData.selectedBarber)?.full_name || 'Selected Barber',
+          serviceName: services.find(s => s.id === bookingData.selectedServices[0])?.name || 'Haircut Service',
+          date: bookingData.selectedDate,
+          time: calculatedTime || 'Queue',
+          queuePosition: result.queue_position,
+          totalPrice: finalDbTotalPrice
+        });
+        
+        // Show modal and skip automatic redirect
+        setShowSuccessModal(true);
 
         resetFriendVerification();
 
@@ -2654,10 +2710,7 @@ const BookAppointment = () => {
           console.warn('⚠️ Failed to notify barber/manager of new booking:', notifError);
         }
 
-        // Navigate after 2 seconds
-        setTimeout(() => {
-          navigate('/appointments');
-        }, 2000);
+        // Do not auto navigate - user clicks button on modal.
 
         console.log('✅ Advanced Hybrid Queue booking completed successfully');
 
@@ -2703,14 +2756,42 @@ const BookAppointment = () => {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center vh-100 bg-white">
+        <div className="text-center">
+          <div className="spinner-border text-dark mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="text-muted fw-medium">Verifying your session...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
-      <div className="container py-4">
-        <div className="text-center">
-          <h3>Please log in to book an appointment</h3>
-          <button className="btn btn-primary" onClick={() => navigate('/login')}>
-            Go to Login
-          </button>
+      <div className="container-fluid vh-100 d-flex align-items-center justify-content-center" style={{ background: '#F8F9FA' }}>
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="card border-0 shadow-lg p-5 text-center rounded-5">
+            <div className="bg-light rounded-circle p-4 mb-4 d-inline-block shadow-sm">
+              <i className="bi bi-person-lock fs-1" style={{ color: '#5D4037' }}></i>
+            </div>
+            <h3 className="fw-800 mb-3 text-dark">Login Required</h3>
+            <p className="text-muted mb-4 fs-6">Please log in to your account to book an appointment and manage your schedule.</p>
+            <button
+              className="btn btn-dark btn-lg w-100 py-3 rounded-pill fw-bold shadow-sm"
+              onClick={() => navigate('/login')}
+            >
+              Go to Login
+            </button>
+            <button
+              className="btn btn-link mt-3 text-decoration-none text-muted small fw-medium"
+              onClick={() => navigate('/')}
+            >
+              <i className="bi bi-arrow-left me-2"></i>Back to Home
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2718,75 +2799,199 @@ const BookAppointment = () => {
 
 
   return (
-    <div className="container-fluid px-2 px-md-4 py-3 py-md-5">
+    <div className="container-fluid px-2 px-md-4 py-3 py-md-5 booking-step-container" style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+      <style>{`
+        :root {
+          --premium-black: #000000;
+          --premium-brown: #5D4037;
+          --premium-light-gray: #F5F5F5;
+          --premium-white: #FFFFFF;
+        }
+
+        .booking-step-container {
+          font-family: 'Outfit', 'Inter', sans-serif !important;
+        }
+
+        h1, h2, h3, h4, h5, h6, .display-1, .display-2, .display-3, .display-4, .display-5, .display-6 {
+          font-family: 'Outfit', 'Inter', sans-serif !important;
+        }
+
+        .btn-dark, .btn-primary {
+          background-color: var(--premium-black) !important;
+          border-color: var(--premium-black) !important;
+          color: var(--premium-white) !important;
+          border-radius: 50px !important;
+          font-weight: 600 !important;
+          transition: all 0.3s ease !important;
+        }
+
+        .btn-dark:hover, .btn-primary:hover {
+          background-color: var(--premium-brown) !important;
+          border-color: var(--premium-brown) !important;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-outline-primary {
+          color: var(--premium-black) !important;
+          border-color: var(--premium-black) !important;
+          border-radius: 50px !important;
+        }
+
+        .btn-outline-primary:hover {
+          background-color: var(--premium-black) !important;
+          color: var(--premium-white) !important;
+        }
+
+        .text-primary {
+          color: var(--premium-brown) !important;
+        }
+
+        .bg-primary {
+          background-color: var(--premium-brown) !important;
+        }
+
+        .card {
+          border-radius: 20px !important;
+          border: 1px solid rgba(0,0,0,0.05) !important;
+          transition: all 0.3s ease !important;
+        }
+
+        .barber-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 12px 24px rgba(0,0,0,0.1) !important;
+          border-color: var(--premium-brown) !important;
+        }
+
+        .progress-bar {
+          background: linear-gradient(90deg, var(--premium-black) 0%, var(--premium-brown) 100%) !important;
+        }
+
+        .step-indicator {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          margin-bottom: 10px;
+          transition: all 0.3s ease;
+          cursor: pointer;
+        }
+        .step-indicator:hover {
+          transform: scale(1.1);
+          box-shadow: 0 4px 12px rgba(93, 64, 55, 0.2);
+        }
+
+        .step-active {
+          background-color: var(--premium-black);
+          color: white;
+          box-shadow: 0 0 0 4px rgba(93, 64, 55, 0.2);
+        }
+
+        .step-inactive {
+          background-color: var(--premium-light-gray);
+          color: #999;
+        }
+
+        .form-control:focus {
+          border-color: var(--premium-brown) !important;
+          box-shadow: 0 0 0 0.25rem rgba(93, 64, 55, 0.1) !important;
+        }
+
+        .badge-premium {
+          background-color: var(--premium-light-gray);
+          color: var(--premium-black);
+          border: 1px solid rgba(0,0,0,0.1);
+          border-radius: 50px;
+          padding: 6px 14px;
+          font-weight: 600;
+        }
+      `}</style>
+
       <div className="container-fluid">
         {/* Book for a Child */}
         <div className="row mb-4 mb-lg-5">
           <div className="col">
-            <div className="card border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-              <div className="card-body py-4 py-lg-5">
+            <div className="card border-0 shadow-sm" style={{ background: '#FFFFFF', borderRadius: '24px' }}>
+              <div className="card-body py-4 py-lg-4">
                 {/* Mobile Layout */}
                 <div className="d-block d-md-none">
                   <div className="text-center mb-3">
-                    <div className="bg-white rounded-circle p-2 d-inline-block shadow-sm mb-2">
+                    <div className="bg-white rounded-circle p-2 d-inline-block shadow-sm mb-2 border" style={{ width: '60px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img
                         src={logoImage}
-                        alt="Raf & Rok"
-                        height="35"
-                        className="rounded-circle"
+                        alt="Raf & Rox"
+                        style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
                       />
                     </div>
                     <h5 className="mb-1 text-dark fw-bold">
                       {isRebooking ? 'Reschedule Appointment' : 'Book Appointment'}
                     </h5>
-                    <small className="text-secondary fw-medium">
-                      Step {currentStep} of 3: {getStepTitle(currentStep)}
-                    </small>
-                  </div>
-                  <div className="d-flex justify-content-center">
-                    <div className="bg-white rounded-pill px-3 py-2 shadow-sm" style={{ width: '100%', maxWidth: '250px' }}>
-                      <div className="progress" style={{ height: '8px' }}>
-                        <div
-                          className="progress-bar bg-gradient-primary"
-                          style={{
-                            width: `${(currentStep / 3) * 100}%`,
-                            background: 'linear-gradient(90deg, #6c757d 0%, #495057 100%)'
-                          }}
-                        ></div>
-                      </div>
+                    <div className="d-flex justify-content-center gap-2 mt-2">
+                      <span 
+                        className={`badge ${currentStep === 1 ? 'step-active' : 'step-inactive'} step-indicator`}
+                        onClick={() => goToStep(1)}
+                        style={{ cursor: 'pointer' }}
+                      >1</span>
+                      <span 
+                        className={`badge ${currentStep === 2 ? 'step-active' : 'step-inactive'} step-indicator`}
+                        onClick={() => goToStep(2)}
+                        style={{ cursor: 'pointer' }}
+                      >2</span>
+                      <span 
+                        className={`badge ${currentStep === 3 ? 'step-active' : 'step-inactive'} step-indicator`}
+                        onClick={() => goToStep(3)}
+                        style={{ cursor: 'pointer' }}
+                      >3</span>
                     </div>
+                    <small className="text-secondary fw-bold text-uppercase mt-2 d-block" style={{ letterSpacing: '1px' }}>
+                      {currentStep}. {getStepTitle(currentStep)}
+                    </small>
                   </div>
                 </div>
 
-                {/* Desktop Layout */}
-                <div className="d-none d-md-flex align-items-center justify-content-between">
+                <div className="d-none d-md-flex align-items-center justify-content-between px-4">
                   <div className="d-flex align-items-center">
-                    <div className="bg-white rounded-circle p-3 me-4 shadow-sm">
+                    <div className="bg-white rounded-circle p-2 me-4 shadow-sm border" style={{ width: '75px', height: '75px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img
                         src={logoImage}
                         alt="Raf & Rok"
-                        height="50"
-                        className="rounded-circle"
+                        style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
                       />
                     </div>
                     <div>
-                      <h3 className="mb-2 text-dark fw-bold">
+                      <h3 className="mb-1 text-dark fw-800">
                         {isRebooking ? 'Reschedule Appointment' : 'Book Appointment'}
                       </h3>
                       <p className="text-secondary fw-medium mb-0 fs-5">
-                        Step {currentStep} of 3: {getStepTitle(currentStep)}
+                        {currentStep}. {getStepTitle(currentStep)}
                       </p>
                     </div>
                   </div>
 
                   <div className="d-flex align-items-center gap-4">
-                    <div className="bg-white rounded-pill px-4 py-3 shadow-sm">
-                      <div className="progress" style={{ width: '250px', height: '12px' }}>
+                    <div className="d-flex gap-3">
+                      <div className="text-center" onClick={() => goToStep(1)} style={{ cursor: 'pointer' }}>
+                        <div className={`step-indicator ${currentStep === 1 ? 'step-active' : 'step-inactive'} mx-auto`}>1</div>
+                        <small className="fw-bold extra-small text-uppercase">1 Setup</small>
+                      </div>
+                      <div className="text-center" onClick={() => goToStep(2)} style={{ cursor: 'pointer' }}>
+                        <div className={`step-indicator ${currentStep === 2 ? 'step-active' : 'step-inactive'} mx-auto`}>2</div>
+                        <small className="fw-bold extra-small text-uppercase">2 Services</small>
+                      </div>
+                      <div className="text-center" onClick={() => goToStep(3)} style={{ cursor: 'pointer' }}>
+                        <div className={`step-indicator ${currentStep === 3 ? 'step-active' : 'step-inactive'} mx-auto`}>3</div>
+                        <small className="fw-bold extra-small text-uppercase">3 Review</small>
+                      </div>
+                    </div>
+                    <div className="bg-light rounded-pill px-2 py-1 shadow-sm ms-3" style={{ width: '150px' }}>
+                      <div className="progress" style={{ height: '6px' }}>
                         <div
-                          className="progress-bar bg-gradient-primary"
+                          className="progress-bar"
                           style={{
-                            width: `${(currentStep / 3) * 100}%`,
-                            background: 'linear-gradient(90deg, #6c757d 0%, #495057 100%)'
+                            width: `${(currentStep / 3) * 100}%`
                           }}
                         ></div>
                       </div>
@@ -2803,29 +3008,31 @@ const BookAppointment = () => {
             <div className={`card border-0 shadow-lg ${animateForm ? 'form-animated' : ''}`}>
               {/* Alerts */}
               {error && (
-                <div className="alert alert-danger alert-dismissible m-3 mb-0 fade show" role="alert">
+                <div className="alert border-0 m-3 mb-0 fade show" role="alert" style={{ background: '#FFF5F5', borderLeft: '4px solid #DC3545', borderRadius: '12px' }}>
                   <div className="d-flex align-items-center">
-                    <i className="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
-                    <div>{error}</div>
+                    <i className="bi bi-exclamation-triangle-fill me-2 fs-5" style={{ color: '#DC3545' }}></i>
+                    <div className="text-dark fw-medium small">{error}</div>
                   </div>
                   <button
                     type="button"
-                    className="btn-close"
+                    className="btn-close small"
                     onClick={() => setError('')}
+                    style={{ fontSize: '0.7rem' }}
                   ></button>
                 </div>
               )}
 
               {success && (
-                <div className="alert alert-success alert-dismissible m-3 mb-0 fade show" role="alert">
+                <div className="alert border-0 m-3 mb-0 fade show" role="alert" style={{ background: '#F8F9FA', borderLeft: '4px solid #5D4037', borderRadius: '12px' }}>
                   <div className="d-flex align-items-center">
-                    <i className="bi bi-check-circle-fill me-2 fs-4"></i>
-                    <div>{success}</div>
+                    <i className="bi bi-check-circle-fill me-2 fs-5" style={{ color: '#5D4037' }}></i>
+                    <div className="text-dark fw-medium small">{success}</div>
                   </div>
                   <button
                     type="button"
-                    className="btn-close"
+                    className="btn-close small"
                     onClick={() => setSuccess('')}
+                    style={{ fontSize: '0.7rem' }}
                   ></button>
                 </div>
               )}
@@ -2899,7 +3106,7 @@ const BookAppointment = () => {
         bookingData={bookingData}
         updateBookingData={updateBookingData}
         onPrev={prevStep}
-        onEdit={goToStep}
+        onEdit={() => goToStep(2)}
         barbers={barbers}
         services={services}
         addOns={addOns}
@@ -2928,6 +3135,68 @@ const BookAppointment = () => {
         onLoadAlternatives={loadAlternativeBarbers}
       />}
 
+      {/* Success Modal */}
+      {showSuccessModal && submittedDetails && (
+        <div className="modal-backdrop fade show" style={{ zIndex: 1055, background: 'rgba(0,0,0,0.6)' }} onClick={() => navigate('/appointments')}></div>
+      )}
+      {showSuccessModal && submittedDetails && (
+        <div className="modal fade show d-block" tabIndex="-1" style={{ zIndex: 1056 }}>
+          <div className="modal-dialog modal-dialog-centered modal-sm px-2">
+            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '24px', overflow: 'hidden' }}>
+              <div className="modal-body p-4 p-md-5 text-center bg-white">
+                <div className="mb-4">
+                  <div className="bg-success bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: '80px', height: '80px' }}>
+                    <i className="bi bi-calendar-check-fill text-success" style={{ fontSize: '2.5rem' }}></i>
+                  </div>
+                </div>
+                <h3 className="fw-900 text-dark mb-2" style={{ letterSpacing: '-0.5px' }}>Booked!</h3>
+                <p className="text-muted small mb-4">Your appointment was queued successfully.</p>
+                
+                <div className="bg-light rounded-4 p-3 text-start mb-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-muted extra-small">Barber</span>
+                    <span className="fw-bold small text-truncate ms-3 text-end">{submittedDetails.barberName}</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-muted extra-small">Service</span>
+                    <span className="fw-bold small text-truncate ms-3 text-end">{submittedDetails.serviceName}</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-muted extra-small">Date</span>
+                    <span className="fw-bold small">{new Date(submittedDetails.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                  </div>
+                  {submittedDetails.queuePosition ? (
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="text-muted extra-small">Queue Position</span>
+                        <span className="fw-bold small px-2 py-1 rounded bg-warning bg-opacity-25 text-dark" style={{fontSize: '0.7rem'}}>#{submittedDetails.queuePosition}</span>
+                      </div>
+                  ) : null}
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-muted extra-small">Est. Start</span>
+                    <span className="fw-bold small">{submittedDetails.time && submittedDetails.time !== 'Queue' ? convertTo12Hour(submittedDetails.time) : 'TBD'}</span>
+                  </div>
+                  <hr className="my-2 border-secondary opacity-10" />
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="text-dark fw-bold small">Total</span>
+                    <span className="fw-900 fs-5" style={{ color: '#5D4037' }}>{formatPrice(submittedDetails.totalPrice)}</span>
+                  </div>
+                </div>
+
+                <button 
+                  className="btn btn-dark w-100 rounded-pill py-3 fw-bold shadow-sm"
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    navigate('/appointments');
+                  }}
+                  style={{ background: '#1a1a1a', border: 'none' }}
+                >
+                  View Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
@@ -3627,8 +3896,12 @@ const Step1DateTypeAndBarber = ({
   return (
     <div className="card-body p-3 p-md-4">
       <div className="d-flex align-items-center mb-4">
-        <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
-          <i className="bi bi-calendar3 fs-4 text-primary"></i>
+        <div className="bg-white p-1 rounded-circle me-3 shadow-sm border" style={{ width: '60px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <img
+            src={logoImage}
+            alt="RAF & ROX"
+            style={{ maxWidth: '80%', maxHeight: '80%', objectFit: 'contain' }}
+          />
         </div>
         <div>
           <h4 className="mb-0 fw-bold text-dark">Select Date & Barber</h4>
@@ -3657,16 +3930,16 @@ const Step1DateTypeAndBarber = ({
             </h5>
 
             <div className="mb-4">
-              <label htmlFor="appointmentDate" className="form-label fw-bold small text-uppercase text-secondary">
+              <label htmlFor="appointmentDate" className="form-label fw-bold small text-uppercase text-secondary mb-2" style={{ letterSpacing: '0.5px' }}>
                 Select Date
               </label>
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  <i className="bi bi-calendar-event text-primary"></i>
+              <div className="input-group shadow-sm" style={{ borderRadius: '15px', overflow: 'hidden', border: '1px solid #E0E0E0' }}>
+                <span className="input-group-text bg-white border-0" style={{ paddingLeft: '1.25rem' }}>
+                  <i className="bi bi-calendar-check-fill fs-5" style={{ color: '#5D4037' }}></i>
                 </span>
                 <input
                   type="date"
-                  className="form-control border-start-0 ps-0"
+                  className="form-control border-0 ps-2 py-3"
                   id="appointmentDate"
                   value={selectedDate}
                   onChange={(e) => handleDateChange(e.target.value)}
@@ -3674,6 +3947,7 @@ const Step1DateTypeAndBarber = ({
                   min={today}
                   max={maxDateStr}
                   required
+                  style={{ fontWeight: '600', fontSize: '1.05rem', backgroundColor: '#FFF' }}
                 />
               </div>
               {dateValidationMessage && (
@@ -3685,29 +3959,29 @@ const Step1DateTypeAndBarber = ({
             </div>
 
             <div className="mb-4">
-              <div className="form-check form-switch p-3 bg-white rounded-3 shadow-sm mb-3">
+              <div className="form-check form-switch p-3 bg-white rounded-3 shadow-sm mb-3 border">
                 <input
                   className="form-check-input ms-0 me-3"
                   type="checkbox"
                   id="bookForFriend"
                   checked={bookForFriend}
                   onChange={(e) => handleBookForFriendChange(e.target.checked)}
-                  style={{ width: '2.5em', height: '1.25em' }}
+                  style={{ width: '2.5em', height: '1.25em', cursor: 'pointer' }}
                 />
-                <label className="form-check-label fw-bold d-flex align-items-center" htmlFor="bookForFriend">
-                  <i className="bi bi-person-plus me-2 text-primary"></i>
+                <label className="form-check-label fw-bold d-flex align-items-center text-dark" htmlFor="bookForFriend">
+                  <i className="bi bi-person-plus me-2" style={{ color: '#5D4037' }}></i>
                   Book for a Child
                 </label>
               </div>
 
               {bookForFriend && (
-                <div className="card border-0 shadow-sm rounded-4 p-4 mt-3 bg-white animate-fade-in border-start border-4 border-primary">
+                <div className="card border-0 shadow-sm rounded-4 p-4 mt-3 bg-white animate-fade-in border-start border-4" style={{ borderColor: '#5D4037' }}>
                   <div className="d-flex align-items-center mb-3">
-                    <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
-                      <i className="bi bi-person-heart text-primary fs-5"></i>
+                    <div className="bg-light p-2 rounded-circle me-3">
+                      <i className="bi bi-person-heart fs-5" style={{ color: '#5D4037' }}></i>
                     </div>
                     <div>
-                      <h6 className="mb-0 fw-bold">Child's Information</h6>
+                      <h6 className="mb-0 fw-bold text-dark">Child's Information</h6>
                       <p className="text-muted extra-small mb-0">Please provide details for the child booking</p>
                     </div>
                   </div>
@@ -3831,14 +4105,14 @@ const Step1DateTypeAndBarber = ({
           {selectedDate ? (
             <div className="d-flex flex-column gap-4 h-100">
               {/* Recommendations Section */}
-              <div className="card border-0 rounded-4 p-3 p-lg-4 shadow-sm" style={{ background: '#fff9f0' }}>
+              <div className="card border-0 rounded-4 p-3 p-lg-4 shadow-sm" style={{ background: '#F9F9F9', border: '1px solid #EDEDED' }}>
                 <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h5 className="mb-0 fw-bold">
-                    <i className="bi bi-star-fill me-2 text-warning"></i>
+                  <h5 className="mb-0 fw-800 text-dark">
+                    <i className="bi bi-stars me-2" style={{ color: '#D4AF37' }}></i>
                     Recommended for You
                   </h5>
                   <button
-                    className="btn btn-sm btn-light rounded-circle shadow-sm"
+                    className="btn btn-sm btn-light rounded-circle shadow-sm border"
                     onClick={() => setShowRecommendations(!showRecommendations)}
                   >
                     {showRecommendations ? <i className="bi bi-chevron-up"></i> : <i className="bi bi-chevron-down"></i>}
@@ -3846,7 +4120,7 @@ const Step1DateTypeAndBarber = ({
                 </div>
 
                 {showRecommendations && (
-                  <div className="row g-3 barber-selection-row">
+                  <div className="row g-3 barber-selection-row overflow-hidden">
                     {barberRecommendations && barberRecommendations.length > 0 ? (
                       (() => {
                         const serviceDuration = bookingData.selectedServices.length > 0
@@ -3877,13 +4151,13 @@ const Step1DateTypeAndBarber = ({
                                         {rec.barber.profile_picture_url ? (
                                           <img src={rec.barber.profile_picture_url} alt={rec.barber.full_name} style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
                                         ) : (
-                                          <div className="bg-primary text-white d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: '0 2px 4px rgba(13,110,253,0.2)' }}>
+                                          <div className="bg-dark text-white d-flex align-items-center justify-content-center" style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
                                             {rec.barber.full_name ? rec.barber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
                                           </div>
                                         )}
                                       </div>
                                       <div className="text-truncate">
-                                        <h6 className="fw-bold mb-0 text-truncate">
+                                        <h6 className="fw-bold mb-0 text-truncate text-dark">
                                           {rec.barber.full_name}
                                         </h6>
                                         <div className="extra-small text-muted fw-normal d-flex align-items-center mt-1">
@@ -3893,15 +4167,15 @@ const Step1DateTypeAndBarber = ({
                                         </div>
                                       </div>
                                     </div>
-                                    <span className="badge bg-warning text-dark rounded-pill shadow-sm">#{index + 1}</span>
+                                    <span className="badge bg-dark text-white rounded-pill px-2">#{index + 1}</span>
                                   </div>
                                   <div className="mb-2 d-flex flex-wrap gap-1">
                                     {rec.barber.skills?.split(',').slice(0, 2).map((skill, i) => (
-                                      <span key={i} className="badge bg-light text-dark extra-small rounded-1">{skill.trim()}</span>
+                                      <span key={i} className="badge bg-light text-dark extra-small rounded-1 border">{skill.trim()}</span>
                                     ))}
                                   </div>
-                                  <button className={`btn btn-sm w-100 mt-2 ${selectedBarber === rec.barber.id ? 'btn-primary' : 'btn-outline-primary'}`}>
-                                    {selectedBarber === rec.barber.id ? 'Selected' : 'Choose'}
+                                  <button className={`btn btn-sm w-100 mt-2 ${selectedBarber === rec.barber.id ? 'btn-dark' : 'btn-outline-dark'}`} style={{ borderRadius: '10px' }}>
+                                    {selectedBarber === rec.barber.id ? 'Selected' : 'Choose Barber'}
                                   </button>
                                 </div>
                               </div>
@@ -3921,11 +4195,11 @@ const Step1DateTypeAndBarber = ({
                   return (
                     <>
                       <div className="d-flex align-items-center justify-content-between mb-3 px-1">
-                        <h5 className="mb-0 fw-bold">Choose Your Barber</h5>
-                        <span className="badge bg-light text-dark border">{activeBarbers.length} Available</span>
+                        <h5 className="mb-0 fw-800 text-dark">Choose Your Barber</h5>
+                        <span className="badge badge-premium">{activeBarbers.length} Available</span>
                       </div>
 
-                      <div className="row g-3 barber-selection-row">
+                      <div className="row g-3 barber-selection-row overflow-hidden">
                         {activeBarbers.length > 0 ? (
                           activeBarbers.map((barber) => {
                             const queue = barberQueues[barber.id];
@@ -3941,9 +4215,10 @@ const Step1DateTypeAndBarber = ({
                             const isDisabled = isFullSlot || isUnavailable;
 
                             return (
-                              <div key={barber.id} className="col-md-4">
+                              <div key={barber.id} className="col-sm-6 col-xl-4">
                                 <div
                                   className={`card barber-card h-100 shadow-sm ${isSelected ? 'border-primary ring-2 ring-primary ring-opacity-20' : 'border-0'} ${isDisabled ? 'opacity-50 grayscale' : ''}`}
+                                  style={{ borderColor: isSelected ? '#5D4037' : 'transparent', borderRadius: '18px', width: '100%' }}
                                   onClick={() => !isDisabled && handleBarberSelect(barber.id)}
                                 >
                                   <div className="card-body p-3">
@@ -3960,13 +4235,13 @@ const Step1DateTypeAndBarber = ({
                                           {barber.profile_picture_url ? (
                                             <img src={barber.profile_picture_url} alt={barber.full_name} className={`${isDisabled ? 'opacity-50 grayscale' : ''}`} style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: isDisabled ? 'none' : '0 2px 4px rgba(0,0,0,0.1)' }} />
                                           ) : (
-                                            <div className={`text-white d-flex align-items-center justify-content-center ${isDisabled ? 'bg-secondary' : 'bg-primary'}`} style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: isDisabled ? '#6c757d' : 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: isDisabled ? 'none' : '0 2px 4px rgba(13,110,253,0.2)' }}>
+                                            <div className={`text-white d-flex align-items-center justify-content-center ${isDisabled ? 'bg-secondary' : 'bg-dark'}`} style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', boxShadow: isDisabled ? 'none' : '0 2px 4px rgba(0,0,0,0.2)' }}>
                                               {barber.full_name ? barber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
                                             </div>
                                           )}
                                         </div>
                                         <div className="text-truncate">
-                                          <h6 className="fw-bold mb-0 text-truncate">
+                                          <h6 className="fw-bold mb-0 text-truncate text-dark">
                                             {barber.full_name}
                                           </h6>
                                           <div className="extra-small text-muted fw-normal d-flex align-items-center mt-1">
@@ -3977,31 +4252,41 @@ const Step1DateTypeAndBarber = ({
                                         </div>
                                       </div>
                                       {isUnavailable ? (
-                                        <span className="badge bg-danger rounded-pill px-2">Offline</span>
+                                        <span className="badge bg-secondary rounded-pill px-2">Offline</span>
                                       ) : isFullSlot ? (
                                         <span className="badge bg-secondary rounded-pill px-2">Full</span>
                                       ) : (
-                                        <span className="badge bg-success rounded-pill px-2">Available</span>
+                                        <span className="badge rounded-pill px-2 text-white" style={{ background: '#5D4037' }}>Available</span>
                                       )}
                                     </div>
 
                                     <div className="mt-auto pt-2 border-top">
-                                      <div className="d-flex justify-content-between align-items-center mb-2">
+                                      <div className="d-flex justify-content-between align-items-center mb-1">
+                                        <span className="extra-small fw-bold text-uppercase text-muted ls-1">Line Status</span>
+                                        <span className="badge bg-success bg-opacity-10 text-success extra-small rounded-pill pulse-soft">
+                                          <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5em' }}></i> Live
+                                        </span>
+                                      </div>
+                                      <div className="d-flex justify-content-between align-items-center mb-1">
                                         <span className="small text-muted"><i className="bi bi-people me-1"></i>Ahead:</span>
                                         <span className="small fw-bold">{queue?.queueCount || 0} person(s)</span>
                                       </div>
+                                      <div className="d-flex justify-content-between align-items-center mb-1">
+                                        <span className="small text-muted"><i className="bi bi-clock me-2"></i>Serving:</span>
+                                        <span className="small fw-bold">{queue?.current ? 'In Progress' : 'None'}</span>
+                                      </div>
                                       <div className="d-flex justify-content-between align-items-center">
-                                        <span className="small text-muted"><i className="bi bi-clock me-1"></i>Wait:</span>
-                                        <span className="small fw-bold text-primary">{queue?.estimatedWait ? `${queue.estimatedWait}m` : '0m'}</span>
+                                        <span className="small text-muted"><i className="bi bi-hourglass-split me-2"></i>Wait:</span>
+                                        <span className="small fw-bold" style={{ color: '#5D4037' }}>{queue?.estimatedWait ? `${queue.estimatedWait}m` : '0m'}</span>
                                       </div>
                                     </div>
 
                                     <div className="d-flex gap-2 mt-3 mb-3">
                                       <button
-                                        className={`btn btn-sm flex-grow-1 ${isSelected ? 'btn-primary' : isDisabled ? 'btn-light disabled' : 'btn-outline-primary'}`}
+                                        className={`btn btn-sm flex-grow-1 ${isSelected ? 'btn-dark' : isDisabled ? 'btn-light disabled' : 'btn-outline-dark'}`}
                                         disabled={isDisabled}
                                       >
-                                        {isSelected ? 'Selected' : isDisabled ? 'Unavailable' : 'Select'}
+                                        {isSelected ? 'Barber Selected' : isDisabled ? 'Unavailable' : 'Select'}
                                       </button>
                                     </div>
 
@@ -4010,7 +4295,7 @@ const Step1DateTypeAndBarber = ({
                                         <div className="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
                                           <span className="fw-bold extra-small text-uppercase text-muted letter-spacing-1">Current Queue</span>
                                           {queue.appointments?.length > 0 && (
-                                            <span className="badge bg-white text-primary border extra-small">{queue.appointments.length}</span>
+                                            <span className="badge bg-white border extra-small" style={{ color: '#5D4037' }}>{queue.appointments.length}</span>
                                           )}
                                         </div>
                                         {queue.appointments?.length > 0 ? (
@@ -4018,8 +4303,8 @@ const Step1DateTypeAndBarber = ({
                                             {queue.appointments.slice(0, 3).map((apt, i) => (
                                               <div key={i} className="d-flex justify-content-between extra-small align-items-center p-1 px-2 rounded-2 bg-white shadow-sm border border-light">
                                                 <span className="text-truncate fw-medium">
-                                                  <i className={`bi bi-circle-fill me-2 ${apt.status === 'ongoing' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '0.5em' }}></i>
-                                                  {apt.status === 'ongoing' ? 'Currently Serving' : `Position #${i + 1}`}
+                                                  <i className={`bi bi-circle-fill me-2 ${apt.status === 'ongoing' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '0.6em' }}></i>
+                                                  {apt.status === 'ongoing' ? 'Serving...' : `Position #${i + 1}`}
                                                 </span>
                                                 <span className="badge bg-light text-muted fw-normal">{apt.total_duration || 30}m</span>
                                               </div>
@@ -4057,11 +4342,11 @@ const Step1DateTypeAndBarber = ({
               </div>
             </div>
           ) : (
-            <div className="h-100 d-flex flex-column align-items-center justify-content-center bg-light rounded-4 border p-5 text-center">
-              <div className="bg-white rounded-circle p-4 shadow-sm mb-4">
-                <i className="bi bi-calendar-check fs-1 text-primary"></i>
+            <div className="h-100 d-flex flex-column align-items-center justify-content-center bg-white rounded-4 border p-5 text-center shadow-sm">
+              <div className="bg-light rounded-circle p-4 shadow-sm mb-4">
+                <i className="bi bi-calendar-check fs-1" style={{ color: '#5D4037' }}></i>
               </div>
-              <h5 className="fw-bold">Please Select a Date</h5>
+              <h5 className="fw-800">Please Select a Date</h5>
               <p className="text-muted">Choose a date on the left to see available barbers and their schedules</p>
             </div>
           )}
@@ -4072,11 +4357,11 @@ const Step1DateTypeAndBarber = ({
       <div className="row mt-5 border-top pt-4">
         <div className="col-12 d-flex justify-content-end">
           <button
-            className="btn btn-primary btn-lg px-5 rounded-pill shadow"
+            className="btn btn-dark btn-lg px-5 rounded-pill shadow-sm"
             onClick={handleNext}
             disabled={!selectedDate || !selectedBarber || (barberAvailabilityStatus[selectedBarber] && !barberAvailabilityStatus[selectedBarber].isAvailable)}
           >
-            Next: Select Services
+            Next: Choose Services
             <i className="bi bi-arrow-right ms-2"></i>
           </button>
         </div>
@@ -4102,19 +4387,19 @@ const Step1DateTypeAndBarber = ({
                     style={{ minHeight: '300px', maxHeight: '450px', objectFit: 'cover' }}
                   />
                 ) : (
-                  <div className="bg-primary text-white d-flex flex-column align-items-center justify-content-center w-100" style={{ height: '350px', fontSize: '6rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)' }}>
+                  <div className="bg-dark text-white d-flex flex-column align-items-center justify-content-center w-100" style={{ height: '350px', fontSize: '6rem', fontWeight: 'bold' }}>
                     {expandedProfileBarber.full_name ? expandedProfileBarber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
                   </div>
                 )}
                 <div className="bg-white p-4 text-start position-relative z-2" style={{ marginTop: '-20px', borderRadius: '24px 24px 0 0', boxShadow: '0 -10px 20px rgba(0,0,0,0.05)' }}>
-                  <h4 className="fw-bold mb-1">{expandedProfileBarber.full_name}</h4>
+                  <h4 className="fw-bold mb-1 text-dark">{expandedProfileBarber.full_name}</h4>
                   <div className="d-flex flex-wrap gap-2 mt-2">
                     <span className="badge bg-light text-dark shadow-sm py-2 px-3 fw-bold">
                       <i className="bi bi-star-fill text-warning me-1"></i>
                       {expandedProfileBarber.average_rating || '0'} <span className="text-muted fw-normal ms-1">({expandedProfileBarber.total_ratings || 0} reviews)</span>
                     </span>
                     {expandedProfileBarber.skills && expandedProfileBarber.skills.split(',').map((skill, i) => (
-                      <span key={i} className="badge bg-primary bg-opacity-10 text-primary shadow-sm py-2 px-3">{skill.trim()}</span>
+                      <span key={i} className="badge bg-light text-dark shadow-sm py-2 px-3 border">{skill.trim()}</span>
                     ))}
                   </div>
                 </div>
@@ -4221,11 +4506,11 @@ const Step2ServicesAndAddons = ({
   return (
     <div className="card-body p-3 p-md-4">
       <div className="d-flex align-items-center mb-4">
-        <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
-          <i className="bi bi-scissors fs-4 text-primary"></i>
+        <div className="bg-light p-2 rounded-circle me-3">
+          <i className="bi bi-scissors fs-4" style={{ color: '#5D4037' }}></i>
         </div>
         <div>
-          <h4 className="mb-0 fw-bold text-dark">Services & Add-ons</h4>
+          <h4 className="mb-0 fw-800 text-dark">Services & Add-ons</h4>
           <p className="text-muted small mb-0">Customize your haircut experience</p>
         </div>
       </div>
@@ -4244,13 +4529,14 @@ const Step2ServicesAndAddons = ({
           {services && services.length > 0 ? services.map((service) => (
             <div key={service.id} className="col-md-6 col-lg-4">
               <div
-                className={`card barber-card h-100 ${selectedServices.includes(service.id) ? 'border-primary bg-primary bg-opacity-5' : 'border-0 shadow-sm'}`}
+                className={`card barber-card h-100 ${selectedServices.includes(service.id) ? 'border shadow-sm' : 'border-0 shadow-sm'}`}
+                style={{ borderColor: selectedServices.includes(service.id) ? '#5D4037' : 'transparent', background: selectedServices.includes(service.id) ? '#FDFDFD' : '#FFFFFF' }}
                 onClick={() => handleServiceToggle(service.id)}
               >
                 <div className="card-body p-3 d-flex flex-column">
                   <div className="d-flex justify-content-between align-items-start mb-2">
-                    <h6 className="fw-bold mb-0">{service.name}</h6>
-                    <span className="fw-bold text-success">{formatPrice(service.price)}</span>
+                    <h6 className="fw-bold mb-0 text-dark">{service.name}</h6>
+                    <span className="fw-800" style={{ color: '#5D4037' }}>{formatPrice(service.price)}</span>
                   </div>
                   <p className="text-muted small mb-3 flex-grow-1">{service.description}</p>
                   <div className="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
@@ -4259,9 +4545,9 @@ const Step2ServicesAndAddons = ({
                       {service.duration} mins
                     </small>
                     {selectedServices.includes(service.id) ? (
-                      <span className="badge bg-primary rounded-pill"><i className="bi bi-check-lg"></i></span>
+                      <span className="badge bg-dark rounded-pill"><i className="bi bi-check-lg"></i></span>
                     ) : (
-                      <span className="text-primary small fw-bold">Select</span>
+                      <span className="small fw-bold" style={{ color: '#5D4037' }}>Select</span>
                     )}
                   </div>
                 </div>
@@ -4279,8 +4565,8 @@ const Step2ServicesAndAddons = ({
       {/* Add-ons Selection */}
       <div className="mb-5">
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="mb-0 fw-bold">
-            <i className="bi bi-plus-circle me-2 text-primary"></i>
+          <h5 className="mb-0 fw-bold text-dark">
+            <i className="bi bi-plus-circle me-2" style={{ color: '#5D4037' }}></i>
             Extra add-ons
           </h5>
           <span className="badge bg-light text-dark border">Multiple allowed</span>
@@ -4314,22 +4600,20 @@ const Step2ServicesAndAddons = ({
             return (
               <div key={addon.id} className="col-md-6 col-lg-4">
                 <div
-                  className={`card barber-card h-100 ${isSelected ? 'border-warning bg-warning bg-opacity-5' : 'border-0 shadow-sm'} ${(isDisabled || wouldConflict) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                  className={`card barber-card h-100 ${isSelected ? 'border shadow-sm' : 'border-0 shadow-sm'} ${(isDisabled || wouldConflict) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                  style={{ borderColor: isSelected ? '#5D4037' : 'transparent', background: isSelected ? '#FDFDFD' : '#FFFFFF' }}
                   onClick={() => !isDisabled && !wouldConflict && handleAddOnToggle(addon.id)}
                   title={isDisabled ? `Not available with ${selectedServiceObj?.name}` : wouldConflict ? 'This addon crosses lunch or closing' : ''}
                 >
                   <div className="card-body p-3 d-flex flex-column">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <div className="d-flex flex-column">
-                        <h6 className="fw-bold mb-0 small">{addon.name}</h6>
+                        <h6 className="fw-bold mb-0 small text-dark">{addon.name}</h6>
                         {isRecommended && !isSelected && !isDisabled && !wouldConflict && (
-                          <span className="extra-small text-primary fw-bold mt-1"><i className="bi bi-hand-thumbs-up-fill me-1"></i>Highly Recommended</span>
-                        )}
-                        {wouldConflict && !isSelected && !isDisabled && (
-                          <span className="extra-small text-danger fw-bold mt-1"><i className="bi bi-clock-history me-1"></i>Time Conflict</span>
+                          <span className="extra-small fw-bold mt-1" style={{ color: '#5D4037' }}><i className="bi bi-hand-thumbs-up-fill me-1"></i>Highly Recommended</span>
                         )}
                       </div>
-                      <span className="small fw-bold text-warning-emphasis">{formatPrice(addon.price)}</span>
+                      <span className="small fw-bold" style={{ color: '#5D4037' }}>{formatPrice(addon.price)}</span>
                     </div>
                     <div className="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
                       <small className="text-muted extra-small">
@@ -4337,11 +4621,9 @@ const Step2ServicesAndAddons = ({
                         {addon.duration} mins
                       </small>
                       {isSelected ? (
-                        <span className="badge bg-warning text-dark rounded-pill"><i className="bi bi-check-lg"></i></span>
-                      ) : (isDisabled || wouldConflict) ? (
-                        <span className="text-muted extra-small fw-bold">{wouldConflict ? 'Full' : 'N/A'}</span>
+                        <span className="badge bg-dark rounded-pill"><i className="bi bi-check-lg"></i></span>
                       ) : (
-                        <span className="text-warning small fw-bold">Add</span>
+                        <span className="small fw-bold" style={{ color: '#5D4037' }}>Add</span>
                       )}
                     </div>
                   </div>
@@ -4358,8 +4640,8 @@ const Step2ServicesAndAddons = ({
 
       {/* Special Requests */}
       <div className="mb-5">
-        <label htmlFor="specialRequests" className="form-label fw-bold">
-          <i className="bi bi-chat-dots me-2 text-primary"></i>
+        <label htmlFor="specialRequests" className="form-label fw-bold text-dark">
+          <i className="bi bi-chat-dots me-2" style={{ color: '#5D4037' }}></i>
           Any special instructions?
         </label>
         <textarea
@@ -4393,16 +4675,16 @@ const Step2ServicesAndAddons = ({
       })()}
 
       {/* Floating Summary Bar (Mobile Only or Bottom Fixed) */}
-      <div className="alert alert-primary border-0 shadow-sm rounded-4 p-3 mb-5">
-        <div className="d-flex justify-content-between align-items-center">
+      <div className="alert border-0 shadow-sm rounded-4 p-3 mb-5" style={{ background: '#F8F9FA', border: '1px solid #EDEDED' }}>
+        <div className="d-flex justify-content-between align-items-center text-dark">
           <div>
             <h6 className="mb-1 fw-bold">Current Total</h6>
-            <p className="mb-0 small text-primary-emphasis">
+            <p className="mb-0 small text-muted">
               {selectedServices.length} Service {selectedAddOns.length > 0 ? `+ ${selectedAddOns.length} Add-on(s)` : ''}
             </p>
           </div>
           <div className="text-end">
-            <h4 className="mb-0 fw-bold">{formatPrice(calculateTotal())}</h4>
+            <h4 className="mb-0 fw-800" style={{ color: '#5D4037' }}>{formatPrice(calculateTotal())}</h4>
           </div>
         </div>
       </div>
@@ -4411,14 +4693,14 @@ const Step2ServicesAndAddons = ({
       <div className="row mt-5 border-top pt-4">
         <div className="col-12 d-flex justify-content-between">
           <button
-            className="btn btn-light btn-lg px-4 rounded-pill border"
+            className="btn btn-outline-dark btn-lg px-4 rounded-pill"
             onClick={onPrev}
           >
             <i className="bi bi-arrow-left me-2"></i>
             Back
           </button>
           <button
-            className="btn btn-primary btn-lg px-5 rounded-pill shadow"
+            className="btn btn-dark btn-lg px-5 rounded-pill shadow-sm"
             onClick={handleNext}
             disabled={selectedServices.length === 0}
           >
@@ -4721,7 +5003,7 @@ const Step3QueueSummary = ({
           font-weight: 800;
           line-height: 1;
           margin-bottom: -5px;
-          background: linear-gradient(135deg, #198754 0%, #0d6efd 100%);
+          background: linear-gradient(135deg, #000000 0%, #5D4037 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           display: block;
@@ -4734,10 +5016,10 @@ const Step3QueueSummary = ({
           letter-spacing: 1.5px;
         }
         .total-price-card {
-          background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+          background: linear-gradient(135deg, #000000 0%, #5D4037 100%);
           border-radius: 20px;
           color: white;
-          box-shadow: 0 10px 20px rgba(25, 135, 84, 0.2);
+          box-shadow: 0 10px 20px rgba(0,0,0,0.15);
         }
         .edit-btn-pill {
           padding: 4px 12px;
@@ -4799,333 +5081,217 @@ const Step3QueueSummary = ({
         .stat-box-v2 .h3 {
           font-size: 1.5rem !important;
         }
-        .stat-box-v2 .extra-small {
-          font-size: 0.6rem !important;
-        }
-        .summary-card {
-          padding: 1.25rem !important;
-        }
-        .info-card.mobile-row {
-          flex-direction: column !important;
-          text-align: center;
-        }
-        .info-card.mobile-row .queue-number-v2 {
-          margin-right: 0 !important;
-          margin-bottom: 1rem;
-        }
       }
-    `}</style>
+      `}</style>
 
-      <div className="container-xl">
-        <div className="row justify-content-center">
-          <div className="col-12 col-lg-10 col-xl-8">
-            <div className="summary-card p-4 p-lg-5">
+      <div className="row justify-content-center">
+        <div className="col-xl-9 col-lg-10">
+          <div className="summary-card">
+            {/* Real-time Status Banner */}
+            {realTimeStatus.lastUpdated && (
+              <div className="bg-dark text-white py-2 px-4 text-center small">
+                <i className="bi bi-arrow-repeat me-2"></i>
+                Estimate updated at {realTimeStatus.lastUpdated}
+              </div>
+            )}
+
+            <div className="p-4 p-lg-5">
               {/* Header Section */}
               <div className="text-center mb-5">
-                <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-bold mb-3">
-                  <i className="bi bi-shield-check me-2"></i>Final Confirmation
+                <span className="badge badge-premium px-3 py-2 rounded-pill fw-bold mb-3">
+                  <i className="bi bi-shield-check me-2" style={{ color: '#5D4037' }}></i>Final Confirmation
                 </span>
-                <h2 className="display-6 fw-bold text-dark">Review Your Booking</h2>
+                <h2 className="display-6 fw-800 text-dark">Review Your Booking</h2>
                 <p className="text-muted">Almost there! Double-check your appointment details below.</p>
               </div>
 
-              {/* Queue Visualization */}
-              {bookingData?.appointmentType === 'queue' && (
-                <div className="mb-3 p-3 p-sm-4 bg-white border-0 shadow-sm rounded-4 position-relative overflow-hidden">
-                  <div className="d-flex justify-content-between align-items-start mb-4">
-                    <div className="d-flex align-items-center flex-grow-1">
-                      <div className="queue-number-v2 me-3 me-sm-4">
-                        {statusLoading ? (
-                          <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
-                        ) : (
-                          `#${realTimeStatus.queueStatus?.nextQueuePosition || '?'}`
-                        )}
-                      </div>
-                      <div>
-                        <h5 className="mb-0 fw-bold h5 h4-sm">Queue Reservation</h5>
-                        <p className="text-muted mb-0 small">Spot with <strong>{selectedBarber?.full_name || 'Selected Barber'}</strong></p>
-                      </div>
-                    </div>
-                    <div className="d-none d-md-block">
-                      <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2">
-                        <i className="bi bi-broadcast me-2 animate-pulse-subtle"></i>
-                        Live Estimate
-                      </span>
+              {/* Ultra-Minimalist Queue Status with Circle */}
+              <div className="text-center mb-5">
+                <div className="d-flex flex-column align-items-center mb-4">
+                  <div className="position-relative d-flex align-items-center justify-content-center mb-2" style={{ width: '110px', height: '110px' }}>
+                    <div className="position-absolute w-100 h-100 rounded-circle border border-dark border-opacity-10"></div>
+                    <div className="position-absolute rounded-circle border border-dark border-2" style={{ width: '90px', height: '90px' }}></div>
+                    <span className="display-4 fw-900 text-dark" style={{ zIndex: 1, letterSpacing: '-2px' }}>
+                      {realTimeStatus.queueStatus?.nextQueuePosition || '?'}
+                    </span>
+                  </div>
+                  <div className="small text-muted text-uppercase fw-bold ls-2">Position</div>
+                </div>
+
+                <div className="py-4">
+                  <h4 className="fw-bold text-dark mb-0">Queue Reservation</h4>
+                  <p className="text-muted small">with {selectedBarber?.full_name || 'Selected Barber'}</p>
+                </div>
+
+                <div className="row g-2 g-md-3 justify-content-center mb-5 px-2">
+                  <div className="col-6 col-sm-5 col-md-4">
+                    <div className="stat-box-v2 h-100 d-flex flex-column justify-content-center">
+                      <div className="extra-small text-muted text-uppercase fw-bold ls-1 mb-1">Waiting Time</div>
+                      <div className="h3 fw-900 mb-0" style={{ color: '#5D4037' }}>{statusLoading ? '...' : (realTimeStatus.queueStatus?.estimatedWaitTime || '0')}m</div>
                     </div>
                   </div>
-
-                  <div className="d-flex gap-3 mb-4">
-                    <div className="stat-box-v2">
-                      <div className="text-primary fw-bold h3 mb-0">
-                        {statusLoading ? '...' : (realTimeStatus.queueStatus?.estimatedWaitTime || '0')}
+                  {!statusLoading && estimatedStartTime && (
+                    <div className="col-6 col-sm-5 col-md-4">
+                      <div className="stat-box-v2 h-100 d-flex flex-column justify-content-center">
+                        <span className="extra-small text-muted text-uppercase fw-bold ls-1 mb-1 d-block">Arrival Time</span>
+                        <div className="h3 fw-900 mb-0" style={{ color: '#5D4037' }}>{estimatedStartTime}</div>
                       </div>
-                      <div className="text-muted extra-small text-uppercase fw-bold ls-1">Minutes Wait</div>
-                    </div>
-                    <div className="stat-box-v2">
-                      <div className="text-success fw-bold h3 mb-0">
-                        {statusLoading ? '...' : (realTimeStatus.queueStatus?.queueLength || '0')}
-                      </div>
-                      <div className="text-muted extra-small text-uppercase fw-bold ls-1">People Ahead</div>
-                    </div>
-                  </div>
-
-                  {!statusLoading && estimatedStartTime && estimatedStartTime !== 'Loading...' && (
-                    <div className="d-flex flex-column align-items-center gap-2 border-top pt-4 mt-2">
-                      <div className="bg-success bg-opacity-10 text-success rounded-pill px-3 px-sm-4 py-2 fw-bold small">
-                        <i className="bi bi-clock-fill me-2"></i>Estimated Arrival: <span className="text-dark">{estimatedStartTime}</span>
-                      </div>
-
-                      {/* Urgent Priority Toggle */}
-                      <div className={`mt-3 p-3 rounded-4 border ${bookingData.isUrgent ? 'border-primary bg-primary bg-opacity-5' : 'border-dashed'}`} style={{ transition: 'all 0.3s ease' }}>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div className="d-flex align-items-center">
-                            <div className={`bg-${bookingData.isUrgent ? 'primary' : 'warning'} bg-opacity-10 p-2 rounded-circle me-3`}>
-                              <i className={`bi bi-lightning-fill text-${bookingData.isUrgent ? 'primary' : 'warning'}`}></i>
-                            </div>
-                            <div>
-                              <h6 className="mb-0 fw-bold small">Urgent Priority (Queue Jump)</h6>
-                              <p className="extra-small text-muted mb-0">Skip the line for a ₱{QUEUE_SETTINGS.URGENT_FEE || 100} fee</p>
-                            </div>
-                          </div>
-                          <div className="form-check form-switch">
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              role="switch"
-                              id="urgentToggle"
-                              checked={bookingData.isUrgent || false}
-                              onChange={(e) => updateBookingData({ isUrgent: e.target.checked })}
-                              style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Recommendations / Warnings */}
-                      {realTimeStatus.recommendations?.map((rec, i) => (
-                        <div key={i} className={`alert ${rec.type === 'lunch_conflict' ? 'alert-warning' : 'alert-info'} border-0 py-2 px-3 small mt-2 mb-0 d-flex align-items-center gap-2 rounded-3`}>
-                          <i className={`bi ${rec.type === 'lunch_conflict' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill'}`}></i>
-                          <div>
-                            <strong>{rec.message}</strong>
-                            {rec.suggestion && <div className="extra-small opacity-75">{rec.suggestion}</div>}
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   )}
                 </div>
+
+                {/* Minimalist Switch Component */}
+                <div className="d-flex justify-content-center pt-2">
+                  <label className={`d-flex align-items-center gap-3 px-4 py-2 rounded-pill border ${bookingData.isUrgent ? 'border-dark bg-dark text-white' : 'border-light bg-light'} cursor-pointer`} style={{ transition: 'all 0.2s', cursor: 'pointer' }}>
+                    <span className="small fw-bold">Urgent Priority (+₱{QUEUE_SETTINGS.URGENT_FEE || 100})</span>
+                    <div className="form-check form-switch mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        checked={bookingData.isUrgent || false}
+                        onChange={(e) => updateBookingData({ isUrgent: e.target.checked })}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Conflict Warnings */}
+              {realTimeStatus.recommendations?.length > 0 && (
+                <div className="mt-3">
+                  {realTimeStatus.recommendations.map((rec, i) => (
+                    <div key={i} className={`alert border-0 shadow-sm rounded-4 p-3 mb-2 d-flex align-items-center gap-3 ${rec.severity === 'high' ? 'alert-danger' : 'alert-warning'}`}>
+                      <i className={`bi ${rec.severity === 'high' ? 'bi-exclamation-octagon-fill' : 'bi-exclamation-triangle-fill'} fs-4`}></i>
+                      <div>
+                        <h6 className="mb-1 fw-bold">{rec.title}</h6>
+                        <p className="mb-0 small opacity-75">{rec.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
 
-              {/* Actionable Recommendations for Conflicts */}
-              {!statusLoading && (
-                realTimeStatus.queueStatus?.isOverflowingWorkHours ||
-                realTimeStatus.availability?.isOverflowingWorkHours ||
-                realTimeStatus.queueStatus?.wasPushedByLunch ||
-                realTimeStatus.availability?.wasPushedByLunch
-              ) && (
-                  <div className="mb-4 animate-fade-in">
-                    <div className={`alert ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'alert-danger shadow-sm border-start border-4 border-danger' : 'alert-warning shadow-sm border-start border-4 border-warning'} border-0 p-3 rounded-4`}>
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <i className={`bi ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'bi-exclamation-octagon-fill text-danger' : 'bi-clock-fill text-warning'} fs-5`}></i>
-                        <div className={`fw-bold small ${(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'text-danger' : 'text-warning-emphasis'}`}>
-                          {(realTimeStatus.queueStatus?.isOverflowingWorkHours || realTimeStatus.availability?.isOverflowingWorkHours) ? 'Action Required: Booking Conflict' : 'Alert: Crosses Lunch Break'}
-                        </div>
-                      </div>
-
-                      <p className="extra-small mb-3 opacity-75 ps-4">
-                        {realTimeStatus.availability?.conflictMessage || (realTimeStatus.queueStatus?.isOverflowingWorkHours ? 'Please select a faster service or different barber to finish by 5:00 PM.' : 'This service would cross the 12:00 PM lunch break.')}
-                      </p>
-
-                      <div className="d-flex flex-column gap-3">
-                        {/* Alternative Barbers */}
-                        {alternativeBarbers && alternativeBarbers.length > 0 && (
-                          <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10">
-                            <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Available Barbers</div>
-                            <div className="d-flex flex-wrap gap-2">
-                              {alternativeBarbers.slice(0, 3).map(alt => (
-                                <button
-                                  key={alt.barber.id}
-                                  className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale"
-                                  onClick={() => updateBookingData({ selectedBarber: alt.barber.id })}
-                                >
-                                  <i className="bi bi-person-fill small"></i>
-                                  <span className="fw-bold extra-small">{alt.barber.full_name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="row g-2">
-                          {/* Fitting Services */}
-                          {fittingServices && fittingServices.length > 0 && (
-                            <div className="col-12 col-sm-6">
-                              <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10 h-100">
-                                <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Shorter Services</div>
-                                <div className="d-flex flex-wrap gap-2">
-                                  {fittingServices.slice(0, 3).map(service => (
-                                    <button
-                                      key={service.id}
-                                      className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale flex-grow-1"
-                                      onClick={() => updateBookingData({ selectedServices: [service.id] })}
-                                    >
-                                      <i className="bi bi-scissors small"></i>
-                                      <span className="fw-bold extra-small">{service.name} ({service.duration}m)</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Fitting Add-ons */}
-                          {fittingAddOns && fittingAddOns.length > 0 && (
-                            <div className="col-12 col-sm-6">
-                              <div className="bg-white bg-opacity-50 p-2 rounded-3 border border-dark border-opacity-10 h-100">
-                                <div className="fw-bold extra-small text-uppercase ls-1 mb-2 opacity-75 ps-1">Compatible Add-ons</div>
-                                <div className="d-flex flex-wrap gap-2">
-                                  {fittingAddOns.slice(0, 3).map(addon => {
-                                    const selectedServiceObj = services.find(s => bookingData.selectedServices.includes(s.id));
-                                    const serviceName = selectedServiceObj?.name?.toLowerCase() || '';
-                                    const addonName = addon.name?.toLowerCase() || '';
-                                    const isRecommended = (
-                                      (serviceName.includes('haircut') && (addonName.includes('spa') || addonName.includes('massage'))) ||
-                                      (serviceName.includes('beard') && addonName.includes('facial'))
-                                    );
-
-                                    return (
-                                      <button
-                                        key={addon.id}
-                                        className="btn btn-xs btn-outline-dark text-start d-flex align-items-center gap-2 py-1 px-3 rounded-pill bg-white hover-scale flex-grow-1"
-                                        onClick={() => updateBookingData({ selectedAddOns: [addon.id] })}
-                                      >
-                                        <i className={`bi ${isRecommended ? 'bi-hand-thumbs-up-fill text-primary' : 'bi-plus-circle'} small`}></i>
-                                        <span className="fw-bold extra-small">{addon.name} ({addon.duration}m)</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
               {/* Booking Grid */}
-              <div className="row g-4 mb-3">
-                {/* Date and Barber Column */}
-                <div className="col-md-6">
-                  <div className="h-100 d-flex flex-column gap-4">
-                    {/* Date Card */}
-                    <div className="info-card p-3">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-calendar3 me-2"></i>Date</div>
-                        <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(1)}>Edit</button>
+              <div className="row g-4 mb-5">
+                {/* Left Column: Barber Summary */}
+                <div className="col-lg-5">
+                  <div className="card border-0 bg-light rounded-4 p-4 h-100 shadow-sm">
+                    <div className="d-flex align-items-center mb-4">
+                      <div className="bg-white p-2 rounded-circle shadow-sm me-3">
+                        <i className="bi bi-person-badge fs-5" style={{ color: '#5D4037' }}></i>
                       </div>
-                      <div className="fs-5 fw-bold text-dark">{bookingData.selectedDate}</div>
+                      <h5 className="mb-0 fw-bold text-dark">Your Barber</h5>
                     </div>
 
-                    {/* Barber Card */}
-                    <div className="info-card p-3">
-                      <div className="d-flex justify-content-between align-items-center mb-0">
-                        <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-person-fill me-2"></i>Barber</div>
-                        <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(1)}>Edit</button>
-                      </div>
-                      <div className="d-flex align-items-center mt-2">
+                    <div className="d-flex align-items-center p-3 bg-white rounded-4 border">
+                      <div className="position-relative">
                         {selectedBarber?.profile_picture_url ? (
-                          <img src={selectedBarber.profile_picture_url} alt={selectedBarber.full_name} className="flex-shrink-0 me-3 mt-1" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                          <img
+                            src={selectedBarber.profile_picture_url}
+                            alt={selectedBarber.full_name}
+                            className="rounded-circle border"
+                            style={{ width: '64px', height: '64px', objectFit: 'cover' }}
+                          />
                         ) : (
-                          <div className="bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3 mt-1" style={{ width: '42px', height: '42px', borderRadius: '50%', fontSize: '1.2rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', boxShadow: '0 2px 4px rgba(13,110,253,0.2)' }}>
-                            {selectedBarber?.full_name ? selectedBarber.full_name.charAt(0).toUpperCase() : <i className="bi bi-person"></i>}
+                          <div className="bg-dark text-white d-flex align-items-center justify-content-center rounded-circle" style={{ width: '64px', height: '64px', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                            {selectedBarber?.full_name?.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <div className="fw-bold text-dark fs-5">{selectedBarber?.full_name}</div>
                       </div>
+                      <div className="ms-3">
+                        <h6 className="mb-0 fw-800 text-dark">{selectedBarber?.full_name || 'No Barber Selected'}</h6>
+                        <span className="badge bg-light text-muted border extra-small mt-1 px-2">Professional Barber</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-top">
+                      <p className="small text-muted mb-2 fw-bold text-uppercase ls-1">Appointment Details</p>
+                      <ul className="list-unstyled mb-0">
+                        <li className="d-flex justify-content-between mb-2 small">
+                          <span className="text-muted"><i className="bi bi-calendar-event me-2" style={{ color: '#5D4037' }}></i>Date</span>
+                          <span className="fw-bold text-dark">{bookingData.selectedDate}</span>
+                        </li>
+                        <li className="d-flex justify-content-between mb-2 small">
+                          <span className="text-muted"><i className="bi bi-clock me-2" style={{ color: '#5D4037' }}></i>Estimated Arrival</span>
+                          <span className="fw-bold text-dark">{estimatedStartTime}</span>
+                        </li>
+                      </ul>
                     </div>
                   </div>
                 </div>
 
-                {/* Services Column */}
-                <div className="col-md-6">
-                  <div className="info-card h-100 p-3">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-scissors me-2 text-primary"></i>Selected Services</div>
-                      <button className="btn btn-outline-primary edit-btn-pill" onClick={() => onEdit(2)}>Edit</button>
+                {/* Right Column: Services & Total */}
+                <div className="col-lg-7">
+                  <div className="card border-0 bg-white rounded-4 p-4 h-100 shadow-sm border">
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                      <div className="d-flex align-items-center">
+                        <div className="bg-light p-2 rounded-circle me-3">
+                          <i className="bi bi-list-check fs-5" style={{ color: '#5D4037' }}></i>
+                        </div>
+                        <h5 className="mb-0 fw-bold text-dark">Services Selected</h5>
+                      </div>
+                      <button className="btn btn-sm btn-link text-decoration-none fw-bold p-0" onClick={onEdit} style={{ color: '#5D4037' }}>Edit</button>
                     </div>
+
                     <div className="services-list mb-4">
                       {bookingData.selectedServices?.map(serviceId => {
                         const service = services.find(s => s.id === serviceId);
                         return (
-                          <div key={serviceId} className="service-item d-flex justify-content-between align-items-center mb-2">
+                          <div key={serviceId} className="d-flex justify-content-between align-items-center py-2 border-bottom border-light">
                             <div>
-                              <div className="fw-bold text-dark mb-0 small">{service?.name}</div>
+                              <div className="fw-bold text-dark mb-0">{service?.name}</div>
                               <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{service?.duration} mins</div>
                             </div>
-                            <div className="fw-bold text-primary small">{formatPrice(service?.price)}</div>
+                            <div className="fw-800" style={{ color: '#5D4037' }}>{formatPrice(service?.price)}</div>
+                          </div>
+                        );
+                      })}
+                      {bookingData.selectedAddOns?.map(addonId => {
+                        const addon = addOns.find(a => a.id === addonId);
+                        return (
+                          <div key={addonId} className="d-flex justify-content-between align-items-center py-2 border-bottom border-light">
+                            <div>
+                              <div className="fw-bold text-dark mb-0 small">{addon?.name} (Add-on)</div>
+                              <div className="text-muted extra-small"><i className="bi bi-clock me-1"></i>{addon?.duration} mins</div>
+                            </div>
+                            <div className="fw-800" style={{ color: '#5D4037' }}>{formatPrice(addon?.price)}</div>
                           </div>
                         );
                       })}
                     </div>
 
-                    <div className="d-flex justify-content-between align-items-center mb-3 mt-4">
-                      <div className="small text-muted fw-bold text-uppercase"><i className="bi bi-plus-circle me-2 text-warning"></i>Extra Add-ons</div>
-                    </div>
-                    <div className="services-list">
-                      {bookingData.selectedAddOns && bookingData.selectedAddOns.length > 0 ? (
-                        <div className="d-flex flex-wrap gap-2">
-                          {bookingData.selectedAddOns.map(addonId => {
-                            const addon = addOns.find(a => a.id === addonId);
-                            if (!addon) return null;
-                            return (
-                              <div key={addonId} className="badge bg-white text-dark border shadow-sm py-2 px-3 rounded-pill animate-fade-in d-flex align-items-center gap-2">
-                                <i className="bi bi-check-circle-fill text-success"></i>
-                                {addon.name}
-                                <button
-                                  className="btn-close border-start ps-2"
-                                  style={{ fontSize: '0.6rem' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateBookingData({ selectedAddOns: bookingData.selectedAddOns.filter(id => id !== addonId) });
-                                  }}
-                                ></button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-muted extra-small italic py-1 ps-1">No add-ons selected yet</div>
-                      )}
+                    <div className="total-price-card p-4 mt-auto">
+                      <div className="d-flex justify-content-between align-items-center mb-3">
+                        <span className="opacity-75 small fw-bold text-uppercase ls-1">Financial Summary</span>
+                        <i className="bi bi-wallet2 opacity-50"></i>
+                      </div>
 
-                      {/* Suggestions in summary */}
-                      {fittingAddOns && fittingAddOns.length > 0 && (
-                        <div className="mt-3 w-100 animate-slide-up border-top pt-3">
-                          <div className="extra-small fw-bold text-primary mb-2 ls-1 text-uppercase d-flex align-items-center" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-                            <i className="bi bi-stars me-2 text-warning"></i> Recommended Add-ons
-                          </div>
-                          <div className="d-flex flex-wrap gap-2">
-                            {fittingAddOns.map(addon => (
-                              <button
-                                key={addon.id}
-                                className="btn btn-sm btn-outline-primary border-dashed py-1 px-3 rounded-pill bg-white hover-lift d-flex align-items-center gap-2"
-                                onClick={() => updateBookingData({ selectedAddOns: [...(bookingData.selectedAddOns || []), addon.id] })}
-                              >
-                                <i className="bi bi-plus-lg fs-6"></i>
-                                <span className="extra-small fw-bold">{addon.name}</span>
-                                <span className="text-muted extra-small">₱{addon.price}</span>
-                              </button>
-                            ))}
-                          </div>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="opacity-85">Base Services</span>
+                        <span className="fw-bold">{formatPrice(calculateTotal() - (bookingData.isUrgent ? (QUEUE_SETTINGS.URGENT_FEE || 100) : 0))}</span>
+                      </div>
+
+                      {bookingData.isUrgent && (
+                        <div className="d-flex justify-content-between align-items-center mb-2 text-warning">
+                          <span className="opacity-85"><i className="bi bi-lightning-fill me-1"></i>Urgent Priority Fee</span>
+                          <span className="fw-bold">{formatPrice(QUEUE_SETTINGS.URGENT_FEE || 100)}</span>
                         </div>
                       )}
-                    </div>
 
-                    <div className="mt-3 pt-3 border-top d-flex justify-content-between align-items-end">
-                      <div className="text-muted extra-small">Total session time:</div>
-                      <div className="text-end">
-                        <span className="fw-bold text-dark">{calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns)} mins</span>
+                      <div className="d-flex justify-content-between align-items-center border-top border-white border-opacity-20 pt-3 mt-3">
+                        <div>
+                          <h6 className="mb-0 opacity-75 fw-medium">Grand Total</h6>
+                          <div className="extra-small opacity-50">Incl. all taxes & fees</div>
+                        </div>
+                        <h2 className="mb-0 fw-800">{formatPrice(calculateTotal())}</h2>
+                      </div>
+                      <div className="mt-3 pt-2 text-center border-top border-white border-opacity-10">
+                        <span className="extra-small opacity-75">
+                          <i className="bi bi-cash-stack me-1"></i>
+                          Pay in person at RAF & ROX
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -5134,124 +5300,18 @@ const Step3QueueSummary = ({
 
               {/* Special Requests */}
               {bookingData.specialRequests && (
-                <div className="info-card p-3 mb-5">
-                  <div className="small text-muted fw-bold text-uppercase mb-2"><i className="bi bi-chat-left-text me-2"></i>Special Instructions</div>
-                  <div className="p-2 bg-white rounded-3 border-start border-4 border-primary italic">
-                    <p className="mb-0 text-muted small">{bookingData.specialRequests}</p>
-                  </div>
+                <div className="info-card p-3 mb-5 border-start border-4" style={{ borderColor: '#5D4037' }}>
+                  <div className="small text-muted fw-bold text-uppercase mb-2">Instructions</div>
+                  <p className="mb-0 text-dark small italic">{bookingData.specialRequests}</p>
                 </div>
               )}
-
-              {/* Child Info Section */}
-              {bookingData.bookForFriend && (
-                <div className="info-card p-4 mb-5 border-start border-4 border-primary shadow-sm" style={{ background: 'linear-gradient(to right, #f8fbff, #ffffff)' }}>
-                  <div className="d-flex align-items-center mb-4">
-                    <div className="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
-                      <i className="bi bi-person-heart text-primary fs-4"></i>
-                    </div>
-                    <div>
-                      <h5 className="mb-0 fw-bold text-dark">Child Booking Details</h5>
-                      <p className="text-muted extra-small mb-0">Verified Guest Information</p>
-                    </div>
-                  </div>
-
-                  <div className="row g-4">
-                    <div className="col-sm-6">
-                      <div className="text-secondary extra-small fw-bold text-uppercase mb-1" style={{ letterSpacing: '1px' }}>Child Name</div>
-                      <div className="d-flex align-items-center">
-                        <i className="bi bi-person me-2 text-primary"></i>
-                        <span className="fw-bold text-dark fs-6">{bookingData.friendName}</span>
-                      </div>
-                    </div>
-                    <div className="col-sm-6">
-                      <div className="text-secondary extra-small fw-bold text-uppercase mb-1" style={{ letterSpacing: '1px' }}>Contact Number</div>
-                      <div className="d-flex align-items-center text-primary fw-bold">
-                        <i className="bi bi-telephone-fill me-2"></i>
-                        <span className="fs-6">{bookingData.friendPhone}</span>
-                      </div>
-                    </div>
-                    <div className="col-12 mt-3 pt-3 border-top border-light">
-                      <div className="d-flex flex-wrap align-items-center gap-3">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-envelope me-2 text-muted"></i>
-                          <span className="text-dark fw-medium small">{bookingData.friendEmail}</span>
-                        </div>
-                        <span className={`badge ${isFriendEmailVerified ? 'bg-success' : 'bg-warning'} bg-opacity-10 ${isFriendEmailVerified ? 'text-success' : 'text-warning'} border ${isFriendEmailVerified ? 'border-success' : 'border-warning'} border-opacity-25 px-3 py-2 rounded-pill`}>
-                          <i className={`bi ${isFriendEmailVerified ? 'bi-patch-check-fill' : 'bi-exclamation-circle-fill'} me-2`}></i>
-                          {isFriendEmailVerified ? 'Email Verified' : 'Verification Pending'}
-                        </span>
-
-                        {!isFriendEmailVerified && !isOtpSectionVisible && (
-                          <button
-                            className="btn btn-sm btn-primary rounded-pill px-3"
-                            onClick={() => onSendFriendVerification(bookingData.friendEmail, bookingData.friendName)}
-                            disabled={friendVerification?.sending || !isFriendEmailValid}
-                          >
-                            {friendVerification?.sending ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-send-fill me-1"></i>}
-                            Verify Now
-                          </button>
-                        )}
-                      </div>
-
-                      {isOtpSectionVisible && (
-                        <div className="bg-white p-3 rounded-3 mt-3 border border-primary border-opacity-25 shadow-sm animate-fade-in">
-                          <label className="form-label small fw-bold mb-2 d-block">Enter Verification Code</label>
-                          <div className="input-group input-group-sm">
-                            <input
-                              type="text"
-                              className="form-control fw-bold text-center"
-                              placeholder="000000"
-                              value={otpCode}
-                              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                              maxLength={6}
-                              style={{ fontSize: '1.2rem', letterSpacing: '4px', borderRadius: '8px 0 0 8px' }}
-                            />
-                            <button
-                              className="btn btn-primary fw-bold px-3"
-                              type="button"
-                              onClick={() => onVerifyFriendVerification(otpCode)}
-                              disabled={otpCode.length !== 6}
-                              style={{ borderRadius: '0 8px 8px 0' }}
-                            >
-                              Verify Code
-                            </button>
-                          </div>
-                          {otpError && <div className="text-danger extra-small mt-2">{otpError}</div>}
-                          <div className="mt-2 d-flex justify-content-between align-items-center">
-                            <small className="text-muted extra-small">Didn't get the code?</small>
-                            <button className="btn btn-link p-0 extra-small text-decoration-none fw-bold" onClick={() => onSendFriendVerification(bookingData.friendEmail, bookingData.friendName)}>Resend Code</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Final Summary Card */}
-              <div className="total-price-card p-4 mb-5">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h5 className="mb-0 fw-bold">Grand Total</h5>
-                    <p className="mb-0 small opacity-85 fw-medium">
-                      {bookingData.isUrgent
-                        ? <span className="text-warning-emphasis"><i className="bi bi-lightning-fill me-1"></i>Includes ₱{QUEUE_SETTINGS.URGENT_FEE || 100} Priority Fee</span>
-                        : 'Final amount including all services'
-                      }
-                    </p>
-                  </div>
-                  <div className="text-end">
-                    <div className="display-5 fw-bold">{formatPrice(calculateTotal())}</div>
-                  </div>
-                </div>
-              </div>
 
               {/* Action Buttons */}
               <div className="row g-3">
                 <div className="col-md-4 order-2 order-md-1">
                   <button
                     type="button"
-                    className="btn btn-outline-secondary btn-lg w-100 py-3 rounded-pill fw-bold"
+                    className="btn btn-outline-dark btn-lg w-100 py-3 rounded-pill fw-bold"
                     onClick={onPrev}
                   >
                     <i className="bi bi-arrow-left me-2"></i>Back
@@ -5260,20 +5320,8 @@ const Step3QueueSummary = ({
                 <div className="col-md-8 order-1 order-md-2">
                   <button
                     type="submit"
-                    className="btn btn-success btn-lg w-100 py-3 rounded-pill fw-bold shadow-sm"
-                    disabled={
-                      loading ||
-                      statusLoading ||
-                      !bookingData.selectedBarber ||
-                      bookingData.selectedServices.length === 0 ||
-                      !bookingData.selectedDate ||
-                      realTimeStatus.queueStatus?.isOverflowingWorkHours ||
-                      realTimeStatus.queueStatus?.wasPushedByLunch ||
-                      realTimeStatus.availability?.isOverflowingWorkHours ||
-                      realTimeStatus.recommendations?.some(r => r.type === 'lunch_conflict') || // Strict catch-all
-                      (bookingData.appointmentType === 'scheduled' && realTimeStatus.availability?.hasConflict) ||
-                      (bookingData.bookForFriend && (!bookingData.friendEmail || !FRIEND_EMAIL_REGEX.test(bookingData.friendEmail.trim()) || !friendVerification?.verified || friendVerification.email !== bookingData.friendEmail.trim().toLowerCase()))
-                    }
+                    className="btn btn-dark btn-lg w-100 py-3 rounded-pill fw-bold shadow-sm"
+                    disabled={loading || statusLoading || !bookingData.selectedBarber || bookingData.selectedServices.length === 0}
                     onClick={onSubmit}
                   >
                     {loading ? (
@@ -5281,7 +5329,7 @@ const Step3QueueSummary = ({
                     ) : (
                       <i className="bi bi-check-circle-fill me-2"></i>
                     )}
-                    {isRebooking ? 'Confirm Reschedule' : 'Confirm & Book Now'}
+                    {isRebooking ? 'Confirm Reschedule' : 'Confirm & Book Spot'}
                   </button>
                 </div>
               </div>

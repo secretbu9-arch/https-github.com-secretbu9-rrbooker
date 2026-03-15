@@ -3,10 +3,10 @@
 
 /* Custom variables - matching with navigation */
 :root {
-  --primary-color: #2c2c2c;
+  --primary-color: #1a1a1a;
   /* Dark gray/black (from the logo) */
-  --secondary-color: #3498db;
-  /* Blue accent */
+  --secondary-color: #a68a64;
+  /* Light brown accent for unified branding */
   --accent-color: #d4b068;
   /* Gold accent for barbershop feel */
   --success-color: #27ae60;
@@ -21,11 +21,11 @@
   /* Darker gray for backgrounds */
 
   /* Gradient variables */
-  --primary-gradient: linear-gradient(135deg, #2c3e50, #3498db);
+  --primary-gradient: linear-gradient(135deg, #1a1a1a, #a68a64);
   --success-gradient: linear-gradient(135deg, #27ae60, #2ecc71);
   --warning-gradient: linear-gradient(135deg, #f39c12, #f1c40f);
   --danger-gradient: linear-gradient(135deg, #e74c3c, #c0392b);
-  --info-gradient: linear-gradient(135deg, #3498db, #2980b9);
+  --info-gradient: linear-gradient(135deg, #a68a64, #cba17d);
   --secondary-gradient: linear-gradient(135deg, #95a5a6, #7f8c8d);
   --dark-gradient: linear-gradient(135deg, #2c3e50, #1a1a1a);
 }

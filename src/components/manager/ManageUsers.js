@@ -10,7 +10,8 @@ const ManageUsers = () => {
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('active'); // 'active' or 'archived'
+    const [statusFilter, setStatusFilter] = useState('active'); 
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
     const [selectedUser, setSelectedUser] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -35,6 +36,125 @@ const ManageUsers = () => {
         phone: '',
         role: 'customer'
     });
+
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Premium Styles
+    const styles = {
+        container: {
+            padding: windowWidth < 576 ? '1.5rem 1rem' : '2rem 1.5rem',
+            backgroundColor: '#fcfcfc',
+            minHeight: '100vh',
+            fontFamily: "'Outfit', 'Inter', sans-serif"
+        },
+        headerCard: {
+            background: '#fff',
+            padding: '1.25rem',
+            borderRadius: '24px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+            border: '1px solid #f0f0f0',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            flexDirection: windowWidth < 650 ? 'column' : 'row',
+            justifyContent: 'space-between',
+            alignItems: windowWidth < 650 ? 'stretch' : 'center',
+            gap: '1rem'
+        },
+        userCard: {
+            backgroundColor: '#fff',
+            padding: '1.25rem',
+            borderRadius: '24px',
+            border: '1px solid #eee',
+            marginBottom: '1rem',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            position: 'relative',
+            overflow: 'hidden'
+        },
+        badge: (role) => {
+            const colors = {
+                manager: { bg: '#FFEBEE', text: '#B71C1C' },
+                barber: { bg: '#E3F2FD', text: '#0D47A1' },
+                customer: { bg: '#E8F5E9', text: '#1B5E20' },
+                archived: { bg: '#f5f5f5', text: '#666' }
+            };
+            const color = colors[role] || { bg: '#f5f5f5', text: '#666' };
+            return {
+                padding: '0.4rem 0.8rem',
+                borderRadius: '10px',
+                fontSize: '0.7rem',
+                fontWeight: '700',
+                backgroundColor: color.bg,
+                color: color.text,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+            };
+        },
+        primaryBtn: {
+            backgroundColor: '#1a1a1a',
+            color: '#fff',
+            border: 'none',
+            padding: '0.8rem 1.25rem',
+            borderRadius: '16px',
+            fontWeight: '600',
+            fontSize: '0.9rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.6rem',
+            transition: 'all 0.3s'
+        },
+        secondaryBtn: {
+            backgroundColor: '#f5f5f5',
+            color: '#1a1a1a',
+            border: 'none',
+            padding: '0.6rem 1rem',
+            borderRadius: '12px',
+            fontWeight: '600',
+            fontSize: '0.8rem',
+            transition: 'all 0.2s'
+        },
+        tab: (active) => ({
+            padding: '0.6rem 1.25rem',
+            borderRadius: '14px',
+            fontSize: '0.85rem',
+            fontWeight: '700',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            backgroundColor: active ? '#1a1a1a' : 'transparent',
+            color: active ? '#fff' : '#888',
+            border: active ? 'none' : '1px solid transparent'
+        }),
+        modalOverlay: {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 1060,
+            display: 'flex',
+            alignItems: windowWidth < 576 ? 'flex-end' : 'center',
+            justifyContent: 'center',
+        },
+        modalContent: {
+            width: '100%',
+            maxWidth: windowWidth < 576 ? '100%' : '500px',
+            backgroundColor: '#fff',
+            borderRadius: windowWidth < 576 ? '32px 32px 0 0' : '28px',
+            boxShadow: '0 -10px 40px rgba(0,0,0,0.1)',
+            maxHeight: windowWidth < 576 ? '92vh' : '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            animation: windowWidth < 576 ? 'slideUp 0.4s cubic-bezier(0, 0, 0.2, 1)' : 'scaleIn 0.3s ease-out'
+        }
+    };
 
     useEffect(() => {
         fetchUsers();
@@ -85,34 +205,37 @@ const ManageUsers = () => {
         setShowEditModal(true);
     };
 
-    const handlePhoneFormatting = (value) => {
-        // Remove all non-digit characters
-        let digits = value.replace(/\D/g, '');
+    const handleArchiveClick = (user) => {
+        setSelectedUser(user);
+        setShowArchiveModal(true);
+    };
 
-        // If user is typing, extract only digits after +63, 63, or initial 0
+    const handleUnarchiveClick = (user) => {
+        setSelectedUser(user);
+        setShowUnarchiveModal(true);
+    };
+
+    const handleDeleteClick = (user) => {
+        setSelectedUser(user);
+        setShowDeleteModal(true);
+    };
+
+    const handlePhoneFormatting = (value) => {
+        let digits = value.replace(/\D/g, '');
         if (value.startsWith('+63')) {
             digits = value.substring(3).replace(/\D/g, '');
         } else if (digits.startsWith('63')) {
             digits = digits.substring(2);
         }
-
-        // Strip leading 0 if it exists (extra check for numbers like +6309...)
         if (digits.startsWith('0')) {
             digits = digits.substring(1);
         }
-
-        // Enforce that it must start with 9
         if (digits.length > 0 && digits[0] !== '9') {
-            // If the first digit entered isn't 9, we reject it
             return '';
         }
-
-        // Limit to 10 digits (the part after +63)
         if (digits.length > 10) {
             digits = digits.substring(0, 10);
         }
-
-        // Add +63 prefix if we have digits
         return digits.length > 0 ? `+63${digits}` : '';
     };
 
@@ -139,9 +262,6 @@ const ManageUsers = () => {
         try {
             setSaving(true);
             setError(null);
-
-            // 1. Create the user in Supabase Auth
-            // This will trigger a confirmation email "authenticating the gmail" as requested
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: addFormData.email,
                 password: addFormData.password,
@@ -151,16 +271,11 @@ const ManageUsers = () => {
                         role: addFormData.role,
                         phone: addFormData.phone
                     },
-                    // Redirect back to profile or dashboard after verification
                     emailRedirectTo: `${window.location.origin}/dashboard`
                 }
             });
-
             if (authError) throw authError;
-
             if (authData.user) {
-                // 2. Manually insert into users table if not already handled by trigger
-                // Some setups use triggers, but we'll be safe here
                 const { error: dbError } = await supabase
                     .from('users')
                     .upsert([{
@@ -170,21 +285,12 @@ const ManageUsers = () => {
                         phone: addFormData.phone,
                         role: addFormData.role
                     }]);
-
-                if (dbError) {
-                    console.error('Profile creation error:', dbError);
-                    throw new Error('User account created but profile setup failed: ' + dbError.message);
-                }
-
-                setSuccessMessage(`User created successfully! An authentication email has been sent to ${addFormData.email}. The user will appear in the list once they verify their email or when the system syncs.`);
+                if (dbError) throw dbError;
+                setSuccessMessage(`User created successfully! Auth email sent to ${addFormData.email}.`);
                 setShowSuccessModal(true);
                 setShowAddModal(false);
                 setAddFormData({
-                    full_name: '',
-                    email: '',
-                    password: '',
-                    phone: '',
-                    role: 'customer'
+                    full_name: '', email: '', password: '', phone: '', role: 'customer'
                 });
                 fetchUsers();
             }
@@ -199,7 +305,6 @@ const ManageUsers = () => {
     const handleSaveEdit = async (e) => {
         e.preventDefault();
         if (!selectedUser) return;
-
         try {
             setSaving(true);
             const { error } = await supabase
@@ -211,58 +316,30 @@ const ManageUsers = () => {
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', selectedUser.id);
-
             if (error) throw error;
-
-            // Update local state
             setUsers(prev => prev.map(u =>
-                u.id === selectedUser.id
-                    ? { ...u, ...formData, updated_at: new Date().toISOString() }
-                    : u
+                u.id === selectedUser.id ? { ...u, ...formData, updated_at: new Date().toISOString() } : u
             ));
-
             setShowEditModal(false);
             setSelectedUser(null);
         } catch (error) {
             console.error('Error updating user:', error);
-            alert('Failed to update user. ' + error.message);
+            alert('Failed to update user.');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleArchiveClick = (user) => {
-        setSelectedUser(user);
-        setShowArchiveModal(true);
-    };
-
-    const handleUnarchiveClick = (user) => {
-        setSelectedUser(user);
-        setShowUnarchiveModal(true);
-    };
-
-    const handleDeleteClick = (user) => {
-        setSelectedUser(user);
-        setShowDeleteModal(true);
-    };
-
     const handleArchiveConfirm = async () => {
         if (!selectedUser) return;
-
         try {
             setSaving(true);
-            const { error } = await supabase
-                .from('users')
-                .update({ archived: true })
-                .eq('id', selectedUser.id);
-
+            const { error } = await supabase.from('users').update({ archived: true }).eq('id', selectedUser.id);
             if (error) throw error;
-
             setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
             setShowArchiveModal(false);
             setSelectedUser(null);
         } catch (error) {
-            console.error('Error archiving user:', error);
             alert('Failed to archive user.');
         } finally {
             setSaving(false);
@@ -271,21 +348,14 @@ const ManageUsers = () => {
 
     const handleUnarchiveConfirm = async () => {
         if (!selectedUser) return;
-
         try {
             setSaving(true);
-            const { error } = await supabase
-                .from('users')
-                .update({ archived: false })
-                .eq('id', selectedUser.id);
-
+            const { error } = await supabase.from('users').update({ archived: false }).eq('id', selectedUser.id);
             if (error) throw error;
-
             setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
             setShowUnarchiveModal(false);
             setSelectedUser(null);
         } catch (error) {
-            console.error('Error unarchiving user:', error);
             alert('Failed to unarchive user.');
         } finally {
             setSaving(false);
@@ -294,34 +364,21 @@ const ManageUsers = () => {
 
     const handleDeleteConfirm = async () => {
         if (!selectedUser) return;
-
         try {
             setSaving(true);
             setError(null);
-
-            // Attempt to delete from the public users table
-            const { error } = await supabase
-                .from('users')
-                .delete()
-                .eq('id', selectedUser.id);
-
+            const { error } = await supabase.from('users').delete().eq('id', selectedUser.id);
             if (error) {
-                // Check if it's a foreign key constraint error
-                if (error.code === '23503') {
-                    throw new Error('Cannot delete user: They have associated records (appointments, orders, etc.). Please archive them instead.');
-                }
+                if (error.code === '23503') throw new Error('Cannot delete user with related records. Archive them instead.');
                 throw error;
             }
-
             setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
             setShowDeleteModal(false);
             setSelectedUser(null);
-
-            setSuccessMessage('User deleted successfully from the database.');
+            setSuccessMessage('User deleted successfully.');
             setShowSuccessModal(true);
         } catch (error) {
-            console.error('Error deleting user:', error);
-            setError(error.message || 'Failed to delete user. They might have related records in other tables.');
+            setError(error.message);
             setShowDeleteModal(false);
         } finally {
             setSaving(false);
@@ -334,555 +391,258 @@ const ManageUsers = () => {
         user.phone?.includes(searchQuery)
     );
 
-    const getRoleBadgeColor = (role) => {
-        switch (role) {
-            case 'manager': return 'bg-danger';
-            case 'barber': return 'bg-primary';
-            case 'customer': return 'bg-success';
-            default: return 'bg-secondary';
-        }
-    };
-
     return (
-        <div className="container-fluid py-4">
-            <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm bg-white">
+        <div style={styles.container}>
+            {/* Header */}
+            <div style={styles.headerCard}>
                 <div>
-                    <h2 className="mb-0 fw-bold">Manage Users</h2>
-                    <p className="text-muted mb-0">Total users: {users.length}</p>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+                        <i className="bi bi-people me-2" style={{ color: '#5D4037' }}></i>
+                        Manage Users
+                    </h2>
+                    <p className="text-muted small mb-0">Total system accounts: {users.length}</p>
                 </div>
-                <div>
-                    <button
-                        className="btn btn-primary d-flex align-items-center gap-2"
-                        onClick={() => setShowAddModal(true)}
-                    >
-                        <i className="bi bi-person-plus-fill"></i>
-                        <span>Add New User</span>
-                    </button>
-                </div>
+                <button style={styles.primaryBtn} className="touch-btn" onClick={() => setShowAddModal(true)}>
+                    <i className="bi bi-person-plus"></i> ADD NEW USER
+                </button>
             </div>
 
             {error && (
-                <div className="alert alert-danger alert-dismissible fade show shadow-sm mb-4" role="alert">
-                    <div className="d-flex align-items-center justify-content-between">
-                        <div>
-                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                            {error}
-                        </div>
-                        {error.includes('archive them instead') && selectedUser && (
-                            <button
-                                className="btn btn-sm btn-outline-danger ms-3 fw-bold"
-                                onClick={() => {
-                                    setShowArchiveModal(true);
-                                    setError(null);
-                                }}
-                            >
-                                Archive this User Instead
-                            </button>
-                        )}
-                    </div>
-                    <button type="button" className="btn-close" onClick={() => setError(null)}></button>
+                <div className="alert alert-danger rounded-4 border-0 shadow-sm d-flex align-items-center mb-4">
+                    <i className="bi bi-exclamation-circle-fill me-2"></i>
+                    <span className="small fw-bold">{error}</span>
+                    <button className="btn-close ms-auto" onClick={() => setError(null)}></button>
                 </div>
             )}
 
-            <div className="card shadow-sm border-0 mb-4">
-                <div className="card-body">
-                    <div className="row g-3">
-                        <div className="col-md-4">
-                            <div className="input-group">
-                                <span className="input-group-text bg-transparent border-end-0">
-                                    <i className="bi bi-search text-muted"></i>
-                                </span>
-                                <input
-                                    type="text"
-                                    className="form-control border-start-0 ps-0"
-                                    placeholder="Search by name, email or phone..."
-                                    value={searchQuery}
-                                    onChange={handleSearchChange}
-                                />
-                            </div>
+            {/* View Filters */}
+            <div className="d-flex gap-2 mb-3 overflow-auto pb-2" style={{ whiteSpace: 'nowrap' }}>
+                <div style={styles.tab(statusFilter === 'active')} onClick={() => setStatusFilter('active')}>ACTIVE</div>
+                <div style={styles.tab(statusFilter === 'archived')} onClick={() => setStatusFilter('archived')}>ARCHIVED</div>
+            </div>
+
+            <div style={{ ...styles.headerCard, padding: '1rem', background: '#fff' }}>
+                <div className="row g-2 w-100 align-items-center">
+                    <div className="col-md-7">
+                        <div className="input-group input-group-sm">
+                            <span className="input-group-text bg-white border-end-0 rounded-start-4">
+                                <i className="bi bi-search text-muted"></i>
+                            </span>
+                            <input 
+                                type="text" 
+                                className="form-control border-start-0 rounded-end-4 bg-white" 
+                                placeholder="Search by name, email, phone..."
+                                value={searchQuery}
+                                onChange={handleSearchChange}
+                            />
                         </div>
-                        <div className="col-md-3">
-                            <select
-                                className="form-select"
-                                value={roleFilter}
-                                onChange={(e) => setRoleFilter(e.target.value)}
-                            >
-                                <option value="all">All Roles</option>
-                                <option value="customer">Customers</option>
-                                <option value="barber">Barbers</option>
-                                <option value="manager">Managers</option>
-                            </select>
-                        </div>
-                        <div className="col-md-3">
-                            <select
-                                className="form-select"
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                            >
-                                <option value="active">Active Users</option>
-                                <option value="archived">Archived Users</option>
-                            </select>
-                        </div>
-                        <div className="col-md-2 text-end">
-                            <button className="btn btn-outline-secondary" onClick={fetchUsers}>
-                                <i className="bi bi-arrow-clockwise me-1"></i> Refresh
-                            </button>
-                        </div>
+                    </div>
+                    <div className="col-md-5">
+                        <select 
+                            className="form-select form-select-sm rounded-4" 
+                            value={roleFilter}
+                            onChange={(e) => setRoleFilter(e.target.value)}
+                        >
+                            <option value="all">All Roles</option>
+                            <option value="customer">Customers</option>
+                            <option value="barber">Barbers</option>
+                            <option value="manager">Managers</option>
+                        </select>
                     </div>
                 </div>
             </div>
 
-            <div className="card shadow-sm border-0">
-                <div className="card-body p-0">
-                    <div className="table-responsive">
-                        <table className="table table-hover align-middle mb-0">
-                            <thead className="table-light">
-                                <tr>
-                                    <th className="ps-4">User</th>
-                                    <th>Contact Info</th>
-                                    <th>Role</th>
-                                    <th>Joined Date</th>
-                                    <th className="text-end pe-4">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
+            {/* Users Table */}
+            <div className="users-table-container mt-2">
+                {loading ? (
+                    <div className="text-center py-5"><div className="spinner-border text-dark"></div></div>
+                ) : filteredUsers.length === 0 ? (
+                    <div className="text-center py-5 bg-white rounded-5 border">
+                        <i className="bi bi-people fs-1 text-muted opacity-25"></i>
+                        <p className="text-muted mt-3 fw-bold">No users found</p>
+                    </div>
+                ) : (
+                    <div className="card border-0 shadow-sm" style={{ borderRadius: '24px', overflow: 'hidden' }}>
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle mb-0" style={{ backgroundColor: '#fff' }}>
+                                <thead style={{ backgroundColor: '#fcfcfc', borderBottom: '1px solid #eee' }}>
                                     <tr>
-                                        <td colSpan="5" className="text-center py-5">
-                                            <LoadingSpinner />
-                                        </td>
+                                        <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>USER</th>
+                                        <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>CONTACT INFO</th>
+                                        <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>ROLE</th>
+                                        <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>JOINED</th>
+                                        <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px', textAlign: 'right' }}>ACTIONS</th>
                                     </tr>
-                                ) : filteredUsers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5" className="text-center py-5">
-                                            <div className="text-muted">
-                                                <i className="bi bi-people fs-1 d-block mb-3"></i>
-                                                No users found
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredUsers.map(user => (
-                                        <tr key={user.id}>
-                                            <td className="ps-4">
-                                                <div className="d-flex align-items-center">
-                                                    <div
-                                                        className="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
-                                                        style={{ width: '40px', height: '40px' }}
-                                                    >
+                                </thead>
+                                <tbody>
+                                    {filteredUsers.map(user => (
+                                        <tr key={user.id} style={{ transition: 'all 0.2s' }}>
+                                            <td style={{ padding: '1.25rem' }}>
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                         {user.profile_picture_url ? (
-                                                            <img
-                                                                src={user.profile_picture_url}
-                                                                alt=""
-                                                                className="rounded-circle"
-                                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                            />
+                                                            <img src={user.profile_picture_url} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '14px' }} />
                                                         ) : (
-                                                            <i className="bi bi-person text-secondary"></i>
+                                                            <i className="bi bi-person text-muted fs-5"></i>
                                                         )}
                                                     </div>
-                                                    <div>
-                                                        <div className="fw-bold">{user.full_name || 'No Name'}</div>
-                                                        <small className="text-muted" style={{ fontSize: '0.75rem' }}>{user.id}</small>
+                                                    <div className="overflow-hidden">
+                                                        <div className="fw-800" style={{ fontSize: '0.95rem', color: '#1a1a1a' }}>{user.full_name || 'No Name'}</div>
+                                                        <div className="small text-muted text-truncate" style={{ fontSize: '0.75rem' }}>ID: {user.id.substring(0, 8)}...</div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>
-                                                <div className="mb-1">
-                                                    <i className="bi bi-envelope text-muted me-2"></i>
-                                                    {user.email}
-                                                </div>
-                                                {user.phone && (
-                                                    <div>
-                                                        <i className="bi bi-telephone text-muted me-2"></i>
-                                                        {user.phone}
+                                            <td style={{ padding: '1.25rem' }}>
+                                                <div className="d-flex flex-column gap-1">
+                                                    <div className="small text-dark" style={{ fontSize: '0.8rem', fontWeight: '500' }}>
+                                                        <i className="bi bi-envelope me-2 text-muted"></i>{user.email}
                                                     </div>
-                                                )}
+                                                    <div className="small text-muted" style={{ fontSize: '0.8rem' }}>
+                                                        <i className="bi bi-telephone me-2 text-muted"></i>{user.phone || '--'}
+                                                    </div>
+                                                </div>
                                             </td>
-                                            <td>
-                                                <span className={`badge ${getRoleBadgeColor(user.role)} text-capitalize`}>
-                                                    {user.role}
-                                                </span>
+                                            <td style={{ padding: '1.25rem' }}>
+                                                <span style={styles.badge(user.role)}>{user.role}</span>
                                             </td>
-                                            <td>{formatDate(user.created_at)}</td>
-                                            <td className="text-end pe-4">
-                                                <div className="dropdown">
-                                                    <button
-                                                        className="btn btn-sm btn-light"
-                                                        type="button"
-                                                        data-bs-toggle="dropdown"
-                                                    >
-                                                        <i className="bi bi-three-dots-vertical"></i>
+                                            <td style={{ padding: '1.25rem' }}>
+                                                <div className="small text-dark" style={{ fontSize: '0.85rem' }}>{formatDate(user.created_at)}</div>
+                                            </td>
+                                            <td style={{ padding: '1.25rem', textAlign: 'right' }}>
+                                                <div className="d-flex gap-2 justify-content-end">
+                                                    <button style={{ ...styles.secondaryBtn, padding: '0.5rem' }} className="touch-btn" title="Edit" onClick={() => handleEditClick(user)}>
+                                                        <i className="bi bi-pencil"></i>
                                                     </button>
-                                                    <ul className="dropdown-menu dropdown-menu-end">
-                                                        <li>
-                                                            <button
-                                                                className="dropdown-item"
-                                                                onClick={() => handleEditClick(user)}
-                                                            >
-                                                                <i className="bi bi-pencil me-2"></i> Edit
-                                                            </button>
-                                                        </li>
-                                                        {statusFilter === 'active' ? (
-                                                            <li>
-                                                                <button
-                                                                    className="dropdown-item text-danger"
-                                                                    onClick={() => handleArchiveClick(user)}
-                                                                >
-                                                                    <i className="bi bi-archive me-2"></i> Archive
-                                                                </button>
-                                                            </li>
-                                                        ) : (
-                                                            <li>
-                                                                <button
-                                                                    className="dropdown-item text-success"
-                                                                    onClick={() => handleUnarchiveClick(user)}
-                                                                >
-                                                                    <i className="bi bi-arrow-counterclockwise me-2"></i> Unarchive
-                                                                </button>
-                                                            </li>
-                                                        )}
-                                                        <li><hr className="dropdown-divider" /></li>
-                                                        <li>
-                                                            <button
-                                                                className="dropdown-item text-danger"
-                                                                onClick={() => handleDeleteClick(user)}
-                                                            >
-                                                                <i className="bi bi-trash me-2"></i> Delete Permanently
-                                                            </button>
-                                                        </li>
-                                                    </ul>
+                                                    {statusFilter === 'active' ? (
+                                                        <button style={{ ...styles.secondaryBtn, color: '#B71C1C', padding: '0.5rem' }} className="touch-btn" title="Archive" onClick={() => handleArchiveClick(user)}>
+                                                            <i className="bi bi-archive"></i>
+                                                        </button>
+                                                    ) : (
+                                                        <button style={{ ...styles.secondaryBtn, color: '#1B5E20', padding: '0.5rem' }} className="touch-btn" title="Restore" onClick={() => handleUnarchiveClick(user)}>
+                                                            <i className="bi bi-arrow-counterclockwise"></i>
+                                                        </button>
+                                                    )}
+                                                    <button style={{ ...styles.secondaryBtn, color: '#ff4444', background: '#fff1f1', padding: '0.5rem' }} className="touch-btn" title="Delete" onClick={() => handleDeleteClick(user)}>
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
-            {/* Edit Modal */}
-            {showEditModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow">
-                            <div className="modal-header bg-dark text-white">
-                                <h5 className="modal-title">Edit User</h5>
-                                <button
-                                    type="button"
-                                    className="btn-close btn-close-white"
-                                    onClick={() => setShowEditModal(false)}
-                                ></button>
+            {/* Modals Container */}
+            {(showEditModal || showAddModal || showArchiveModal || showUnarchiveModal || showDeleteModal || showSuccessModal) && (
+                <div style={styles.modalOverlay} onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                        setShowEditModal(false); setShowAddModal(false); 
+                        setShowArchiveModal(false); setShowUnarchiveModal(false); setShowDeleteModal(false);
+                    }
+                }}>
+                    <div style={styles.modalContent}>
+                        {/* Drag Indicator */}
+                        {windowWidth < 576 && (
+                            <div style={{ padding: '12px', display: 'flex', justifyContent: 'center' }}>
+                                <div style={{ width: '40px', height: '4px', backgroundColor: '#e0e0e0', borderRadius: '2px' }}></div>
                             </div>
-                            <form onSubmit={handleSaveEdit}>
-                                <div className="modal-body">
+                        )}
+
+                        {/* Modal Header */}
+                        <div className="p-4 border-bottom d-flex justify-content-between align-items-center">
+                            <h5 className="m-0 fw-800">
+                                {showAddModal && 'Add New User'}
+                                {showEditModal && 'Edit User Profile'}
+                                {showArchiveModal && 'Archive User'}
+                                {showUnarchiveModal && 'Restore User'}
+                                {showDeleteModal && 'Delete Permanently'}
+                                {showSuccessModal && 'Action Successful'}
+                            </h5>
+                            <button className="btn-close" onClick={() => {
+                                setShowEditModal(false); setShowAddModal(false); 
+                                setShowArchiveModal(false); setShowUnarchiveModal(false); setShowDeleteModal(false);
+                                setShowSuccessModal(false);
+                            }}></button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-4 overflow-auto premium-scroll">
+                            {showAddModal && (
+                                <form onSubmit={handleCreateUser} className="d-flex flex-column gap-3">
+                                    <div><label className="small fw-bold mb-1">Full Name</label><input type="text" className="form-control rounded-3" name="full_name" value={addFormData.full_name} onChange={handleAddFormChange} required /></div>
+                                    <div><label className="small fw-bold mb-1">Email</label><input type="email" className="form-control rounded-3" name="email" value={addFormData.email} onChange={handleAddFormChange} required /></div>
+                                    <div><label className="small fw-bold mb-1">Password</label><input type="password" className="form-control rounded-3" name="password" value={addFormData.password} onChange={handleAddFormChange} required minLength={8} /></div>
+                                    <div><label className="small fw-bold mb-1">Phone</label><input type="text" className="form-control rounded-3" name="phone" value={addFormData.phone} onChange={handleAddFormChange} /></div>
+                                    <div><label className="small fw-bold mb-1">Role</label><select className="form-select rounded-3" name="role" value={addFormData.role} onChange={handleAddFormChange} required><option value="customer">Customer</option><option value="barber">Barber</option><option value="manager">Manager</option></select></div>
+                                    <button style={{ ...styles.primaryBtn, marginTop: '1rem' }} type="submit" disabled={saving}>{saving ? 'Creating...' : 'CREATE USER'}</button>
+                                </form>
+                            )}
+                            {showEditModal && (
+                                <form onSubmit={handleSaveEdit} className="d-flex flex-column gap-3">
+                                    <div><label className="small fw-bold mb-1">Full Name</label><input type="text" className="form-control rounded-3" name="full_name" value={formData.full_name} onChange={handleFormChange} required /></div>
+                                    <div><label className="small fw-bold mb-1">Phone</label><input type="text" className="form-control rounded-3" name="phone" value={formData.phone} onChange={handleFormChange} /></div>
+                                    <div><label className="small fw-bold mb-1">Role</label><select className="form-select rounded-3" name="role" value={formData.role} onChange={handleFormChange} required><option value="customer">Customer</option><option value="barber">Barber</option><option value="manager">Manager</option></select></div>
+                                    <button style={{ ...styles.primaryBtn, marginTop: '1rem' }} type="submit" disabled={saving}>{saving ? 'Saving...' : 'SAVE CHANGES'}</button>
+                                </form>
+                            )}
+                            {(showArchiveModal || showUnarchiveModal || showDeleteModal) && (
+                                <div className="text-center">
                                     <div className="mb-3">
-                                        <label className="form-label fw-bold small">Full Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            name="full_name"
-                                            value={formData.full_name}
-                                            onChange={handleFormChange}
-                                            required
-                                        />
+                                        <i className={`bi bi-${showDeleteModal ? 'exclamation-octagon text-danger' : 'info-circle text-warning'} fs-1`}></i>
                                     </div>
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Phone</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            name="phone"
-                                            value={formData.phone}
-                                            onChange={handleFormChange}
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Role</label>
-                                        <select
-                                            className="form-select"
-                                            name="role"
-                                            value={formData.role}
-                                            onChange={handleFormChange}
-                                            required
+                                    <p className="fw-bold mb-1">{selectedUser?.full_name}</p>
+                                    <p className="text-muted small">
+                                        {showArchiveModal && 'Archive this user? They can be restored later.'}
+                                        {showUnarchiveModal && 'Restore this user to active accounts?'}
+                                        {showDeleteModal && 'Permanently remove this user? This cannot be undone.'}
+                                    </p>
+                                    <div className="d-flex gap-2 mt-4">
+                                        <button className="btn btn-light flex-fill rounded-3 py-2 fw-bold" onClick={() => {setShowArchiveModal(false); setShowUnarchiveModal(false); setShowDeleteModal(false);}}>CANCEL</button>
+                                        <button 
+                                            className={`btn btn-${showDeleteModal ? 'danger' : (showArchiveModal ? 'warning' : 'success')} flex-fill rounded-3 py-2 fw-bold`}
+                                            onClick={showDeleteModal ? handleDeleteConfirm : (showArchiveModal ? handleArchiveConfirm : handleUnarchiveConfirm)}
+                                            disabled={saving}
                                         >
-                                            <option value="customer">Customer</option>
-                                            <option value="barber">Barber</option>
-                                            <option value="manager">Manager</option>
-                                        </select>
+                                            {saving ? 'Processing...' : 'CONFIRM'}
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-light"
-                                        onClick={() => setShowEditModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary px-4"
-                                        disabled={saving}
-                                    >
-                                        {saving ? 'Saving...' : 'Save Changes'}
-                                    </button>
+                            )}
+                            {showSuccessModal && (
+                                <div className="text-center py-3">
+                                    <i className="bi bi-check-circle text-success" style={{ fontSize: '3rem' }}></i>
+                                    <h5 className="mt-3 fw-800">Done!</h5>
+                                    <p className="text-muted small">{successMessage}</p>
+                                    <button style={styles.primaryBtn} className="w-100 mt-3" onClick={() => setShowSuccessModal(false)}>CONTINUE</button>
                                 </div>
-                            </form>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Add User Modal */}
-            {showAddModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow">
-                            <div className="modal-header bg-primary text-white">
-                                <h5 className="modal-title">Add New User</h5>
-                                <button
-                                    type="button"
-                                    className="btn-close btn-close-white"
-                                    onClick={() => setShowAddModal(false)}
-                                ></button>
-                            </div>
-                            <form onSubmit={handleCreateUser}>
-                                <div className="modal-body">
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Full Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            name="full_name"
-                                            value={addFormData.full_name}
-                                            onChange={handleAddFormChange}
-                                            required
-                                            placeholder="John Doe"
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Email Address</label>
-                                        <input
-                                            type="email"
-                                            className="form-control"
-                                            name="email"
-                                            value={addFormData.email}
-                                            onChange={handleAddFormChange}
-                                            required
-                                            placeholder="john@example.com"
-                                        />
-                                        <small className="text-muted">A verification email will be sent to this address.</small>
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Password</label>
-                                        <input
-                                            type="password"
-                                            className="form-control"
-                                            name="password"
-                                            value={addFormData.password}
-                                            onChange={handleAddFormChange}
-                                            required
-                                            minLength={8}
-                                            placeholder="Minimum 8 characters"
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Phone</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            name="phone"
-                                            value={addFormData.phone}
-                                            onChange={handleAddFormChange}
-                                            placeholder="+639..."
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label fw-bold small">Role</label>
-                                        <select
-                                            className="form-select"
-                                            name="role"
-                                            value={addFormData.role}
-                                            onChange={handleAddFormChange}
-                                            required
-                                        >
-                                            <option value="customer">Customer</option>
-                                            <option value="barber">Barber</option>
-                                            <option value="manager">Manager</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-light"
-                                        onClick={() => setShowAddModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary px-4"
-                                        disabled={saving}
-                                    >
-                                        {saving ? 'Creating...' : 'Create & Send Auth Email'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Success Modal */}
-            {showSuccessModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow-lg">
-                            <div className="modal-body text-center p-5">
-                                <div className="mb-4">
-                                    <i className="bi bi-check-circle-fill text-success" style={{ fontSize: '4rem' }}></i>
-                                </div>
-                                <h3 className="fw-bold mb-3">User Registered!</h3>
-                                <p className="text-muted mb-4">{successMessage}</p>
-                                <button
-                                    className="btn btn-success px-5 py-2 rounded-pill fw-bold"
-                                    onClick={() => setShowSuccessModal(false)}
-                                >
-                                    Dismiss
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-
-            {/* Archive Modal */}
-            {showArchiveModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow">
-                            <div className="modal-header bg-warning">
-                                <h5 className="modal-title">Archive User</h5>
-                                <button
-                                    type="button"
-                                    className="btn-close"
-                                    onClick={() => setShowArchiveModal(false)}
-                                ></button>
-                            </div>
-                            <div className="modal-body">
-                                <p>Are you sure you want to archive <strong>{selectedUser?.full_name || selectedUser?.email}</strong>?</p>
-                                <p className="small text-muted mb-0">Archived users will not appear in active lists but their data remains in the system.</p>
-                            </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-light"
-                                    onClick={() => setShowArchiveModal(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-warning"
-                                    onClick={handleArchiveConfirm}
-                                    disabled={saving}
-                                >
-                                    {saving ? 'Archiving...' : 'Archive User'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Unarchive Modal */}
-            {showUnarchiveModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow">
-                            <div className="modal-header bg-success text-white">
-                                <h5 className="modal-title">Unarchive User</h5>
-                                <button
-                                    type="button"
-                                    className="btn-close btn-close-white"
-                                    onClick={() => setShowUnarchiveModal(false)}
-                                ></button>
-                            </div>
-                            <div className="modal-body">
-                                <p>Are you sure you want to unarchive <strong>{selectedUser?.full_name || selectedUser?.email}</strong>?</p>
-                            </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-light"
-                                    onClick={() => setShowUnarchiveModal(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-success px-4"
-                                    onClick={handleUnarchiveConfirm}
-                                    disabled={saving}
-                                >
-                                    {saving ? 'Unarchiving...' : 'Unarchive User'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete Modal */}
-            {showDeleteModal && (
-                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow">
-                            <div className="modal-header bg-danger text-white">
-                                <h5 className="modal-title">Delete User Permanently</h5>
-                                <button
-                                    type="button"
-                                    className="btn-close btn-close-white"
-                                    onClick={() => setShowDeleteModal(false)}
-                                ></button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="text-center mb-4">
-                                    <i className="bi bi-exclamation-octagon text-danger" style={{ fontSize: '3rem' }}></i>
-                                </div>
-                                <p className="text-center fw-bold">Warning: This action is irreversible.</p>
-                                <p>Are you sure you want to permanently delete <strong>{selectedUser?.full_name || selectedUser?.email}</strong> from the database?</p>
-                                <p className="small text-danger">
-                                    <i className="bi bi-info-circle me-1"></i>
-                                    Note: Deletion will fail if the user has active appointments or other related records. In that case, use <strong>Archive</strong> instead.
-                                </p>
-                            </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-light"
-                                    onClick={() => setShowDeleteModal(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-danger px-4"
-                                    onClick={handleDeleteConfirm}
-                                    disabled={saving}
-                                >
-                                    {saving ? 'Deleting...' : 'Permanently Delete'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <style>{`
+                .fw-800 { font-weight: 800; }
+                .touch-btn:active { transform: scale(0.96); }
+                .table-hover tbody tr:hover {
+                    background-color: #fcfcfc !important;
+                    transform: scale(1.002);
+                }
+                .premium-scroll::-webkit-scrollbar { width: 4px; }
+                .premium-scroll::-webkit-scrollbar-thumb { background: #eee; border-radius: 10px; }
+                @keyframes slideUp {
+                    from { transform: translateY(100%); }
+                    to { transform: translateY(0); }
+                }
+                @keyframes scaleIn {
+                    from { opacity: 0; transform: scale(0.95); }
+                    to { opacity: 1; transform: scale(1); }
+                }
+            `}</style>
         </div>
     );
 };

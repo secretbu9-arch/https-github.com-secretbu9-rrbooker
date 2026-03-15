@@ -5,8 +5,218 @@ import { supabase } from '../../supabaseClient';
 import { apiService } from '../../services/core/ApiService';
 import { PushService } from '../../services/notifications/PushService';
 import NotificationModal from '../manager/NotificationModal';
-import './ManagerDashboard.css';
 import logoImage from '../../assets/images/raf-rok-logo.png';
+
+const managerDashboardStyles = `
+  :root {
+    --mng-black: #000000;
+    --mng-brown: #2c1810;
+    --mng-white: #ffffff;
+    --mng-light-gray: #f8f9fa;
+    --mng-gray: #e9ecef;
+    --mng-dark-gray: #6c757d;
+  }
+
+  .manager-container {
+    background-color: var(--mng-light-gray);
+    min-height: 100vh;
+    padding-bottom: 5rem;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .premium-card {
+    background: var(--mng-white);
+    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+    transition: all 0.3s ease;
+  }
+
+  .main-header {
+    background: var(--mng-white);
+    border-bottom: 1px solid var(--mng-gray);
+    padding: 1.5rem 0;
+    margin-bottom: 2rem;
+  }
+
+  .title-accent {
+    height: 4px;
+    width: 40px;
+    background: var(--mng-brown);
+    border-radius: 10px;
+    margin-top: 0.5rem;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (min-width: 992px) {
+    .stat-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .metric-box {
+    background: var(--mng-white);
+    padding: 1.5rem;
+    border-radius: 24px;
+    border: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.2s ease;
+  }
+
+  .metric-box:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+  }
+
+  .metric-label {
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--mng-dark-gray);
+    letter-spacing: 1.5px;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .metric-val {
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--mng-black);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .section-title {
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-transform: uppercase;
+  }
+
+  .modern-table-card {
+    background: var(--mng-white);
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+
+  .table-head-minimal {
+    background: var(--mng-black);
+    color: var(--mng-white);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+
+  .table-row-hover {
+    transition: all 0.2s ease;
+  }
+
+  .table-row-hover:hover {
+    background-color: var(--mng-light-gray);
+  }
+
+  .status-pill {
+    padding: 0.35rem 0.85rem;
+    border-radius: 100px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .pill-pending { background: var(--mng-gray); color: var(--mng-dark-gray); }
+  .pill-active { background: var(--mng-black); color: var(--mng-white); }
+  .pill-success { background: #e6fffa; color: #2c7a7b; }
+  .pill-danger { background: #fff5f5; color: #c53030; }
+
+  .action-btn-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--mng-gray);
+    background: var(--mng-white);
+    color: var(--mng-black);
+    transition: all 0.2s ease;
+  }
+
+  .action-btn-circle:hover {
+    background: var(--mng-black);
+    color: var(--mng-white);
+    transform: scale(1.1);
+  }
+
+  .hub-item {
+    padding: 1rem;
+    border-radius: 16px;
+    background: var(--mng-light-gray);
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .hub-item:hover {
+    background: var(--mng-white);
+    border-color: var(--mng-brown);
+    transform: translateX(5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
+
+  .hub-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--mng-white);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: var(--mng-brown);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  }
+
+  .btn-refresh-top {
+    background: var(--mng-white);
+    border: 1px solid var(--mng-gray);
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .btn-refresh-top:active {
+    transform: rotate(180deg);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spin-anim { animation: spin 1s linear infinite; }
+`;
 
 const ManagerDashboard = () => {
   const navigate = useNavigate();
@@ -26,7 +236,8 @@ const ManagerDashboard = () => {
     todayOrders: 0,
     pendingOrders: 0,
     readyOrders: 0,
-    orderRevenue: 0
+    orderRevenue: 0,
+    todayRevenue: 0
   });
 
   const [recentAppointments, setRecentAppointments] = useState([]);
@@ -182,7 +393,7 @@ const ManagerDashboard = () => {
           .eq('role', 'barber')
           .or('barber_status.eq.available,barber_status.is.null'),
 
-        // Calculate revenue (completed appointments)
+        // Calculate Gross Revenue (all non-cancelled appointments)
         supabase
           .from('appointments')
           .select(`
@@ -190,7 +401,7 @@ const ManagerDashboard = () => {
             is_urgent,
             service:service_id(price)
           `)
-          .eq('status', 'completed'),
+          .neq('status', 'cancelled'),
 
         // Recent appointments
         supabase
@@ -237,11 +448,11 @@ const ManagerDashboard = () => {
           .select('*', { count: 'exact', head: true })
           .eq('status', 'ready_for_pickup'),
 
-        // Completed orders for revenue calculation
+        // All non-cancelled orders for gross revenue calculation
         supabase
           .from('orders')
           .select('total_amount')
-          .in('status', ['picked_up', 'completed']),
+          .neq('status', 'cancelled'),
 
         // Recent orders
         supabase
@@ -265,19 +476,39 @@ const ManagerDashboard = () => {
           .limit(5)
       ]);
 
-      // Calculate total revenue including urgent fees
-      const appointmentRevenue = completedAppointments?.reduce((sum, appointment) => {
-        let price = appointment.total_price || appointment.service?.price || 0;
-        if (appointment.is_urgent) {
-          price += 100; // Urgent fee
+      // Calculate total Gross Revenue (all non-cancelled)
+      const appointmentRevenue = completedAppointments?.reduce((sum, apt) => {
+        // If total_price exists and is > 0, it's our primary source (assumed to include urgent fee)
+        if (apt.total_price !== null && apt.total_price !== undefined && Number(apt.total_price) > 0) {
+          return sum + Number(apt.total_price);
         }
-        return sum + price;
+        
+        // Fallback: Service Price + Urgent Fee
+        const price = Number(apt.service?.price) || 0;
+        const urgentFee = apt.is_urgent ? 100 : 0;
+        return sum + price + urgentFee;
       }, 0) || 0;
 
       // Calculate order revenue
       const orderRevenue = completedOrders?.reduce((sum, order) => {
         return sum + (order.total_amount || 0);
       }, 0) || 0;
+
+      // Calculate today's revenue specifically
+      const todayAppointmentsData = appointments?.filter(apt => apt.appointment_date === todayString && apt.status !== 'cancelled') || [];
+      const todayApptRevenue = todayAppointmentsData.reduce((sum, apt) => {
+        if (apt.total_price !== null && apt.total_price !== undefined && Number(apt.total_price) > 0) {
+          return sum + Number(apt.total_price);
+        }
+        const price = Number(apt.service?.price) || 0;
+        const urgentFee = apt.is_urgent ? 100 : 0;
+        return sum + price + urgentFee;
+      }, 0);
+
+      const todayOrdersData = recentOrdersData?.filter(o => o.created_at?.startsWith(todayString) && o.status !== 'cancelled') || [];
+      const todayOrderRevenue = todayOrdersData.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+
+      const todayRevenue = todayApptRevenue + todayOrderRevenue;
 
       const totalRevenue = appointmentRevenue + orderRevenue;
 
@@ -319,7 +550,8 @@ const ManagerDashboard = () => {
         todayOrders: todayOrders || 0,
         pendingOrders: pendingOrders || 0,
         readyOrders: readyOrders || 0,
-        orderRevenue
+        orderRevenue,
+        todayRevenue
       });
 
       setRecentAppointments(appointments || []);
@@ -611,406 +843,257 @@ const ManagerDashboard = () => {
   }
 
   return (
-    <div className="dashboard-container">
-      {/* Premium Header */}
-      <header className="dashboard-header d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h1 className="dashboard-title">
-            Manager Dashboard
-          </h1>
-          <p className="dashboard-subtitle">
-            {new Date().toLocaleDateString('en-US', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            })}
-          </p>
-        </div>
-        <div className="d-flex gap-2">
-          <button
-            className="btn btn-outline-secondary btn-premium"
-            onClick={fetchDashboardData}
-            disabled={isFetchingData}
-          >
-            <i className={`bi bi-arrow-clockwise me-1 ${isFetchingData ? 'spinner-border spinner-border-sm' : ''}`}></i>
-            Refresh
-          </button>
+    <div className="manager-container">
+      <style>{managerDashboardStyles}</style>
+
+      {/* Main Header */}
+      <header className="main-header">
+        <div className="container">
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h1 className="fw-black mb-0" style={{ letterSpacing: '-1.5px', fontSize: '1.75rem' }}>MANAGER DASHBOARD</h1>
+              <div className="title-accent"></div>
+              <p className="text-muted small mt-2 mb-0 fw-bold opacity-75">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+            <button
+              className="btn-refresh-top"
+              onClick={fetchDashboardData}
+              disabled={isFetchingData}
+            >
+              <i className={`bi bi-arrow-clockwise ${isFetchingData ? 'spin-anim' : ''}`}></i>
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Category: Operational Overview */}
-      <div className="row g-3 mb-3">
-        {/* Appointments Today */}
-        <div className="col-12 col-md-6 col-lg-3">
-          <div className="metric-card animate-fade-in-up stagger-1">
-            <div className="card-body">
-              <div className="metric-icon-wrapper bg-primary-soft">
-                <i className="bi bi-calendar-check"></i>
-              </div>
-              <div className="metric-label">Daily Appointments</div>
-              <div className="metric-value">{stats.todayAppointments}</div>
-              <div className="mt-2">
-                <small className="text-muted">Total: {stats.totalAppointments}</small>
-              </div>
+      <div className="container">
+        {error && (
+          <div className="alert alert-dark border-0 rounded-4 shadow-sm mb-4 d-flex align-items-center gap-3">
+            <i className="bi bi-exclamation-octagon-fill fs-4"></i>
+            <div className="small fw-bold">{error}</div>
+            <button className="btn-close ms-auto" onClick={() => setError('')}></button>
+          </div>
+        )}
+
+        {/* Global Statistics */}
+        <div className="stat-grid">
+          <div className="metric-box">
+            <div className="metric-label">
+              <i className="bi bi-calendar-event"></i> TODAY'S GROSS
             </div>
+            <div className="metric-val">₱{stats.todayRevenue.toLocaleString()}</div>
+            <div className="mt-2 small text-muted">Current Sales</div>
+          </div>
+          <div className="metric-box">
+            <div className="metric-label">
+              <i className="bi bi-cash-stack"></i> TOTAL GROSS
+            </div>
+            <div className="metric-val">₱{stats.totalRevenue.toLocaleString()}</div>
+            <div className="mt-2 small text-muted">All Time Revenue</div>
+          </div>
+          <div className="metric-box">
+            <div className="metric-label">
+              <i className="bi bi-people"></i> CLIENTS
+            </div>
+            <div className="metric-val">{stats.totalCustomers}</div>
+            <div className="mt-2 small text-muted">Registered</div>
+          </div>
+          <div className="metric-box">
+            <div className="metric-label">
+              <i className="bi bi-calendar-check"></i> TODAY'S APPOINTMENTS
+            </div>
+            <div className="metric-val">{stats.todayAppointments}</div>
+            <div className="mt-2 small text-muted">Bookings Today</div>
           </div>
         </div>
 
-        {/* Financial: Total Revenue */}
-        <div className="col-12 col-md-6 col-lg-3">
-          <div className="metric-card animate-fade-in-up stagger-2">
-            <div className="card-body d-flex flex-column align-items-end">
-              <div className="d-flex align-items-center justify-content-between w-100 mb-2">
-                <div className="metric-icon-wrapper bg-success-soft mb-0">
-                  <span className="fw-bold">₱</span>
-                </div>
-                <div className="metric-label mb-0">Business Revenue</div>
-              </div>
-              <div className="metric-value">
-                ₱{stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-              <div className="mt-1">
-                <small className="text-success fw-semibold">Orders: ₱{stats.orderRevenue.toLocaleString()}</small>
-              </div>
+        <div className="row g-4">
+          {/* Main Content Area */}
+          <div className="col-lg-8">
+            <div className="section-title">
+              <i className="bi bi-lightning-fill"></i> ACTIVE SESSIONS
             </div>
-          </div>
-        </div>
 
-        {/* Shop Status: Customers & Barbers */}
-        <div className="col-12 col-md-6 col-lg-6">
-          <div className="metric-card animate-fade-in-up stagger-3">
-            <div className="card-body d-flex align-items-center justify-content-between h-100">
-              <div className="d-flex align-items-center flex-fill border-end pe-4">
-                <div className="metric-icon-wrapper bg-info-soft mb-0 me-3">
-                  <i className="bi bi-people-fill"></i>
-                </div>
-                <div>
-                  <div className="metric-label">Total Customers</div>
-                  <div className="metric-value" style={{ fontSize: '1.5rem' }}>{stats.totalCustomers}</div>
-                </div>
-              </div>
-              <div className="d-flex align-items-center flex-fill ps-4">
-                <div className="metric-icon-wrapper bg-success-soft mb-0 me-3">
-                  <i className="bi bi-scissors"></i>
-                </div>
-                <div>
-                  <div className="metric-label">Active Barbers</div>
-                  <div className="metric-value" style={{ fontSize: '1.5rem' }}>{stats.totalBarbers}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Integrated Action & Operations Row */}
-
-
-      <div className="row g-3">
-        {/* Recent Operational History (Main Content) */}
-        <div className="col-lg-8">
-          {/* Recent Appointments */}
-          <div className="content-card mb-3">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <h5>
-                <i className="bi bi-calendar-week me-2 text-primary"></i>
-                Active Appointments
-              </h5>
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge badge-primary">{recentAppointments.length} Items</span>
-                <button
-                  className="btn btn-sm btn-light border-0"
-                  onClick={() => navigate('/manage/appointments')}
-                  title="View Full Schedule"
-                >
-                  <i className="bi bi-arrow-right"></i>
-                </button>
-              </div>
-            </div>
-            <div className="card-body p-0">
-              {recentAppointments.length === 0 ? (
-                <div className="text-center py-5">
-                  <i className="bi bi-calendar-x text-muted" style={{ fontSize: '3rem' }}></i>
-                  <p className="text-muted mt-2 mb-0">No appointments found</p>
-                </div>
-              ) : (
-                <>
-                  <div className="table-responsive">
-                    <table className="table modern-table table-hover">
-                      <thead>
-                        <tr>
-                          <th>Customer</th>
-                          <th>Service</th>
-                          <th>Schedule</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentAppointments.slice(0, 6).map((appointment) => (
-                          <tr key={appointment.id}>
-                            <td>
-                              <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
-                              {appointment.customer?.phone && (
-                                <small className="text-muted d-block mt-1 x-small">
-                                  <i className="bi bi-telephone me-1"></i>
-                                  {appointment.customer.phone}
-                                </small>
+            <div className="modern-table-card mb-4">
+              <div className="table-responsive">
+                <table className="table border-0 mb-0">
+                  <thead className="table-head-minimal">
+                    <tr>
+                      <th className="border-0 px-4 py-3">Customer</th>
+                      <th className="border-0 px-4 py-3">Service</th>
+                      <th className="border-0 px-4 py-3">Status</th>
+                      <th className="border-0 px-4 py-3 text-end">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentAppointments.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="text-center py-5 text-muted">No recent sessions</td>
+                      </tr>
+                    ) : (
+                      recentAppointments.slice(0, 6).map((apt) => (
+                        <tr key={apt.id} className="table-row-hover">
+                          <td className="px-4 py-3">
+                            <div className="fw-black" style={{ fontSize: '0.9rem' }}>{apt.customer?.full_name || 'Walk-in'}</div>
+                            <div className="small text-muted opacity-75">{apt.barber?.full_name}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="small fw-bold">{apt.service?.name}</div>
+                            <div className="small text-muted">₱{apt.total_price || apt.service?.price}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`status-pill ${apt.status === 'completed' ? 'pill-success' :
+                                apt.status === 'ongoing' ? 'pill-active' : 'pill-pending'
+                              }`}>
+                              {apt.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-end">
+                            <div className="d-flex justify-content-end gap-2">
+                              {apt.status === 'scheduled' && (
+                                <button className="action-btn-circle" onClick={() => handleAppointmentStatus(apt.id, 'ongoing')}>
+                                  <i className="bi bi-play-fill text-dark"></i>
+                                </button>
                               )}
-                            </td>
-                            <td>
-                              <div className="fw-semibold">{appointment.service?.name || 'Unknown'}</div>
-                              <small className="text-muted">
-                                ₱{appointment.total_price || appointment.service?.price}
-                              </small>
-                            </td>
-                            <td>
-                              <div className="small fw-medium">{appointment.appointment_date}</div>
-                              <small className="text-primary x-small">
-                                {appointment.barber?.full_name}
-                              </small>
-                            </td>
-                            <td>
-                              <span className={`status-badge badge-${appointment.status === 'completed' ? 'success' :
-                                appointment.status === 'ongoing' ? 'warning' :
-                                  appointment.status === 'scheduled' || appointment.status === 'confirmed' ? 'primary' :
-                                    appointment.status === 'cancelled' ? 'danger' : 'secondary'
-                                }`}>
-                                {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="d-flex gap-1">
-                                {appointment.status === 'scheduled' && (
-                                  <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={() => handleAppointmentStatus(appointment.id, 'ongoing')}
-                                    title="Start Session"
-                                  >
-                                    <i className="bi bi-play-fill"></i>
-                                  </button>
-                                )}
-                                {appointment.status === 'ongoing' && (
-                                  <button
-                                    className="btn btn-sm btn-outline-success"
-                                    onClick={() => handleAppointmentStatus(appointment.id, 'completed')}
-                                    title="Complete Session"
-                                  >
-                                    <i className="bi bi-check-lg"></i>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              {apt.status === 'ongoing' && (
+                                <button className="action-btn-circle" onClick={() => handleAppointmentStatus(apt.id, 'completed')}>
+                                  <i className="bi bi-check-lg text-dark"></i>
+                                </button>
+                              )}
+                              <button className="action-btn-circle" onClick={() => navigate(`/appointments/${apt.id}`)}>
+                                <i className="bi bi-eye text-dark"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="section-title">
+              <i className="bi bi-clock-history"></i> SYSTEM ACTIVITY
+            </div>
+            <div className="premium-card p-0 overflow-hidden">
+              {recentLogs.length === 0 ? (
+                <div className="p-4 text-center text-muted small">No recent activity detected</div>
+              ) : (
+                recentLogs.slice(0, 5).map((log, idx) => (
+                  <div key={log.id} className={`p-3 d-flex gap-3 align-items-center ${idx < 4 ? 'border-bottom' : ''}`}>
+                    <div className="rounded-circle bg-light d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+                      <i className="bi bi-activity text-muted opacity-50"></i>
+                    </div>
+                    <div className="flex-grow-1">
+                      <div className="small fw-black">{formatAction(log.action)}</div>
+                      <div className="small text-muted opacity-75" style={{ fontSize: '0.75rem' }}>
+                        {log.user?.full_name || 'System'} • {formatTimestamp(log.created_at)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-2 border-top bg-light text-center">
-                    <button className="btn btn-sm btn-light w-100 border-0 x-small fw-bold" onClick={() => navigate('/manage/appointments')}>
-                      MANAGED DETAILED SCHEDULE <i className="bi bi-chevron-right ms-1"></i>
-                    </button>
-                  </div>
-                </>
+                ))
               )}
             </div>
           </div>
 
-          {/* Recent Orders Overview */}
-          {recentOrders.length > 0 && (
-            <div className="content-card mb-3">
-              <div className="card-header d-flex justify-content-between align-items-center">
-                <h5>
-                  <i className="bi bi-receipt me-2 text-success"></i>
-                  Recent Shop Orders
-                </h5>
-                <button
-                  className="btn btn-premium btn-outline-secondary btn-sm"
-                  onClick={() => navigate('/manage/orders')}
-                >
-                  Manage All
-                </button>
-              </div>
-              <div className="card-body p-0">
-                <div className="table-responsive">
-                  <table className="table modern-table table-hover">
-                    <thead>
-                      <tr>
-                        <th>Order Ref</th>
-                        <th>Customer</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentOrders.slice(0, 5).map((order) => (
-                        <tr key={order.id}>
-                          <td className="fw-bold text-primary">#{order.order_number || order.id.slice(0, 8)}</td>
-                          <td>{order.customer?.full_name || 'Unknown'}</td>
-                          <td>
-                            <span className="fw-bold text-dark">
-                              ₱{Number(order.total_amount || 0).toFixed(2)}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`status-badge badge-${order.status === 'picked_up' || order.status === 'completed' ? 'success' :
-                              order.status === 'ready_for_pickup' ? 'success' :
-                                order.status === 'preparing' ? 'warning' :
-                                  order.status === 'confirmed' ? 'primary' :
-                                    order.status === 'pending' ? 'secondary' : 'danger'
-                              }`}>
-                              {order.status.replace('_', ' ').toUpperCase()}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              className="btn btn-sm btn-light border"
-                              onClick={() => navigate(`/manage/orders?order=${order.id}`)}
-                            >
-                              Details
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          {/* Sidebar Area */}
+          <div className="col-lg-4">
+            {/* Urgent Requests Mini Hub */}
+            {pendingRequests.length > 0 && (
+              <div className="mb-4">
+                <div className="section-title text-danger">
+                  <i className="bi bi-exclamation-circle-fill"></i> URGENT ACTIONS
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar: Action Center & Priority Tasks */}
-        <div className="col-lg-4">
-          <div className="card content-card shadow-sm border-0 mb-3" style={{ background: '#f8f9fc' }}>
-            <div className="card-body p-3">
-              <h6 className="fw-bold mb-3 d-flex align-items-center">
-                <i className="bi bi-lightning-fill text-warning me-2"></i>
-                Action Center
-              </h6>
-
-              {/* Critical Requests Count */}
-              <div className="d-flex gap-2 mb-3">
-                <div className="flex-fill bg-white p-3 rounded-3 border shadow-xs text-center">
-                  <div className="text-warning h4 mb-0 fw-bold">{pendingRequests.length}</div>
-                  <div className="text-muted x-small fw-bold">REQUESTS</div>
-                </div>
-                <div className="flex-fill bg-white p-3 rounded-3 border shadow-xs text-center">
-                  <div className="text-info h4 mb-0 fw-bold">{pendingOrders.length}</div>
-                  <div className="text-muted x-small fw-bold">ORDERS</div>
-                </div>
-              </div>
-
-              {/* Collapsible Action Sections */}
-              <div className="action-hub-sections">
-                {/* Pending Booking Requests */}
-                {pendingRequests.length > 0 && (
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <span className="x-small fw-bold text-muted uppercase">URGENT REQUESTS</span>
-                    </div>
-                    {pendingRequests.slice(0, 3).map((request) => (
-                      <div key={request.id} className="p-2 mb-2 bg-white rounded border-start border-4 border-warning shadow-xs">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <div>
-                            <div className="fw-bold" style={{ fontSize: '0.8rem' }}>{request.customer?.full_name}</div>
-                            <div className="text-muted x-small">{request.service?.name}</div>
-                          </div>
-                          {request.is_urgent && <span className="badge bg-danger x-small">!!!</span>}
+                <div className="premium-card p-3" style={{ background: '#fff5f5' }}>
+                  {pendingRequests.slice(0, 3).map((req) => (
+                    <div key={req.id} className="p-2 mb-2 bg-white rounded-4 border shadow-sm">
+                      <div className="d-flex justify-content-between align-items-start mb-2 px-1">
+                        <div>
+                          <div className="fw-black small">{req.customer?.full_name}</div>
+                          <div className="text-muted" style={{ fontSize: '0.65rem' }}>{req.service?.name}</div>
                         </div>
-                        <div className="d-flex gap-1">
-                          <button className="btn btn-sm btn-primary py-0 px-2 x-small" onClick={() => handlePendingRequest(request.id, 'approve')}>Approve</button>
-                          <button className="btn btn-sm btn-outline-secondary py-0 px-2 x-small border-0" onClick={() => handlePendingRequest(request.id, 'decline')}>Decline</button>
-                        </div>
+                        {req.is_urgent && <span className="badge bg-danger p-1">!!!</span>}
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Pending Product Orders */}
-                {pendingOrders.length > 0 && (
-                  <div>
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <span className="x-small fw-bold text-muted uppercase">ORDERS TO PROCESS</span>
-                    </div>
-                    {pendingOrders.slice(0, 3).map((order) => (
-                      <div key={order.id} className="p-2 mb-2 bg-white rounded border-start border-4 border-info shadow-xs">
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <div className="fw-bold" style={{ fontSize: '0.8rem' }}>#{order.order_number || order.id.slice(0, 6)}</div>
-                            <div className="text-muted x-small">{order.customer?.full_name}</div>
-                          </div>
-                          <span className="status-badge badge-warning x-small">₱{Number(order.total_amount).toFixed(0)}</span>
-                        </div>
-                        <button className="btn btn-sm btn-outline-info w-100 mt-2 py-0 x-small" onClick={() => navigate(`/manage/orders?order=${order.id}`)}>Review Order</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {pendingRequests.length === 0 && pendingOrders.length === 0 && (
-                  <div className="text-center py-4 opacity-50">
-                    <i className="bi bi-check2-all h1"></i>
-                    <p className="small mb-0">System clear, all tasks handled!</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Barber Performance Leaderboard */}
-      {barberRatings.length > 0 && (
-        <div className="row mb-3">
-          <div className="col-12">
-            <div className="content-card">
-              <div className="card-header d-flex justify-content-between align-items-center">
-                <h5 className="mb-0">
-                  <i className="bi bi-award me-2 text-warning"></i>
-                  Barber Performance
-                </h5>
-              </div>
-              <div className="card-body">
-                <div className="row g-3">
-                  {barberRatings.slice(0, 4).map((barber) => (
-                    <div key={barber.id} className="col-12 col-md-6 col-lg-3">
-                      <div className="p-3 rounded-4 border bg-light h-100 transition-hover">
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                          <div className="fw-bold">{barber.full_name}</div>
-                          <span className={`status-badge badge-${barber.barber_status === 'available' ? 'success' :
-                            barber.barber_status === 'busy' ? 'danger' : 'secondary'
-                            }`}>
-                            {barber.barber_status === 'available' ? 'Available' : barber.barber_status.charAt(0).toUpperCase() + barber.barber_status.slice(1)}
-                          </span>
-                        </div>
-                        <div className="d-flex align-items-center justify-content-between">
-                          <div>
-                            <div className="text-warning small mb-1">
-                              {[...Array(5)].map((_, i) => (
-                                <i key={i} className={`bi bi-star${i < Math.floor(barber.average_rating || 0) ? '-fill' : ''} me-1`}></i>
-                              ))}
-                            </div>
-                            <div className="text-muted small">{barber.total_ratings || 0} Ratings</div>
-                          </div>
-                          <div className="text-end">
-                            <div className="h4 mb-0 fw-bold">{barber.average_rating || '0'}</div>
-                            <div className="text-muted x-small">AVG SCORE</div>
-                          </div>
-                        </div>
+                      <div className="d-flex gap-2">
+                        <button className="btn btn-black text-white flex-grow-1 py-1 rounded-pill small fw-bold" onClick={() => handlePendingRequest(req.id, 'approve')}>APPROVE</button>
+                        <button className="btn btn-light border flex-grow-1 py-1 rounded-pill small fw-bold" onClick={() => handlePendingRequest(req.id, 'reject')}>REJECT</button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+            )}
+
+            <div className="section-title">
+              <i className="bi bi-grid-fill"></i> ACTION HUB
+            </div>
+            <div className="premium-card p-3 mb-4">
+              <div className="hub-item" onClick={() => navigate('/manage/appointments')}>
+                <div className="hub-icon"><i className="bi bi-calendar-check"></i></div>
+                <div>
+                  <div className="small fw-black">APPOINTMENTS</div>
+                  <div className="x-small text-muted opacity-75">Scheduling & Control</div>
+                </div>
+              </div>
+              <div className="hub-item" onClick={() => navigate('/manage/barbers')}>
+                <div className="hub-icon"><i className="bi bi-scissors"></i></div>
+                <div>
+                  <div className="small fw-black">TEAM MEMBERS</div>
+                  <div className="x-small text-muted opacity-75">Roster & Attendance</div>
+                </div>
+              </div>
+              <div className="hub-item" onClick={() => navigate('/manage/orders')}>
+                <div className="hub-icon"><i className="bi bi-bag-check"></i></div>
+                <div>
+                  <div className="small fw-black">PRODUCT ORDERS</div>
+                  <div className="x-small text-muted opacity-75">Shop Fulfillment</div>
+                </div>
+              </div>
+              <div className="hub-item" onClick={() => navigate('/settings')}>
+                <div className="hub-icon"><i className="bi bi-gear-fill"></i></div>
+                <div>
+                  <div className="small fw-black">BUSINESS SETTINGS</div>
+                  <div className="x-small text-muted opacity-75">System Configuration</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="section-title">
+              <i className="bi bi-graph-up-arrow"></i> SHOP PERFORMANCE
+            </div>
+            <div className="premium-card p-4">
+              <div className="mb-4">
+                <div className="d-flex justify-content-between mb-2">
+                  <span className="small fw-black">GLOBAL CAPACITY</span>
+                  <span className="small fw-bold">{stats.activeQueues > 0 ? 'ACTIVE' : 'IDLE'}</span>
+                </div>
+                <div className="progress bg-light" style={{ height: '6px', borderRadius: '10px' }}>
+                  <div
+                    className="progress-bar bg-black"
+                    style={{ width: `${(stats.activeQueues / (stats.totalBarbers || 1)) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              <div className="d-flex flex-column gap-3">
+                {barberRatings.slice(0, 3).map((barber) => (
+                  <div key={barber.id} className="d-flex justify-content-between align-items-center p-2 rounded-3 bg-light">
+                    <span className="small fw-black">{barber.full_name}</span>
+                    <div className="d-flex align-items-center gap-1">
+                      <i className="bi bi-star-fill text-dark small"></i>
+                      <span className="small fw-black">{barber.average_rating?.toFixed(1)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Notification Modal */}
       <NotificationModal
         isOpen={showNotificationModal}
         onClose={handleModalClose}

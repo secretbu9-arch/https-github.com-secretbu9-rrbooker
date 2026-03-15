@@ -31,12 +31,130 @@ const ManageAppointments = () => {
   const [statusUpdateData, setStatusUpdateData] = useState({ appointmentId: null, newStatus: null });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [availableSlots, setAvailableSlots] = useState([]);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
 
   // Advanced Hybrid Queue System state
   const [queueAnalytics, setQueueAnalytics] = useState({});
   const [realTimeUpdates, setRealTimeUpdates] = useState(false);
   const [efficiencyMetrics, setEfficiencyMetrics] = useState({});
+
+  // Premium Styles
+  const styles = {
+    container: {
+      padding: windowWidth < 576 ? '1.5rem 1rem' : '2rem 1.5rem',
+      backgroundColor: '#fcfcfc',
+      minHeight: '100vh',
+      fontFamily: "'Outfit', 'Inter', sans-serif"
+    },
+    headerCard: {
+      background: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+      border: '1px solid #f0f0f0',
+      marginBottom: '1.5rem',
+      display: 'flex',
+      flexDirection: windowWidth < 650 ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: windowWidth < 650 ? 'stretch' : 'center',
+      gap: '1rem'
+    },
+    card: {
+      backgroundColor: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      marginBottom: '1rem',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      position: 'relative',
+      overflow: 'hidden'
+    },
+    badge: (status) => {
+      const colors = {
+        pending: { bg: '#FFF3E0', text: '#E65100' },
+        confirmed: { bg: '#E3F2FD', text: '#0D47A1' },
+        ongoing: { bg: '#F3E5F5', text: '#7B1FA2' },
+        completed: { bg: '#E8F5E9', text: '#1B5E20' },
+        cancelled: { bg: '#FFEBEE', text: '#B71C1C' }
+      };
+      const color = colors[status] || { bg: '#f5f5f5', text: '#666' };
+      return {
+        padding: '0.4rem 0.8rem',
+        borderRadius: '10px',
+        fontSize: '0.7rem',
+        fontWeight: '700',
+        backgroundColor: color.bg,
+        color: color.text,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      };
+    },
+    primaryBtn: {
+      backgroundColor: '#1a1a1a',
+      color: '#fff',
+      border: 'none',
+      padding: '0.8rem 1.25rem',
+      borderRadius: '16px',
+      fontWeight: '600',
+      fontSize: '0.9rem',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.6rem',
+      transition: 'all 0.3s'
+    },
+    secondaryBtn: {
+      backgroundColor: '#f5f5f5',
+      color: '#1a1a1a',
+      border: 'none',
+      padding: '0.5rem 0.8rem',
+      borderRadius: '12px',
+      fontWeight: '600',
+      fontSize: '0.8rem',
+      transition: 'all 0.2s',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    tab: (active) => ({
+      padding: '0.6rem 1.25rem',
+      borderRadius: '14px',
+      fontSize: '0.85rem',
+      fontWeight: '700',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      backgroundColor: active ? '#1a1a1a' : 'transparent',
+      color: active ? '#fff' : '#888',
+      border: active ? 'none' : '1px solid transparent'
+    }),
+    modalOverlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      backdropFilter: 'blur(8px)',
+      zIndex: 1060,
+      display: 'flex',
+      alignItems: windowWidth < 576 ? 'flex-end' : 'center',
+      justifyContent: 'center',
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: windowWidth < 576 ? '100%' : '600px',
+      backgroundColor: '#fff',
+      borderRadius: windowWidth < 576 ? '32px 32px 0 0' : '28px',
+      boxShadow: '0 -10px 40px rgba(0,0,0,0.1)',
+      maxHeight: windowWidth < 576 ? '92vh' : '90vh',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      animation: windowWidth < 576 ? 'slideUp 0.4s cubic-bezier(0, 0, 0.2, 1)' : 'scaleIn 0.3s ease-out'
+    }
+  };
 
   // Allowed statuses for ManageAppointments: Only Pending, Confirmed, Ongoing, Completed, Cancelled
   const ALLOWED_STATUSES = [
@@ -121,6 +239,12 @@ const ManageAppointments = () => {
   });
 
   const [formErrors, setFormErrors] = useState({});
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     fetchInitialData();
@@ -704,307 +828,191 @@ const ManageAppointments = () => {
   }
 
   return (
-    <div className="container-fluid py-4">
-      {error && (
-        <div className="alert alert-danger alert-dismissible fade show" role="alert">
-          {error}
-          <button
-            type="button"
-            className="btn-close"
-            onClick={() => setError(null)}
-            aria-label="Close"
-          ></button>
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={styles.headerCard}>
         <div>
-          <h2 className="mb-0 fw-bold">Manage Appointments</h2>
-          <small className="text-muted">View and manage all appointments</small>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+            <i className="bi bi-calendar-check me-2" style={{ color: '#5D4037' }}></i>
+            Manage Appointments
+          </h2>
+          <p className="text-muted small mb-0">Total system appointments: {appointments.length}</p>
         </div>
-        <div className="d-flex gap-2">
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {/* Action buttons could go here */}
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <SearchAndFilter
-        type="appointments"
-        onResults={setAppointments}
-        initialFilters={filters}
-      />
+      {error && (
+        <div className="alert alert-danger rounded-4 border-0 shadow-sm d-flex align-items-center mb-4">
+          <i className="bi bi-exclamation-circle-fill me-2"></i>
+          <span className="small fw-bold">{error}</span>
+          <button className="btn-close ms-auto" onClick={() => setError(null)}></button>
+        </div>
+      )}
 
-      {/* Filters Row */}
-      <div className="row mb-3">
-        <div className="col-md-12">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body py-2">
-              <div className="d-flex align-items-center gap-3">
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="doubleBookingFilter"
-                    checked={filters.double_booking_only}
-                    onChange={(e) => setFilters(prev => ({
-                      ...prev,
-                      double_booking_only: e.target.checked
-                    }))}
-                  />
-                  <label className="form-check-label fw-medium" htmlFor="doubleBookingFilter">
-                    <i className="bi bi-people me-2 text-info"></i>
-                    Show only "Book a Friend" appointments
-                  </label>
-                </div>
-                {filters.double_booking_only && (
-                  <span className="badge bg-info bg-opacity-20 text-info">
-                    <i className="bi bi-funnel me-1"></i>
-                    Filtering friend bookings
-                  </span>
-                )}
-              </div>
+      {/* Navigation Tabs */}
+      <div className="d-flex gap-2 mb-3 overflow-auto pb-2" style={{ whiteSpace: 'nowrap' }}>
+        <div style={styles.tab(filters.date_range === 'today')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'today' }))}>TODAY</div>
+        <div style={styles.tab(filters.date_range === 'week')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'week' }))}>UPCOMING</div>
+        <div style={styles.tab(filters.date_range === 'month')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'month' }))}>MONTHLY</div>
+        <div style={styles.tab(filters.date_range === 'all')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'all' }))}>VIEW ALL</div>
+      </div>
+
+      {/* Filters & Search Card */}
+      <div style={{ ...styles.headerCard, padding: '1rem', background: '#fff' }}>
+        <div className="row g-2 w-100 align-items-center">
+          <div className="col-md-6">
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-white border-end-0 rounded-start-4">
+                <i className="bi bi-search text-muted"></i>
+              </span>
+              <input 
+                type="text" 
+                className="form-control border-start-0 rounded-end-4 bg-white" 
+                placeholder="Search by customer or barber..."
+                value={filters.search}
+                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              />
             </div>
+          </div>
+          <div className="col-md-3">
+            <select 
+              className="form-select form-select-sm rounded-4" 
+              value={filters.status}
+              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+            >
+              <option value="">All Statuses</option>
+              {ALLOWED_STATUSES.map(s => (
+                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-3">
+            <select 
+              className="form-select form-select-sm rounded-4" 
+              value={filters.barber_id}
+              onChange={(e) => setFilters(prev => ({ ...prev, barber_id: e.target.value }))}
+            >
+              <option value="">All Barbers</option>
+              {barbers.map(b => (
+                <option key={b.id} value={b.id}>{b.full_name}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
+      <div style={{ ...styles.headerCard, padding: '0.8rem 1.25rem', background: '#f8f9fa', marginBottom: '1rem' }}>
+        <div className="form-check form-switch mb-0">
+          <input 
+            className="form-check-input" 
+            type="checkbox" 
+            id="doubleBookingSwitch"
+            checked={filters.double_booking_only}
+            onChange={(e) => setFilters(prev => ({ ...prev, double_booking_only: e.target.checked }))}
+          />
+          <label className="form-check-label small fw-bold text-muted" htmlFor="doubleBookingSwitch">
+            <i className="bi bi-people me-1"></i> SHOW FRIEND BOOKINGS ONLY
+          </label>
+        </div>
+      </div>
+
       {/* Appointments Table */}
-      <div className="card">
-        <div className="card-body">
-          {appointments.length === 0 ? (
-            <div className="text-center py-5">
-              <div className="text-muted mb-3">
-                <i className="bi bi-calendar-x fs-1"></i>
-              </div>
-              <p>No appointments found matching your criteria.</p>
-            </div>
-          ) : (
+      <div className="appointments-table-container">
+        {loading ? (
+          <div className="text-center py-5"><div className="spinner-border text-dark"></div></div>
+        ) : appointments.length === 0 ? (
+          <div className="text-center py-5 bg-white rounded-5 border">
+            <i className="bi bi-calendar-x fs-1 text-muted opacity-25"></i>
+            <p className="text-muted mt-3 fw-bold">No appointments found</p>
+          </div>
+        ) : (
+          <div className="card border-0 shadow-sm" style={{ borderRadius: '24px', overflow: 'hidden' }}>
             <div className="table-responsive">
-              <table className="table table-hover">
-                <thead>
+              <table className="table table-hover align-middle mb-0" style={{ backgroundColor: '#fff' }}>
+                <thead style={{ backgroundColor: '#fcfcfc', borderBottom: '1px solid #eee' }}>
                   <tr>
-                    <th>Date & Time</th>
-                    <th>
-                      Customer
-                      <small className="text-muted d-block">(includes friend bookings)</small>
-                    </th>
-                    <th>Barber</th>
-                    <th>Service</th>
-                    <th className="text-center">Queue #</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>DATE & TIME</th>
+                    <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>CUSTOMER</th>
+                    <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>BARBER</th>
+                    <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>SERVICE</th>
+                    <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }}>STATUS</th>
+                    <th style={{ padding: '1.25rem', fontSize: '0.75rem', fontWeight: '800', color: '#888', letterSpacing: '1px', textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {appointments
                     .filter(appointment => {
-                      // Apply double booking filter
-                      if (filters.double_booking_only) {
-                        if (!appointment.is_double_booking) return false;
-                      }
-
-                      // Apply add-on filter
+                      if (filters.double_booking_only && !appointment.is_double_booking) return false;
                       return true;
                     })
-                    .map((appointment) => {
+                    .map(appointment => {
                       const canonicalStatus = normalizeStatus(appointment.status) || appointment.status;
-                      const displayStatus = canonicalStatus || appointment.status || '';
-
-                      const isPriorityOne = appointment.priority_level === '1';
-                      const isUrgent = appointment.priority_level === 'urgent';
-                      const hasHighPriority = isPriorityOne || isUrgent;
-
                       return (
-                        <tr key={appointment.id} className={isPriorityOne ? 'table-danger border-left-priority' : isUrgent ? 'table-warning opacity-90' : ''}>
-                          <td>
-                            {formatDate(appointment.appointment_date)} <br />
-                            <small className="text-muted">{formatTime(appointment.appointment_time)}</small>
+                        <tr key={appointment.id} style={{ transition: 'all 0.2s' }}>
+                          <td style={{ padding: '1.25rem' }}>
+                            <div className="fw-800" style={{ fontSize: '0.9rem', color: '#1a1a1a' }}>{formatDate(appointment.appointment_date)}</div>
+                            <div className="small text-muted fw-bold" style={{ fontSize: '0.75rem' }}>
+                              <i className="bi bi-clock me-1"></i> {formatTime(appointment.appointment_time) || 'QUEUE'}
+                            </div>
+                            {appointment.queue_position && (
+                              <span className="badge bg-dark rounded-pill mt-1" style={{ fontSize: '0.6rem' }}>Q#{appointment.queue_position}</span>
+                            )}
                           </td>
-                          <td>
-                            <div className="d-flex align-items-start">
-                              <div className="me-3 d-flex flex-column align-items-center">
-                                {appointment.is_double_booking ? (
-                                  <div className="text-center">
-                                    <div className="bg-info text-white rounded-circle d-flex align-items-center justify-content-center mb-1"
-                                      style={{ width: '32px', height: '32px' }}>
-                                      <i className="bi bi-people-fill fs-6"></i>
-                                    </div>
-                                    <small className="text-info fw-bold">Double</small>
-                                  </div>
-                                ) : (
-                                  <div className="text-center">
-                                    <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mb-1"
-                                      style={{ width: '32px', height: '32px' }}>
-                                      <i className="bi bi-person-fill fs-6"></i>
-                                    </div>
-                                    <small className="text-primary fw-bold">Single</small>
-                                  </div>
-                                )}
+                          <td style={{ padding: '1.25rem' }}>
+                            <div className="d-flex align-items-center gap-3">
+                              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: appointment.is_double_booking ? '#E3F2FD' : '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <i className={`bi bi-person${appointment.is_double_booking ? '-fill text-primary' : ''} fs-5`}></i>
                               </div>
-                              <div className="flex-grow-1">
-                                <div className="fw-bold text-dark">
-                                  {appointment.customer?.full_name || 'Unknown'}
-                                </div>
-                                <small className="text-muted d-block mb-2">
-                                  <i className="bi bi-telephone me-1"></i>
-                                  {appointment.customer?.phone || 'No phone'}
-                                </small>
-                                {appointment.is_double_booking && appointment.double_booking_data && (
-                                  <div className="p-2 bg-info bg-opacity-10 border border-info rounded">
-                                    <div className="text-dark">
-                                      <div className="mb-1">
-                                        <i className="bi bi-person-check me-1 text-info"></i>
-                                        <strong>Service For:</strong> {appointment.double_booking_data.friend_name || 'Friend'}
-                                      </div>
-                                      {appointment.double_booking_data.friend_phone && (
-                                        <div className="mb-1">
-                                          <i className="bi bi-telephone me-1 text-info"></i>
-                                          <strong>Contact Number:</strong> {appointment.double_booking_data.friend_phone}
-                                        </div>
-                                      )}
-                                      <div className="mb-1">
-                                        <i className="bi bi-person-plus me-1 text-info"></i>
-                                        <strong>Booked By:</strong> {appointment.double_booking_data.booked_by || 'Customer'}
-                                      </div>
-                                      {appointment.customer?.phone && appointment.customer.phone !== 'No phone' && (
-                                        <div className="mb-0">
-                                          <i className="bi bi-telephone-fill me-1 text-info"></i>
-                                          <strong>Contact Number of Booked Person:</strong> {appointment.customer.phone}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                              <div>
+                                <div className="fw-800" style={{ fontSize: '0.9rem' }}>{appointment.customer?.full_name || 'Anonymous'}</div>
+                                <div className="small text-muted" style={{ fontSize: '0.75rem' }}>{appointment.customer?.phone || '--'}</div>
+                                {appointment.is_double_booking && (
+                                  <span className="badge bg-info text-white mt-1" style={{ fontSize: '0.6rem' }}>FRIEND BOOKING</span>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td>{appointment.barber?.full_name || 'Unknown'}</td>
-                          <td>
-                            {appointment.service?.name || 'Unknown'} <br />
-                            <small className="text-muted">{appointment.service?.duration} min</small>
-                            {(() => {
-                              if (!appointment.add_ons_data) return null;
-
-                              const addOnIds = parseAddOnsData(appointment.add_ons_data);
-
-                              if (!addOnIds || addOnIds.length === 0) return null;
-                              if (!addOns || addOns.length === 0) return null;
-
-                              // Fetch full add-on data using UUIDs from database
-                              const appointmentAddOns = addOnIds.map(addonId => {
-                                // First, try to find by original ID (in case it's already a UUID)
-                                let addon = addOns.find(a => a.id === addonId);
-
-                                // If not found, map legacy ID to UUID and try again
-                                if (!addon) {
-                                  const mappedIds = mapLegacyAddonIds([addonId], addOns);
-                                  if (mappedIds.length > 0 && mappedIds[0]) {
-                                    addon = addOns.find(a => a.id === mappedIds[0]);
-                                  }
-                                }
-
-                                // If found, return full addon data from database
-                                if (addon) {
-                                  return {
-                                    name: addon.name,
-                                    price: addon.price,
-                                    duration: addon.duration,
-                                    id: addon.id
-                                  };
-                                }
-
-                                // If not found, skip it
-                                return null;
-                              }).filter(Boolean);
-
-                              if (appointmentAddOns.length > 0) {
-                                return (
-                                  <div className="mt-2">
-                                    <small className="text-muted d-block mb-1">
-                                      <i className="bi bi-plus-circle me-1"></i>
-                                      <strong>Add-ons:</strong>
-                                    </small>
-                                    {appointmentAddOns.map((addon, index) => (
-                                      <span key={index} className="badge bg-secondary me-1 mb-1">
-                                        {addon.name} {addon.price > 0 && `(₱${addon.price})`}
-                                      </span>
-                                    ))}
-                                  </div>
-                                );
-                              }
-
-                              return null;
-                            })()}
+                          <td style={{ padding: '1.25rem' }}>
+                            <div className="small fw-700" style={{ color: '#5D4037' }}>{appointment.barber?.full_name || '--'}</div>
                           </td>
-                          <td className="text-center">
-                            {appointment.queue_position !== null && appointment.queue_position !== undefined ? (
-                              <div className="d-flex justify-content-center align-items-center">
-                                <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold"
-                                  style={{ width: '40px', height: '40px', fontSize: '16px' }}>
-                                  {appointment.queue_position}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-muted small">-</span>
-                            )}
+                          <td style={{ padding: '1.25rem' }}>
+                            <div className="small fw-800" style={{ fontSize: '0.85rem' }}>{appointment.service?.name || '--'}</div>
+                            <div className="small text-muted" style={{ fontSize: '0.7rem' }}>₱{appointment.service?.price || 0} • {appointment.service?.duration || 0}m</div>
                           </td>
-                          <td>
-                            <span className={`badge bg-${getStatusColor(displayStatus)}`}>
-                              {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
-                            </span>
-                            {appointment.is_double_booking && (
-                              <span className="badge bg-info ms-1">
-                                <i className="bi bi-people me-1"></i>
-                                Friend
-                              </span>
-                            )}
+                          <td style={{ padding: '1.25rem' }}>
+                            <span style={styles.badge(canonicalStatus)}>{canonicalStatus}</span>
                           </td>
-                          <td>
-                            <div className="dropdown">
-                              <button className="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id={`dropdown-${appointment.id}`} data-bs-toggle="dropdown" aria-expanded="false">
-                                Actions
+                          <td style={{ padding: '1.25rem', textAlign: 'right' }}>
+                            <div className="d-flex gap-2 justify-content-end">
+                              <button style={styles.secondaryBtn} className="touch-btn" title="View Details" onClick={() => handleViewDetails(appointment)}>
+                                <i className="bi bi-eye"></i>
                               </button>
-                              <ul className="dropdown-menu" aria-labelledby={`dropdown-${appointment.id}`}>
-                                <li>
-                                  <button className="dropdown-item" onClick={() => handleViewDetails(appointment)}>
-                                    <i className="bi bi-eye me-2"></i>View Details
-                                  </button>
-                                </li>
-                                <li>
-                                  <button className="dropdown-item" onClick={() => handleEdit(appointment)}>
-                                    <i className="bi bi-pencil me-2"></i>Edit
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    className="dropdown-item text-danger fw-bold"
-                                    onClick={() => handleApproveEmergency(appointment)}
-                                    disabled={
-                                      appointment.priority_level === '1' ||
-                                      appointment.status === 'ongoing' ||
-                                      ['completed', 'cancelled', 'cancel', 'done'].includes(appointment.status?.toLowerCase()) ||
-                                      appointment.appointment_date < new Date().toISOString().split('T')[0]
-                                    }
-                                  >
-                                    <i className="bi bi-lightning-charge-fill me-2"></i>Approve Urgent Priority
-                                  </button>
-                                </li>
-                                <li><hr className="dropdown-divider" /></li>
-                                <li className="dropdown-header">Change Status</li>
-                                {ALLOWED_STATUSES.map(status => (
-                                  <li key={status}>
-                                    {status !== displayStatus && (
-                                      <button
-                                        className="dropdown-item"
-                                        onClick={() => handleStatusChange(appointment.id, status)}
-                                      >
-                                        <i className={`bi bi-check-circle me-2 text-${getStatusColor(status)}`}></i>
-                                        Mark as {status.charAt(0).toUpperCase() + status.slice(1)}
-                                      </button>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
+                              <button style={styles.secondaryBtn} className="touch-btn" title="Edit" onClick={() => handleEdit(appointment)}>
+                                <i className="bi bi-pencil"></i>
+                              </button>
+                              
+                              {/* Approve Urgent Override */}
+                              {appointment.priority_level !== '1' && 
+                               appointment.status !== 'ongoing' && 
+                               !['completed', 'cancelled', 'cancel', 'done'].includes(appointment.status?.toLowerCase()) && 
+                               appointment.appointment_date >= new Date().toISOString().split('T')[0] && (
+                                <button style={{ ...styles.secondaryBtn, color: '#E65100', background: '#FFF3E0' }} className="touch-btn" title="Approve Urgent" onClick={() => handleApproveEmergency(appointment)}>
+                                  <i className="bi bi-lightning-charge-fill"></i>
+                                </button>
+                              )}
+
+                              {['pending', 'confirmed'].includes(canonicalStatus) && (
+                                <button style={{ ...styles.secondaryBtn, color: '#1B5E20', background: '#E8F5E9' }} className="touch-btn" title="Mark Done" onClick={() => handleStatusChange(appointment.id, 'completed')}>
+                                  <i className="bi bi-check2-circle"></i>
+                                </button>
+                              )}
+                              {canonicalStatus !== 'cancelled' && (
+                                <button style={{ ...styles.secondaryBtn, color: '#B71C1C', background: '#FFEBEE' }} className="touch-btn" title="Cancel" onClick={() => handleStatusChange(appointment.id, 'cancelled')}>
+                                  <i className="bi bi-x-circle"></i>
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1013,723 +1021,199 @@ const ManageAppointments = () => {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Details Modal */}
-      {showDetailsModal && selectedAppointment && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content shadow-lg">
-              <div className="modal-header bg-primary text-white">
-                <h5 className="modal-title">
-                  <i className="bi bi-calendar-check me-2"></i>
-                  Appointment Details
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={closeDetailsModal}
-                ></button>
+      {/* Modals Container */}
+      {(showDetailsModal || showEditModal || showStatusModal) && (
+        <div style={styles.modalOverlay} onClick={(e) => {
+          if (e.target === e.currentTarget && !loading) {
+            setShowDetailsModal(false); setShowEditModal(false); setShowStatusModal(false);
+          }
+        }}>
+          <div style={styles.modalContent}>
+            {/* Drag Indicator */}
+            {windowWidth < 576 && (
+              <div style={{ padding: '12px', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ width: '40px', height: '4px', backgroundColor: '#e0e0e0', borderRadius: '2px' }}></div>
               </div>
-              <div className="modal-body p-4">
-                {/* Header Section with Status and Queue */}
-                <div className="mb-4 pb-3 border-bottom">
-                  <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-                    {selectedAppointment.queue_position !== null && selectedAppointment.queue_position !== undefined && (
-                      <div className="rounded-circle bg-info text-white d-flex align-items-center justify-content-center fw-bold"
-                        style={{ width: '50px', height: '50px', fontSize: '20px' }}>
-                        {selectedAppointment.queue_position}
+            )}
+
+            {/* Modal Header */}
+            <div className="p-4 border-bottom d-flex justify-content-between align-items-center">
+              <h5 className="m-0 fw-800">
+                {showDetailsModal && 'Appointment Details'}
+                {showEditModal && 'Edit Appointment'}
+                {showStatusModal && 'Update Status'}
+              </h5>
+              <button className="btn-close" disabled={loading} onClick={() => {
+                setShowDetailsModal(false); setShowEditModal(false); setShowStatusModal(false);
+              }}></button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 overflow-auto premium-scroll">
+              {showDetailsModal && selectedAppointment && (
+                <div className="d-flex flex-column gap-4">
+                  <div className="d-flex align-items-center gap-3">
+                    <div style={{ width: '64px', height: '64px', borderRadius: '20px', backgroundColor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <i className="bi bi-person fs-2 text-muted"></i>
+                    </div>
+                    <div>
+                      <h4 className="fw-800 m-0">{selectedAppointment.customer?.full_name || 'Anonymous'}</h4>
+                      <div className="text-muted small fw-bold mt-1">
+                        <i className="bi bi-telephone me-1"></i> {selectedAppointment.customer?.phone || '--'}
                       </div>
-                    )}
-                    <span className={`badge bg-${getStatusColor(selectedAppointment.status)} fs-6 px-3 py-2`}>
-                      <i className={`bi bi-${selectedAppointment.status === 'ongoing' ? 'scissors' : selectedAppointment.status === 'completed' ? 'check-circle-fill' : selectedAppointment.status === 'cancelled' ? 'x-circle-fill' : selectedAppointment.status === 'confirmed' ? 'check-circle' : 'clock-fill'} me-2`}></i>
-                      {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
-                    </span>
-                    {selectedAppointment.is_urgent && (
-                      <span className="badge bg-warning text-dark fs-6 px-3 py-2">
-                        <i className="bi bi-lightning-fill me-1"></i>
-                        Urgent
-                      </span>
-                    )}
-                    {selectedAppointment.is_double_booking && (
-                      <span className="badge bg-info fs-6 px-3 py-2">
-                        <i className="bi bi-people me-1"></i>
-                        Double Booking
-                      </span>
-                    )}
+                    </div>
                   </div>
-                  <div className="d-flex align-items-center mb-2">
-                    <i className="bi bi-calendar3 me-2 text-primary fs-5"></i>
-                    <h4 className="mb-0">{formatDate(selectedAppointment.appointment_date)}</h4>
+
+                  <div className="row g-3">
+                    <div className="col-6">
+                      <div className="p-3 bg-light rounded-4">
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-1">BARBER</div>
+                        <div className="fw-800 small">{selectedAppointment.barber?.full_name || '--'}</div>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="p-3 bg-light rounded-4">
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-1">SERVICE</div>
+                        <div className="fw-800 small text-truncate">{selectedAppointment.service?.name || '--'}</div>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="p-3 bg-light rounded-4">
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-1">DATE</div>
+                        <div className="fw-800 small">{formatDate(selectedAppointment.appointment_date)}</div>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="p-3 bg-light rounded-4">
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-1">TIME</div>
+                        <div className="fw-800 small">{formatTime(selectedAppointment.appointment_time) || 'QUEUE'}</div>
+                      </div>
+                    </div>
                   </div>
-                  {selectedAppointment.appointment_time && (
-                    <div className="d-flex align-items-center">
-                      <i className="bi bi-clock me-2 text-muted"></i>
-                      <span className="text-muted">{formatTime(selectedAppointment.appointment_time)}</span>
+
+                  {selectedAppointment.is_double_booking && selectedAppointment.double_booking_data && (
+                    <div className="p-3 border border-info rounded-4 bg-info bg-opacity-10">
+                      <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#0288D1', letterSpacing: '1px' }} className="mb-2">
+                        <i className="bi bi-people-fill me-1"></i> FRIEND BOOKING DETAILS
+                      </div>
+                      <div className="small fw-800 mb-1">Name: {selectedAppointment.double_booking_data.friend_name}</div>
+                      <div className="small text-muted mb-1">Phone: {selectedAppointment.double_booking_data.friend_phone || '--'}</div>
+                      <div className="small text-muted mt-2 pt-2 border-top border-info border-opacity-25" style={{ fontSize: '0.7rem' }}>
+                        Booked by: {selectedAppointment.double_booking_data.booked_by}
+                      </div>
                     </div>
                   )}
-                </div>
 
-                <div className="row mb-4">
-                  <div className="col-md-6 mb-3">
-                    <div className="card border-0 bg-light h-100">
-                      <div className="card-body">
-                        <h6 className="card-title text-primary mb-3">
-                          <i className="bi bi-person-fill me-2"></i>
-                          Customer Information
-                        </h6>
-                        <div className="mb-2">
-                          <strong className="text-muted small d-block">Name</strong>
-                          <span className="fs-6">{selectedAppointment.customer?.full_name || 'Unknown'}</span>
-                        </div>
-                        <div className="mb-2">
-                          <strong className="text-muted small d-block">Email</strong>
-                          <span className="fs-6">{selectedAppointment.customer?.email || 'N/A'}</span>
-                        </div>
-                        <div className="mb-0">
-                          <strong className="text-muted small d-block">Phone</strong>
-                          <span className="fs-6">
-                            <i className="bi bi-telephone me-1"></i>
-                            {selectedAppointment.customer?.phone || 'N/A'}
-                          </span>
-                        </div>
-
-                        {/* Double Booking Information */}
-                        {selectedAppointment.is_double_booking && selectedAppointment.double_booking_data && (
-                          <div className="mt-3 pt-3 border-top">
-                            <h6 className="text-info mb-2">
-                              <i className="bi bi-people me-2"></i>
-                              Double Booking Details
-                            </h6>
-                            <div className="small">
-                              <div className="mb-2">
-                                <strong>Service For:</strong> {selectedAppointment.double_booking_data.friend_name || 'Friend'}
-                              </div>
-                              {selectedAppointment.double_booking_data.friend_phone && (
-                                <div className="mb-2">
-                                  <strong>Contact Number:</strong> {selectedAppointment.double_booking_data.friend_phone}
-                                </div>
-                              )}
-                              <div className="mb-2">
-                                <strong>Booked By:</strong> {selectedAppointment.double_booking_data.booked_by || 'Customer'}
-                              </div>
-                              {selectedAppointment.customer?.phone && selectedAppointment.customer.phone !== 'No phone' && (
-                                <div className="mb-0">
-                                  <strong>Contact Number of Booked Person:</strong> {selectedAppointment.customer.phone}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                  {selectedAppointment.notes && (
+                    <div className="p-3 border rounded-4">
+                      <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-2">NOTES</div>
+                      <p className="small m-0 text-muted">{selectedAppointment.notes}</p>
                     </div>
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <div className="card border-0 bg-light h-100">
-                      <div className="card-body">
-                        <h6 className="card-title text-primary mb-3">
-                          <i className="bi bi-scissors me-2"></i>
-                          Barber Information
-                        </h6>
-                        <div className="mb-2">
-                          <strong className="text-muted small d-block">Name</strong>
-                          <span className="fs-6">{selectedAppointment.barber?.full_name || 'Unknown'}</span>
-                        </div>
-                        <div className="mb-2">
-                          <strong className="text-muted small d-block">Email</strong>
-                          <span className="fs-6">{selectedAppointment.barber?.email || 'N/A'}</span>
-                        </div>
-                        {selectedAppointment.barber?.phone && (
-                          <div className="mb-0">
-                            <strong className="text-muted small d-block">Phone</strong>
-                            <span className="fs-6">
-                              <i className="bi bi-telephone me-1"></i>
-                              {selectedAppointment.barber.phone}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  )}
 
-                <div className="card border-0 bg-light mb-4">
-                  <div className="card-body">
-                    <h6 className="card-title text-primary mb-3">
-                      <i className="bi bi-list-check me-2"></i>
-                      Services & Add-ons
-                    </h6>
-
-                    {/* Main Service */}
-                    <div className="mb-3 p-3 bg-white rounded border">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <strong className="d-block fs-6">{selectedAppointment.service?.name || 'Unknown'}</strong>
-                          <small className="text-muted">
-                            <i className="bi bi-clock me-1"></i>
-                            {selectedAppointment.service?.duration || 0} min
-                          </small>
-                        </div>
-                        <div className="text-end">
-                          <span className="fs-6 fw-bold text-success">₱{selectedAppointment.service?.price || 0}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Add-ons */}
-                    {(() => {
-                      if (!selectedAppointment.add_ons_data) return null;
-
-                      const addOnIds = parseAddOnsData(selectedAppointment.add_ons_data);
-
-                      if (!addOnIds || addOnIds.length === 0) return null;
-                      if (!addOns || addOns.length === 0) return null;
-
-                      const appointmentAddOns = addOnIds.map(addonId => {
-                        let addon = addOns.find(a => a.id === addonId);
-
-                        if (!addon) {
-                          const mappedIds = mapLegacyAddonIds([addonId], addOns);
-                          if (mappedIds.length > 0 && mappedIds[0]) {
-                            addon = addOns.find(a => a.id === mappedIds[0]);
-                          }
-                        }
-
-                        if (addon) {
-                          return {
-                            name: addon.name,
-                            price: addon.price,
-                            duration: addon.duration,
-                            id: addon.id
-                          };
-                        }
-
-                        return null;
-                      }).filter(Boolean);
-
-                      if (appointmentAddOns.length > 0) {
-                        return (
-                          <>
-                            <div className="mb-3">
-                              <small className="text-muted fw-bold d-block mb-2">Add-ons:</small>
-                              <div className="row g-2">
-                                {appointmentAddOns.map((addon, index) => (
-                                  <div key={index} className="col-md-6">
-                                    <div className="d-flex justify-content-between align-items-center p-2 bg-white rounded border">
-                                      <div>
-                                        <strong className="d-block small">{addon.name}</strong>
-                                        {addon.duration > 0 && (
-                                          <small className="text-muted">
-                                            <i className="bi bi-clock me-1"></i>
-                                            {addon.duration} min
-                                          </small>
-                                        )}
-                                      </div>
-                                      <div className="text-end">
-                                        <span className="fw-bold text-success small">₱{addon.price || 0}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </>
-                        );
-                      }
-
-                      return null;
-                    })()}
-
-                    {/* Total */}
-                    <div className="pt-3 border-top">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <strong className="fs-6">Total Duration</strong>
-                          <div className="text-muted small">
-                            <i className="bi bi-clock me-1"></i>
-                            {(() => {
-                              const serviceDuration = selectedAppointment.service?.duration || 0;
-                              let addOnDuration = 0;
-
-                              if (selectedAppointment.add_ons_data) {
-                                const addOnIds = parseAddOnsData(selectedAppointment.add_ons_data);
-                                if (addOnIds && addOnIds.length > 0 && addOns && addOns.length > 0) {
-                                  addOnDuration = addOnIds.map(addonId => {
-                                    let addon = addOns.find(a => a.id === addonId);
-                                    if (!addon) {
-                                      const mappedIds = mapLegacyAddonIds([addonId], addOns);
-                                      if (mappedIds.length > 0 && mappedIds[0]) {
-                                        addon = addOns.find(a => a.id === mappedIds[0]);
-                                      }
-                                    }
-                                    return addon?.duration || 0;
-                                  }).reduce((sum, duration) => sum + duration, 0);
-                                }
-                              }
-
-                              return serviceDuration + addOnDuration;
-                            })()} minutes
-                          </div>
-                        </div>
-                        <div className="text-end">
-                          <strong className="text-muted small d-block mb-1">Total Price</strong>
-                          <span className="fs-4 fw-bold text-success">
-                            ₱{selectedAppointment.total_price || selectedAppointment.service?.price || 0}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedAppointment.notes && (
-                  <div className="card border-0 bg-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title text-primary mb-3">
-                        <i className="bi bi-sticky me-2"></i>
-                        Notes
-                      </h6>
-                      <p className="mb-0">{selectedAppointment.notes}</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedAppointment.priority_level && (
-                  <div className="card border-0 bg-light">
-                    <div className="card-body">
-                      <h6 className="card-title text-primary mb-3">
-                        <i className="bi bi-flag me-2"></i>
-                        Priority Level
-                      </h6>
-                      <span className={`badge bg-${selectedAppointment.priority_level === 'urgent' ? 'danger' : 'info'} fs-6 px-3 py-2`}>
-                        {selectedAppointment.priority_level.charAt(0).toUpperCase() + selectedAppointment.priority_level.slice(1)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={closeDetailsModal}
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    closeDetailsModal();
-                    handleEdit(selectedAppointment);
-                  }}
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {showEditModal && selectedAppointment && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content shadow-lg">
-              <div className="modal-header bg-primary text-white">
-                <h5 className="modal-title">
-                  <i className="bi bi-pencil-square me-2"></i>
-                  Edit Appointment
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={closeEditModal}
-                ></button>
-              </div>
-              <div className="modal-body p-4">
-                <form onSubmit={handleSubmit}>
-                  {/* Customer Info - Read Only */}
-                  <div className="card border-0 bg-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title text-primary mb-3">
-                        <i className="bi bi-person-fill me-2"></i>
-                        Customer Information
-                      </h6>
-                      <div className="row">
-                        <div className="col-md-6">
-                          <strong className="text-muted small d-block">Name</strong>
-                          <span className="fs-6">{selectedAppointment.customer?.full_name || 'Unknown'}</span>
-                        </div>
-                        <div className="col-md-6">
-                          <strong className="text-muted small d-block">Phone</strong>
-                          <span className="fs-6">{selectedAppointment.customer?.phone || 'N/A'}</span>
-                        </div>
-                      </div>
-                      <div className="form-text mt-2">
-                        <i className="bi bi-info-circle me-1"></i>
-                        Customer information cannot be changed
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Barber Selection */}
-                  <div className="card border-0 bg-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title text-primary mb-3">
-                        <i className="bi bi-scissors me-2"></i>
-                        Barber Selection
-                      </h6>
-                      <select
-                        className={`form-select form-select-lg ${formErrors.barber_id ? 'is-invalid' : ''}`}
-                        id="barber_id"
-                        name="barber_id"
-                        value={formData.barber_id}
-                        onChange={handleChange}
-                        required
-                      >
-                        <option value="">Select Barber</option>
-                        {barbers.map((barber) => (
-                          <option key={barber.id} value={barber.id}>
-                            {barber.full_name}
-                          </option>
-                        ))}
-                      </select>
-                      {formErrors.barber_id && (
-                        <div className="invalid-feedback">{formErrors.barber_id}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Service Selection */}
-                  <div className="card border-0 bg-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title text-primary mb-3">
-                        <i className="bi bi-list-check me-2"></i>
-                        Service Selection
-                      </h6>
-                      <select
-                        className={`form-select form-select-lg ${formErrors.service_id ? 'is-invalid' : ''}`}
-                        id="service_id"
-                        name="service_id"
-                        value={formData.service_id}
-                        onChange={handleChange}
-                        required
-                      >
-                        <option value="">Select Service</option>
-                        {services.map((service) => (
-                          <option key={service.id} value={service.id}>
-                            {service.name} - ₱{service.price} ({service.duration} min)
-                          </option>
-                        ))}
-                      </select>
-                      {formErrors.service_id && (
-                        <div className="invalid-feedback">{formErrors.service_id}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Appointment Type & Date */}
-                  <div className="card border-0 bg-light mb-4">
-                    <div className="card-body">
-                      <h6 className="card-title text-primary mb-3">
-                        <i className="bi bi-calendar3 me-2"></i>
-                        Appointment Details
-                      </h6>
-
-                      <div className="row mb-3">
-                        <div className="col-md-6">
-                          <label htmlFor="appointment_type" className="form-label fw-bold">Appointment Type</label>
-                          <select
-                            className="form-select form-select-lg"
-                            id="appointment_type"
-                            name="appointment_type"
-                            value={formData.appointment_type || selectedAppointment.appointment_type || 'queue'}
-                            onChange={handleChange}
-                          >
-                            <option value="queue">Queue</option>
-                            <option value="scheduled">Scheduled</option>
-                          </select>
-                          <div className="form-text">
-                            <i className="bi bi-info-circle me-1"></i>
-                            Queue: No specific time, position-based. Scheduled: Specific time slot.
-                          </div>
-                        </div>
-
-                        <div className="col-md-6">
-                          <label htmlFor="appointment_date" className="form-label fw-bold">Date</label>
-                          <input
-                            type="date"
-                            className={`form-control form-control-lg ${formErrors.appointment_date ? 'is-invalid' : ''}`}
-                            id="appointment_date"
-                            name="appointment_date"
-                            value={formData.appointment_date}
-                            onChange={handleChange}
-                            required
-                          />
-                          {formErrors.appointment_date && (
-                            <div className="invalid-feedback">{formErrors.appointment_date}</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Queue Position or Time Slot */}
-                      {(formData.appointment_type || selectedAppointment.appointment_type) === 'queue' ? (
-                        <div className="row">
-                          <div className="col-md-6">
-                            <label htmlFor="queue_position" className="form-label fw-bold">
-                              <i className="bi bi-123 me-2"></i>
-                              Queue Position
-                            </label>
-                            <input
-                              type="number"
-                              className="form-control form-control-lg"
-                              id="queue_position"
-                              name="queue_position"
-                              min="1"
-                              value={formData.queue_position || selectedAppointment.queue_position || ''}
-                              onChange={handleChange}
-                              placeholder="Enter queue position"
-                            />
-                            <div className="form-text">
-                              Lower number = higher priority. Leave empty for auto-assignment.
-                            </div>
-                          </div>
-                          <div className="col-md-6">
-                            <label htmlFor="priority_level" className="form-label fw-bold">
-                              <i className="bi bi-flag me-2"></i>
-                              Priority Level
-                            </label>
-                            <select
-                              className="form-select form-select-lg"
-                              id="priority_level"
-                              name="priority_level"
-                              value={formData.priority_level || selectedAppointment.priority_level || 'normal'}
-                              onChange={handleChange}
-                            >
-                              <option value="normal">Normal</option>
-                              <option value="urgent">Urgent</option>
-                            </select>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="row">
-                          <div className="col-md-12">
-                            <label htmlFor="appointment_time" className="form-label fw-bold">
-                              <i className="bi bi-clock me-2"></i>
-                              Time Slot
-                            </label>
-                            <select
-                              className={`form-select form-select-lg ${formErrors.appointment_time ? 'is-invalid' : ''}`}
-                              id="appointment_time"
-                              name="appointment_time"
-                              value={formData.appointment_time || ''}
-                              onChange={handleChange}
-                              disabled={!formData.barber_id || !formData.appointment_date}
-                            >
-                              <option value="">Select Time</option>
-                              {availableSlots.map((time) => (
-                                <option key={time} value={time}>
-                                  {formatTime(time)}
-                                </option>
-                              ))}
-                            </select>
-                            {formErrors.appointment_time && (
-                              <div className="invalid-feedback">{formErrors.appointment_time}</div>
-                            )}
-                            {formData.barber_id && formData.appointment_date && availableSlots.length === 0 && (
-                              <div className="form-text text-danger">
-                                <i className="bi bi-exclamation-triangle me-1"></i>
-                                No available slots for this date. Please try another date.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Status & Notes */}
-                  <div className="row mb-4">
-                    <div className="col-md-6">
-                      <div className="card border-0 bg-light h-100">
-                        <div className="card-body">
-                          <h6 className="card-title text-primary mb-3">
-                            <i className="bi bi-check-circle me-2"></i>
-                            Status
-                          </h6>
-                          <select
-                            className={`form-select form-select-lg ${formErrors.status ? 'is-invalid' : ''}`}
-                            id="status"
-                            name="status"
-                            value={formData.status}
-                            onChange={handleChange}
-                            required
-                          >
-                            <option value="">Select Status</option>
-                            {ALLOWED_STATUSES.map((status) => (
-                              <option key={status} value={status}>
-                                {status.charAt(0).toUpperCase() + status.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                          {formErrors.status && (
-                            <div className="invalid-feedback">{formErrors.status}</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="col-md-6">
-                      <div className="card border-0 bg-light h-100">
-                        <div className="card-body">
-                          <h6 className="card-title text-primary mb-3">
-                            <i className="bi bi-sticky me-2"></i>
-                            Notes
-                          </h6>
-                          <textarea
-                            className="form-control"
-                            id="notes"
-                            name="notes"
-                            value={formData.notes}
-                            onChange={handleChange}
-                            rows="4"
-                            placeholder="Add any special notes or instructions..."
-                          ></textarea>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="d-flex justify-content-end gap-3">
-                    <button
-                      type="button"
-                      className="btn btn-lg btn-outline-secondary"
-                      onClick={closeEditModal}
-                    >
-                      <i className="bi bi-x-circle me-2"></i>
-                      Cancel
+                  <div className="d-flex gap-2 mt-2">
+                    <button style={{ ...styles.primaryBtn, flex: 1 }} onClick={() => { setShowDetailsModal(false); handleEdit(selectedAppointment); }}>
+                      <i className="bi bi-pencil"></i> EDIT APPOINTMENT
                     </button>
-                    <button
-                      type="submit"
-                      className="btn btn-lg btn-primary"
+                    <button style={{ ...styles.secondaryBtn, width: '50px', height: '50px', borderRadius: '16px' }} onClick={() => setShowDetailsModal(false)}>
+                      <i className="bi bi-x-lg"></i>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {showEditModal && (
+                <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <label className="small fw-bold mb-1">Barber</label>
+                      <select className="form-select rounded-3" name="barber_id" value={formData.barber_id} onChange={handleChange} required>
+                        <option value="">Select Barber</option>
+                        {barbers.map(b => (
+                          <option key={b.id} value={b.id}>{b.full_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-12">
+                      <label className="small fw-bold mb-1">Service</label>
+                      <select className="form-select rounded-3" name="service_id" value={formData.service_id} onChange={handleChange} required>
+                        <option value="">Select Service</option>
+                        {services.map(s => (
+                          <option key={s.id} value={s.id}>{s.name} - ₱{s.price}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label className="small fw-bold mb-1">Date</label>
+                      <input type="date" className="form-control rounded-3" name="appointment_date" value={formData.appointment_date} onChange={handleChange} required />
+                    </div>
+                    <div className="col-6">
+                      <label className="small fw-bold mb-1">Status</label>
+                      <select className="form-select rounded-3" name="status" value={formData.status} onChange={handleChange} required>
+                        {ALLOWED_STATUSES.map(s => (
+                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-12">
+                      <label className="small fw-bold mb-1">Notes</label>
+                      <textarea className="form-control rounded-3" name="notes" value={formData.notes} onChange={handleChange} rows="2"></textarea>
+                    </div>
+                  </div>
+                  <button style={{ ...styles.primaryBtn, marginTop: '1rem' }} type="submit" disabled={loading}>
+                    {loading ? 'SAVING...' : 'SAVE CHANGES'}
+                  </button>
+                </form>
+              )}
+
+              {showStatusModal && (
+                <div className="text-center py-2">
+                  <div className="mb-4">
+                    <div className="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: '80px', height: '80px' }}>
+                      <i className={`bi bi-arrow-repeat fs-1 text-${getStatusColor(statusUpdateData.newStatus)}`}></i>
+                    </div>
+                    <h5 className="fw-800">Update to {statusUpdateData.newStatus?.toUpperCase()}?</h5>
+                    <p className="text-muted small mt-2">The customer will receive a notification regarding this status change.</p>
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-light flex-fill rounded-4 py-3 fw-800 small" onClick={() => setShowStatusModal(false)} disabled={loading}>CANCEL</button>
+                    <button 
+                      className={`btn btn-${getStatusColor(statusUpdateData.newStatus)} flex-fill rounded-4 py-3 fw-800 small text-white`} 
+                      onClick={confirmStatusUpdate} 
                       disabled={loading}
                     >
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <i className="bi bi-check-circle me-2"></i>
-                          Save Changes
-                        </>
-                      )}
+                      {loading ? 'UPDATING...' : 'CONFIRM UPDATE'}
                     </button>
                   </div>
-                </form>
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-
-
-
-      {/* Status Update Modal */}
-      {showStatusModal && statusUpdateData.appointmentId && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content shadow-lg">
-              <div className="modal-header bg-primary text-white">
-                <h5 className="modal-title">
-                  <i className="bi bi-arrow-repeat me-2"></i>
-                  Update Appointment Status
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={closeStatusModal}
-                  disabled={loading}
-                ></button>
-              </div>
-              <div className="modal-body p-4">
-                {(() => {
-                  const appointment = appointments.find(apt => apt.id === statusUpdateData.appointmentId);
-                  const currentStatus = appointment?.status || 'unknown';
-                  const newStatus = statusUpdateData.newStatus;
-                  const customerName = appointment?.customer?.full_name || 'Customer';
-                  const serviceName = appointment?.service?.name || 'Service';
-
-                  return (
-                    <>
-                      <div className="mb-4">
-                        <p className="mb-2">
-                          <strong>Customer:</strong> {customerName}
-                        </p>
-                        <p className="mb-2">
-                          <strong>Service:</strong> {serviceName}
-                        </p>
-                        <p className="mb-2">
-                          <strong>Current Status:</strong>{' '}
-                          <span className={`badge bg-${getStatusColor(currentStatus)}`}>
-                            {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
-                          </span>
-                        </p>
-                        <p className="mb-0">
-                          <strong>New Status:</strong>{' '}
-                          <span className={`badge bg-${getStatusColor(newStatus)}`}>
-                            {newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}
-                          </span>
-                        </p>
-                      </div>
-
-                      <div className="alert alert-info mb-0">
-                        <i className="bi bi-info-circle me-2"></i>
-                        Are you sure you want to change the status from <strong>{currentStatus}</strong> to <strong>{newStatus}</strong>?
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={closeStatusModal}
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-${getStatusColor(statusUpdateData.newStatus)}`}
-                  onClick={confirmStatusUpdate}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2"></span>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-check-circle me-2"></i>
-                      Confirm Update
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <style>{`
+        .fw-800 { font-weight: 800; }
+        .touch-btn:active { transform: scale(0.96); }
+        .table-hover tbody tr:hover {
+          background-color: #fcfcfc !important;
+          transform: scale(1.002);
+        }
+        .premium-scroll::-webkit-scrollbar { width: 4px; }
+        .premium-scroll::-webkit-scrollbar-thumb { background: #eee; border-radius: 10px; }
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 };

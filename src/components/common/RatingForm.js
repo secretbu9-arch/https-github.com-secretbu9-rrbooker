@@ -88,10 +88,10 @@ const RatingForm = ({ appointment, onRatingSubmitted, onCancel }) => {
   };
 
   return (
-    <div className="border rounded p-3 bg-light">
-      <div className="d-flex align-items-center mb-3">
-        <i className="bi bi-star-fill text-warning me-2"></i>
-        <h6 className="mb-0">Rate Your Experience</h6>
+    <div className="border border-light rounded-4 p-4 bg-white shadow-sm">
+      <div className="d-flex align-items-center mb-4">
+        <i className="bi bi-stars text-brown-premium me-2 fs-5"></i>
+        <h6 className="mb-0 fw-bold text-dark">Rate Your Service</h6>
       </div>
       <div>
         <form onSubmit={handleSubmit}>
@@ -104,19 +104,19 @@ const RatingForm = ({ appointment, onRatingSubmitted, onCancel }) => {
 
           <div className="mb-3">
             <label className="form-label fw-bold">How was your experience?</label>
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2 mb-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
                   type="button"
-                  className={`btn btn-outline-warning p-2 ${
-                    star <= rating ? 'btn-warning text-white' : ''
+                  className={`btn p-2 transition-all rounded-circle ${
+                    star <= rating ? 'bg-brown-premium text-white scale-110' : 'bg-light text-muted opacity-50'
                   }`}
                   onClick={() => setRating(star)}
                   disabled={loading}
-                  style={{ minWidth: '45px', height: '45px' }}
+                  style={{ width: '45px', height: '45px', border: 'none' }}
                 >
-                  <i className={`bi bi-star-fill ${star <= rating ? '' : 'text-muted'}`}></i>
+                  <i className={`bi bi-star-fill ${star <= rating ? '' : 'text-secondary'}`}></i>
                 </button>
               ))}
             </div>
@@ -152,28 +152,28 @@ const RatingForm = ({ appointment, onRatingSubmitted, onCancel }) => {
           <div className="d-flex gap-2">
             <button
               type="submit"
-              className="btn btn-warning"
+              className="btn btn-brown-premium px-4 rounded-pill fw-bold"
               disabled={rating === 0 || loading}
             >
               {loading ? (
                 <>
                   <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                  Submitting...
+                  Sending...
                 </>
               ) : (
                 <>
-                  <i className="bi bi-check-circle me-2"></i>
+                  <i className="bi bi-send me-2"></i>
                   Submit Rating
                 </>
               )}
             </button>
             <button
               type="button"
-              className="btn btn-outline-secondary"
+              className="btn btn-outline-dark px-4 rounded-pill"
               onClick={onCancel}
               disabled={loading}
             >
-              <i className="bi bi-x-circle me-2"></i>
+              <i className="bi bi-x-lg me-2"></i>
               Cancel
             </button>
           </div>

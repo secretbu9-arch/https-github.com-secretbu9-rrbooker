@@ -305,15 +305,26 @@ const Notifications = () => {
           {getFilteredNotifications().slice(0, 6).map(notification => (
             <div
               key={notification.id}
-              className={`notification-item p-2 p-sm-3 border-bottom ${!notification.read ? 'bg-light' : ''}`}
+              className={`notification-item p-3 border-bottom`}
+              style={{
+                transition: 'all 0.2s ease',
+                background: notification.read ? 'transparent' : 'rgba(52, 152, 219, 0.05)',
+                position: 'relative',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.02)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = notification.read ? 'transparent' : 'rgba(52, 152, 219, 0.05)'; }}
             >
+              {!notification.read && (
+                <div style={{ position: 'absolute', left: '0', top: '0', bottom: '0', width: '3px', background: '#3498db' }}></div>
+              )}
               <div className="d-flex">
                 <div className="me-2 me-sm-3 flex-shrink-0">
                   <div className={`rounded-circle bg-${notification.type === 'appointment' ? 'primary' :
                       notification.type === 'queue' ? 'success' :
                         notification.type === 'reminder' ? 'warning' :
                           'secondary'
-                    } bg-opacity-10 p-2 text-center`} style={{
+                    } p-2 text-center text-white shadow-sm`} style={{
                       width: isMobile ? '35px' : '40px',
                       height: isMobile ? '35px' : '40px'
                     }}>
@@ -353,13 +364,13 @@ const Notifications = () => {
             </div>
           ))}
 
-          <div className="p-3 text-center">
+          <div className="p-3 text-center border-top">
             <Link
               to="/notifications"
-              className="btn btn-sm btn-link text-decoration-none"
+              className="btn btn-sm text-decoration-none fw-bold text-primary"
               onClick={() => setShowNotifications(false)}
             >
-              View all
+              View all notifications <i className="bi bi-arrow-right ms-1"></i>
             </Link>
           </div>
         </>
@@ -370,14 +381,15 @@ const Notifications = () => {
   return (
     <div className="dropdown" style={{ position: 'relative' }}>
       <button
-        className="btn btn-link text-decoration-none position-relative text-white"
+        className="btn border-0 position-relative p-2 d-flex align-items-center justify-content-center premium-nav-link"
         onClick={() => setShowNotifications(!showNotifications)}
         aria-expanded={showNotifications}
+        style={{ width: '40px', height: '40px' }}
       >
         <i className="bi bi-bell fs-5"></i>
         {unreadCount > 0 && (
-          <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-            {unreadCount}
+          <span className="position-absolute badge rounded-pill bg-danger shadow-sm" style={{ top: '0', right: '0', fontSize: '0.65rem', padding: '0.35em 0.5em', border: '2px solid rgba(30,30,30,0.98)' }}>
+            {unreadCount > 99 ? '99+' : unreadCount}
             <span className="visually-hidden">unread notifications</span>
           </span>
         )}
@@ -404,7 +416,7 @@ const Notifications = () => {
           {/* Mobile: Fixed position modal-like dropdown */}
           {isMobile ? (
             <div
-              className="show shadow"
+              className="show shadow custom-dropdown"
               style={{
                 width: 'calc(100vw - 20px)',
                 maxWidth: 'calc(100vw - 20px)',
@@ -414,7 +426,7 @@ const Notifications = () => {
                 overflowX: 'hidden',
                 zIndex: 1060,
                 padding: 0,
-                borderRadius: '0.5rem',
+                borderRadius: '16px',
                 position: 'fixed',
                 top: '70px',
                 left: '10px',
@@ -444,7 +456,7 @@ const Notifications = () => {
                 }}
               />
               {/* Mobile header with close button, actions, and filters */}
-              <div className="d-flex flex-column gap-2 p-3 border-bottom" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 1 }}>
+              <div className="d-flex flex-column gap-2 p-3 border-bottom" style={{ position: 'sticky', top: 0, background: '#ffffff', zIndex: 1, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
                 <div className="d-flex justify-content-between align-items-center">
                   <h6 className="mb-0" style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1rem)' }}>Notifications</h6>
                   <button
@@ -542,7 +554,7 @@ const Notifications = () => {
           ) : (
             /* Desktop: Dropdown menu */
             <div
-              className="dropdown-menu dropdown-menu-end show shadow"
+              className="dropdown-menu dropdown-menu-end show shadow custom-dropdown"
               style={{
                 width: 'auto',
                 minWidth: '420px',
@@ -551,10 +563,10 @@ const Notifications = () => {
                 overflowY: 'auto',
                 overflowX: 'hidden',
                 zIndex: 1060,
-                marginTop: '0.75rem',
+                marginTop: '1.2rem',
                 padding: 0,
-                borderRadius: '0.5rem',
-                right: 0,
+                borderRadius: '16px',
+                right: '-10px',
                 overflowWrap: 'anywhere',
                 wordBreak: 'break-word',
                 whiteSpace: 'normal',
@@ -567,7 +579,7 @@ const Notifications = () => {
                 style={{
                   position: 'absolute',
                   top: '-8px',
-                  right: '15px',
+                  right: '25px',
                   width: 0,
                   height: 0,
                   borderLeft: '8px solid transparent',
@@ -582,7 +594,7 @@ const Notifications = () => {
                 style={{
                   position: 'absolute',
                   top: '-9px',
-                  right: '15px',
+                  right: '25px',
                   width: 0,
                   height: 0,
                   borderLeft: '9px solid transparent',

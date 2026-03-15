@@ -315,26 +315,26 @@ const Profile = () => {
   const getRoleBadgeColor = (role) => {
     switch (role) {
       case 'manager':
-        return 'bg-danger';
+        return 'bg-dark text-white px-3 py-1 rounded-pill small fw-bold';
       case 'barber':
-        return 'bg-primary';
+        return 'bg-secondary text-white px-3 py-1 rounded-pill small fw-bold';
       case 'customer':
-        return 'bg-success';
+        return 'bg-light text-dark border px-3 py-1 rounded-pill small fw-bold';
       default:
-        return 'bg-secondary';
+        return 'bg-light text-dark border px-3 py-1 rounded-pill small fw-bold';
     }
   };
 
   const getStatusBadgeColor = (status) => {
     switch (status) {
       case 'available':
-        return 'bg-success';
+        return 'bg-dark text-white px-3 py-1 rounded-pill small fw-bold';
       case 'busy':
-        return 'bg-warning';
+        return 'bg-secondary text-white px-3 py-1 rounded-pill small fw-bold';
       case 'unavailable':
-        return 'bg-danger';
+        return 'bg-light text-muted border px-3 py-1 rounded-pill small fw-bold';
       default:
-        return 'bg-secondary';
+        return 'bg-light text-dark border px-3 py-1 rounded-pill small fw-bold';
     }
   };
 
@@ -380,34 +380,85 @@ const Profile = () => {
   }
 
   return (
-    <div className="container mt-4 mb-5">
+    <div className="container-fluid min-vh-100 py-4" style={{ background: '#fdfdfd', color: '#1a1a1a', fontFamily: "'Outfit', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        :root {
+          --premium-brown: #3d2c24;
+          --premium-dark: #1a1a1a;
+          --border-subtle: rgba(0,0,0,0.06);
+        }
+        .profile-card {
+          background: #fff;
+          border: 1px solid var(--border-subtle);
+          border-radius: 20px;
+          transition: all 0.3s ease;
+          overflow: hidden;
+          margin-bottom: 1.5rem;
+        }
+        .profile-card:hover {
+          box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        .profile-header {
+          border-bottom: 1px solid var(--border-subtle);
+          padding: 20px;
+          background: #fff;
+        }
+        .btn-premium {
+          background-color: var(--premium-dark);
+          color: white;
+          border-radius: 50px;
+          padding: 8px 24px;
+          font-weight: 600;
+          font-size: 0.85rem;
+          border: none;
+          transition: 0.3s ease;
+        }
+        .btn-premium:hover {
+          background-color: var(--premium-brown);
+          color: white;
+        }
+        .btn-premium-outline {
+          background-color: transparent;
+          color: var(--premium-dark);
+          border: 1px solid var(--border-subtle);
+          border-radius: 50px;
+          padding: 8px 24px;
+          font-weight: 600;
+          font-size: 0.85rem;
+          transition: 0.3s ease;
+        }
+        .btn-premium-outline:hover {
+          border-color: var(--premium-dark);
+          background-color: #f8f9fa;
+        }
+        .form-control, .form-select {
+          border-radius: 12px;
+          padding: 10px 15px;
+          border: 1px solid var(--border-subtle);
+          background-color: #f8f9fa;
+          font-size: 0.9rem;
+        }
+        .form-control:focus, .form-select:focus {
+          border-color: var(--premium-dark);
+          box-shadow: 0 0 0 0.2rem rgba(26, 26, 26, 0.1);
+          background-color: #fff;
+        }
+        .icon-dark {
+          color: var(--premium-dark);
+        }
+      `}</style>
+
       <div className="row justify-content-center">
-        <div className="col-md-8">
-          {/* Header Card */}
-          <div className="card shadow-sm mb-4">
-            <div className="card-header bg-dark text-white">
-              <div className="d-flex align-items-center">
-                <img
-                  src={logoImage}
-                  alt="RAF & ROK"
-                  height="40"
-                  className="me-3"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    padding: '5px',
-                    borderRadius: '8px'
-                  }}
-                />
-                <div>
-                  <h4 className="mb-0">
-                    <i className="bi bi-person-circle me-2"></i>
-                    My Profile
-                  </h4>
-                  <small className="text-light opacity-75">
-                    Manage your account information
-                  </small>
-                </div>
-              </div>
+        <div className="col-md-9 col-lg-8">
+          {/* Header */}
+          <div className="d-flex align-items-center gap-3 mb-4">
+            <div className="bg-white rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm flex-shrink-0" style={{ width: '55px', height: '55px', border: '1px solid #eee' }}>
+              <img src={logoImage} alt="Raf & Rox" style={{ width: '40px' }} />
+            </div>
+            <div>
+              <h3 className="mb-0 fw-bold fs-4 fs-md-3">My Profile</h3>
+              <p className="text-muted small mb-0">Manage your account information and preferences</p>
             </div>
           </div>
 
@@ -425,34 +476,34 @@ const Profile = () => {
           )}
 
           {/* Profile Picture Card */}
-          <div className="card shadow-sm mb-4">
-            <div className="card-header">
-              <h5 className="mb-0">
-                <i className="bi bi-camera me-2"></i>
+          <div className="profile-card">
+            <div className="profile-header">
+              <h5 className="mb-0 fw-bold fs-5">
+                <i className="bi bi-camera me-2 text-muted"></i>
                 Profile Picture
               </h5>
             </div>
-            <div className="card-body text-center">
+            <div className="card-body text-center p-4">
               <div className="mb-3">
                 {profilePictureUrl ? (
                   <img
                     src={profilePictureUrl}
                     alt="Profile"
-                    className="rounded-circle border border-3 border-primary"
-                    style={{ width: '150px', height: '150px', objectFit: 'cover' }}
+                    className="rounded-circle"
+                    style={{ width: '130px', height: '130px', objectFit: 'cover', border: '3px solid #1a1a1a', padding: '3px' }}
                   />
                 ) : (
                   <div
-                    className="rounded-circle border border-3 border-secondary d-flex align-items-center justify-content-center mx-auto"
-                    style={{ width: '150px', height: '150px', backgroundColor: '#f8f9fa' }}
+                    className="rounded-circle d-flex align-items-center justify-content-center mx-auto"
+                    style={{ width: '130px', height: '130px', backgroundColor: '#f8f9fa', border: '1px solid #e9ecef' }}
                   >
-                    <i className="bi bi-person-fill text-secondary" style={{ fontSize: '4rem' }}></i>
+                    <i className="bi bi-person-fill text-muted" style={{ fontSize: '4rem' }}></i>
                   </div>
                 )}
               </div>
 
-              <div className="d-flex justify-content-center gap-2">
-                <label className="btn btn-primary btn-sm" htmlFor="profilePictureInput">
+              <div className="d-flex justify-content-center gap-2 mt-3">
+                <label className="btn-premium cursor-pointer m-0" htmlFor="profilePictureInput" style={{ cursor: 'pointer' }}>
                   <i className="bi bi-camera me-1"></i>
                   {profilePictureUrl ? 'Change Picture' : 'Upload Picture'}
                 </label>
@@ -467,9 +518,10 @@ const Profile = () => {
 
                 {profilePictureUrl && (
                   <button
-                    className="btn btn-outline-danger btn-sm"
+                    className="btn-premium-outline rounded-pill"
                     onClick={handleRemoveImage}
                     disabled={uploadingImage}
+                    style={{ color: '#666' }}
                   >
                     <i className="bi bi-trash me-1"></i>
                     Remove
@@ -479,14 +531,14 @@ const Profile = () => {
 
               {uploadingImage && (
                 <div className="mt-3">
-                  <div className="spinner-border spinner-border-sm text-primary me-2" role="status">
+                  <div className="spinner-border spinner-border-sm text-dark me-2" role="status">
                     <span className="visually-hidden">Uploading...</span>
                   </div>
                   <small className="text-muted">Uploading image...</small>
                 </div>
               )}
 
-              <div className="mt-2">
+              <div className="mt-3">
                 <small className="text-muted">
                   <i className="bi bi-info-circle me-1"></i>
                   Recommended size: 300x300px. Max file size: 5MB
@@ -496,24 +548,25 @@ const Profile = () => {
           </div>
 
           {/* Profile Information Card */}
-          <div className="card shadow-sm">
-            <div className="card-header d-flex justify-content-between align-items-center">
+          <div className="profile-card">
+            <div className="profile-header d-flex justify-content-between align-items-center">
               <div className="d-flex align-items-center">
-                <i className={`bi ${getRoleIcon(profile.role)} me-2`}></i>
-                <h5 className="mb-0">Profile Information</h5>
+                <i className={`bi ${getRoleIcon(profile.role)} me-2 text-muted`}></i>
+                <h5 className="mb-0 fw-bold fs-5">Personal Details</h5>
               </div>
               {!isEditing && (
                 <button
-                  className="btn btn-outline-primary btn-sm"
+                  className="btn-premium-outline py-1 px-3 d-flex align-items-center"
                   onClick={() => setIsEditing(true)}
+                  style={{ fontSize: '0.8rem' }}
                 >
-                  <i className="bi bi-pencil me-1"></i>
-                  Edit Profile
+                  <i className="bi bi-pencil me-2"></i>
+                  Edit
                 </button>
               )}
             </div>
 
-            <div className="card-body">
+            <div className="card-body p-4">
               {isEditing ? (
                 /* Edit Form */
                 <form onSubmit={handleSave}>
@@ -629,10 +682,10 @@ const Profile = () => {
                     )}
                   </div>
 
-                  <div className="d-flex gap-2 mt-4">
+                  <div className="d-flex gap-2 mt-4 pt-2">
                     <button
                       type="submit"
-                      className="btn btn-primary"
+                      className="btn-premium shadow-sm w-100"
                       disabled={saving}
                     >
                       {saving ? (
@@ -649,11 +702,10 @@ const Profile = () => {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-outline-secondary"
+                      className="btn-premium-outline w-100"
                       onClick={handleCancel}
                       disabled={saving}
                     >
-                      <i className="bi bi-x-lg me-2"></i>
                       Cancel
                     </button>
                   </div>
@@ -661,90 +713,106 @@ const Profile = () => {
               ) : (
                 /* Display Mode */
                 <div>
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-person text-primary me-2"></i>
-                        <strong>Full Name</strong>
+                  <div className="row g-4">
+                    <div className="col-md-6">
+                      <div className="p-3 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div className="d-flex align-items-center mb-1">
+                          <i className="bi bi-person text-muted me-2 small"></i>
+                          <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>Full Name</small>
+                        </div>
+                        <p className="mb-0 fw-semibold text-dark ps-4">{profile.full_name || 'Not provided'}</p>
                       </div>
-                      <p className="text-muted mb-0">{profile.full_name || 'Not provided'}</p>
                     </div>
 
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-envelope text-primary me-2"></i>
-                        <strong>Email Address</strong>
+                    <div className="col-md-6">
+                      <div className="p-3 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div className="d-flex align-items-center mb-1">
+                          <i className="bi bi-envelope text-muted me-2 small"></i>
+                          <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>Email Address</small>
+                        </div>
+                        <p className="mb-0 fw-semibold text-dark ps-4">{profile.email}</p>
                       </div>
-                      <p className="text-muted mb-0">{profile.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-telephone text-primary me-2"></i>
-                        <strong>Phone Number</strong>
-                      </div>
-                      <p className="text-muted mb-0">{profile.phone || 'Not provided'}</p>
                     </div>
 
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-shield text-primary me-2"></i>
-                        <strong>Role</strong>
+                    <div className="col-md-6">
+                      <div className="p-3 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div className="d-flex align-items-center mb-1">
+                          <i className="bi bi-telephone text-muted me-2 small"></i>
+                          <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>Phone Number</small>
+                        </div>
+                        <p className="mb-0 fw-semibold text-dark ps-4">{profile.phone || 'Not provided'}</p>
                       </div>
-                      <span className={`badge ${getRoleBadgeColor(profile.role)} text-capitalize`}>
-                        <i className={`bi ${getRoleIcon(profile.role)} me-1`}></i>
-                        {profile.role}
-                      </span>
                     </div>
-                  </div>
+
+                    <div className="col-md-6">
+                      <div className="p-3 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-shield text-muted me-2 small"></i>
+                          <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>Role</small>
+                        </div>
+                        <div className="ps-4">
+                          <span className={getRoleBadgeColor(profile.role)}>
+                            <i className={`bi ${getRoleIcon(profile.role)} me-1`}></i>
+                            {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
                   {profile.role === 'barber' && (
-                    <div className="row">
-                      <div className="col-md-6 mb-3">
-                        <div className="d-flex align-items-center mb-2">
-                          <i className="bi bi-activity text-primary me-2"></i>
-                          <strong>Availability Status</strong>
-                        </div>
-                        <span className={`badge ${getStatusBadgeColor(profile.barber_status)} text-capitalize`}>
-                          <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.6rem' }}></i>
-                          {profile.barber_status}
-                        </span>
-                      </div>
-                      <div className="col-md-6 mb-3">
-                        <div className="d-flex align-items-center mb-2">
-                          <i className="bi bi-award text-primary me-2"></i>
-                          <strong>Skills</strong>
-                        </div>
-                        <p className="text-muted mb-0">
-                          {profile.skills ? (
-                            <span className="badge bg-primary me-1">
-                              {profile.skills}
+                    <>
+                      <div className="col-md-6">
+                        <div className="p-3 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                          <div className="d-flex align-items-center mb-2">
+                            <i className="bi bi-activity text-muted me-2 small"></i>
+                            <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>Availability Status</small>
+                          </div>
+                          <div className="ps-4">
+                            <span className={getStatusBadgeColor(profile.barber_status)}>
+                              <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
+                              {profile.barber_status.charAt(0).toUpperCase() + profile.barber_status.slice(1)}
                             </span>
-                          ) : (
-                            'No skills specified'
-                          )}
-                        </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                      <div className="col-md-6">
+                        <div className="p-3 bg-light rounded-4 border" style={{ backgroundColor: '#fcfcfc' }}>
+                          <div className="d-flex align-items-center mb-2">
+                            <i className="bi bi-award text-muted me-2 small"></i>
+                            <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>Skills</small>
+                          </div>
+                          <div className="ps-4">
+                            <p className="text-muted mb-0 small">
+                              {profile.skills ? (
+                                <span className="bg-dark text-white px-2 py-1 rounded small">
+                                  {profile.skills}
+                                </span>
+                              ) : (
+                                'No skills specified'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )}
+                  </div>
 
-                  <div className="row mt-4">
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-calendar-plus text-primary me-2"></i>
-                        <strong>Account Created</strong>
+                  <div className="row mt-4 pt-3 border-top">
+                    <div className="col-md-6 mb-3 mb-md-0">
+                      <div className="d-flex align-items-center mb-1">
+                        <i className="bi bi-calendar-plus text-muted me-2 small"></i>
+                        <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem' }}>Account Created</small>
                       </div>
-                      <p className="text-muted mb-0">{formatDate(profile.created_at)}</p>
+                      <p className="text-dark small mb-0 ps-4 fw-medium">{formatDate(profile.created_at)}</p>
                     </div>
 
-                    <div className="col-md-6 mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-arrow-clockwise text-primary me-2"></i>
-                        <strong>Last Updated</strong>
+                    <div className="col-md-6">
+                      <div className="d-flex align-items-center mb-1">
+                        <i className="bi bi-arrow-clockwise text-muted me-2 small"></i>
+                        <small className="text-muted fw-bold text-uppercase" style={{ fontSize: '0.7rem' }}>Last Updated</small>
                       </div>
-                      <p className="text-muted mb-0">{formatDate(profile.updated_at)}</p>
+                      <p className="text-dark small mb-0 ps-4 fw-medium">{formatDate(profile.updated_at)}</p>
                     </div>
                   </div>
                 </div>
@@ -753,34 +821,36 @@ const Profile = () => {
           </div>
 
           {/* Account Information Card */}
-          <div className="card shadow-sm mt-4">
-            <div className="card-header">
-              <h5 className="mb-0">
-                <i className="bi bi-info-circle me-2"></i>
-                Account Information
+          <div className="profile-card mt-4">
+            <div className="profile-header">
+              <h5 className="mb-0 fw-bold fs-5">
+                <i className="bi bi-info-circle me-2 text-muted"></i>
+                Account ID & Status
               </h5>
             </div>
-            <div className="card-body">
-              <div className="row">
-                <div className="col-md-6 mb-3">
+            <div className="card-body p-4">
+              <div className="row g-4">
+                <div className="col-md-6">
                   <div className="d-flex align-items-center mb-2">
-                    <i className="bi bi-key text-warning me-2"></i>
-                    <strong>User ID</strong>
+                    <i className="bi bi-key text-muted me-2"></i>
+                    <span className="fw-semibold">User ID</span>
                   </div>
-                  <p className="text-muted mb-0 font-monospace" style={{ fontSize: '0.875rem' }}>
+                  <p className="text-muted mb-0 font-monospace ps-4 bg-light p-2 rounded border" style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
                     {profile.id}
                   </p>
                 </div>
 
-                <div className="col-md-6 mb-3">
+                <div className="col-md-6">
                   <div className="d-flex align-items-center mb-2">
-                    <i className="bi bi-shield-check text-success me-2"></i>
-                    <strong>Account Status</strong>
+                    <i className="bi bi-shield-check text-muted me-2"></i>
+                    <span className="fw-semibold">Account Status</span>
                   </div>
-                  <span className="badge bg-success">
-                    <i className="bi bi-check-circle me-1"></i>
-                    Active
-                  </span>
+                  <div className="ps-4 mt-1">
+                    <span className="bg-dark text-white px-3 py-1 rounded-pill small fw-bold">
+                      <i className="bi bi-check-circle me-1"></i>
+                      Active
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -788,41 +858,41 @@ const Profile = () => {
 
           {/* Role-specific information */}
           {profile.role === 'manager' && (
-            <div className="card shadow-sm mt-4">
-              <div className="card-header bg-danger text-white">
-                <h5 className="mb-0">
-                  <i className="bi bi-shield-exclamation me-2"></i>
+            <div className="profile-card mt-4" style={{ borderColor: 'var(--premium-dark)' }}>
+              <div className="profile-header bg-dark text-white m-0 rounded-top" style={{ borderTopLeftRadius: '19px', borderTopRightRadius: '19px' }}>
+                <h5 className="mb-0 fw-bold fs-5">
+                  <i className="bi bi-shield-exclamation me-2 text-light"></i>
                   Manager Privileges
                 </h5>
               </div>
-              <div className="card-body">
-                <p className="mb-3">As a manager, you have access to:</p>
-                <ul className="list-unstyled">
-                  <li><i className="bi bi-check text-success me-2"></i>Manage barbers and their schedules</li>
-                  <li><i className="bi bi-check text-success me-2"></i>Manage services and products</li>
-                  <li><i className="bi bi-check text-success me-2"></i>View and manage all appointments</li>
-                  <li><i className="bi bi-check text-success me-2"></i>Access detailed reports and analytics</li>
-                  <li><i className="bi bi-check text-success me-2"></i>System administration capabilities</li>
+              <div className="card-body p-4 bg-light">
+                <p className="mb-3 text-dark fw-medium">As a manager, you have access to:</p>
+                <ul className="list-unstyled mb-0">
+                  <li className="mb-2"><i className="bi bi-check text-dark fw-bold me-2"></i>Manage barbers and their schedules</li>
+                  <li className="mb-2"><i className="bi bi-check text-dark fw-bold me-2"></i>Manage services and products</li>
+                  <li className="mb-2"><i className="bi bi-check text-dark fw-bold me-2"></i>View and manage all appointments</li>
+                  <li className="mb-2"><i className="bi bi-check text-dark fw-bold me-2"></i>Access detailed reports and analytics</li>
+                  <li><i className="bi bi-check text-dark fw-bold me-2"></i>System administration capabilities</li>
                 </ul>
               </div>
             </div>
           )}
 
           {profile.role === 'barber' && (
-            <div className="card shadow-sm mt-4">
-              <div className="card-header bg-primary text-white">
-                <h5 className="mb-0">
-                  <i className="bi bi-scissors me-2"></i>
+            <div className="profile-card mt-4" style={{ borderColor: 'var(--premium-dark)' }}>
+              <div className="profile-header bg-dark text-white m-0 rounded-top" style={{ borderTopLeftRadius: '19px', borderTopRightRadius: '19px' }}>
+                <h5 className="mb-0 fw-bold fs-5">
+                  <i className="bi bi-scissors me-2 text-light"></i>
                   Barber Tools
                 </h5>
               </div>
-              <div className="card-body">
-                <p className="mb-3">As a barber, you can:</p>
-                <ul className="list-unstyled">
-                  <li><i className="bi bi-check text-success me-2"></i>View and manage your schedule</li>
-                  <li><i className="bi bi-check text-success me-2"></i>Update your availability status</li>
-                  <li><i className="bi bi-check text-success me-2"></i>Manage customer queue</li>
-                  <li><i className="bi bi-check text-success me-2"></i>View appointment details</li>
+              <div className="card-body p-4 bg-light">
+                <p className="mb-3 text-dark fw-medium">As a barber, you can:</p>
+                <ul className="list-unstyled mb-0">
+                  <li className="mb-2"><i className="bi bi-check-lg text-dark fw-bold me-2"></i>View and manage your schedule</li>
+                  <li className="mb-2"><i className="bi bi-check-lg text-dark fw-bold me-2"></i>Update your availability status</li>
+                  <li className="mb-2"><i className="bi bi-check-lg text-dark fw-bold me-2"></i>Manage customer queue</li>
+                  <li><i className="bi bi-check-lg text-dark fw-bold me-2"></i>View appointment details</li>
                 </ul>
               </div>
             </div>

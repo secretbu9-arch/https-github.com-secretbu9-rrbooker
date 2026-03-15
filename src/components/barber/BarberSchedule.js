@@ -12,6 +12,289 @@ import ComprehensiveQueueManager from '../../services/queue/ComprehensiveQueueMa
 import { toISODateString, getStatusColor, getStatusIcon } from '../utils/helpers';
 import '../../styles/barber-appointments.css';
 
+const barberScheduleStyles = `
+  :root {
+    --barber-black: #121212;
+    --barber-dark-brown: #3d2b1f;
+    --barber-brown: #5c4033;
+    --barber-light-brown: #a67c52;
+    --barber-white: #ffffff;
+    --barber-light-gray: #f5f5f5;
+    --barber-medium-gray: #e0e0e0;
+  }
+
+  .schedule-container {
+    background-color: var(--barber-light-gray);
+    min-height: 100vh;
+    padding-top: 1rem !important;
+  }
+
+  /* Refined Header Card */
+  .schedule-header-card {
+    background: var(--barber-white) !important;
+    border: 1px solid var(--barber-medium-gray) !important;
+    border-left: 6px solid var(--barber-brown) !important;
+    border-radius: 20px !important;
+    margin-bottom: 2.5rem;
+    overflow: visible;
+  }
+
+  .schedule-header-content {
+    padding: 1rem;
+  }
+
+  .schedule-header-card h2 {
+    color: var(--barber-black) !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+
+  .schedule-header-card .text-muted {
+    color: #666666 !important;
+    font-weight: 500;
+  }
+
+  .header-accent-icon {
+    width: 50px;
+    height: 50px;
+    background: var(--barber-light-gray);
+    color: var(--barber-brown);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-right: 1.25rem;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  }
+
+  .schedule-header-actions .btn {
+    border-radius: 12px !important;
+    padding: 8px 16px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+  }
+
+  /* Week Day Cards */
+  .nav-day-card {
+    border-radius: 20px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    position: relative;
+    overflow: visible !important;
+  }
+
+  .nav-day-card.selected-day {
+    background: linear-gradient(135deg, var(--barber-black) 0%, var(--barber-dark-brown) 100%) !important;
+    color: var(--barber-white) !important;
+    transform: translateY(-8px);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .appt-count-badge {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: var(--barber-brown);
+    color: white;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-weight: 800;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    border: 2px solid white;
+    z-index: 5;
+  }
+
+  .selected-day .appt-count-badge {
+    background: var(--barber-light-brown);
+  }
+
+  .nav-day-card.today-day:not(.selected-day) {
+    border: 2px solid var(--barber-brown) !important;
+  }
+
+  /* Appointment Cards */
+  .appointment-card-premium {
+    border-radius: 20px !important;
+    border: 1px solid var(--barber-medium-gray) !important;
+    background: var(--barber-white) !important;
+    transition: all 0.3s ease !important;
+  }
+
+  .appointment-card-premium:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  /* Status Colors Mapping */
+  .status-ongoing-card { border-left: 6px solid var(--barber-light-brown) !important; }
+  .status-pending-card { border-left: 6px solid var(--barber-brown) !important; }
+  .status-completed-card { border-left: 6px solid var(--barber-black) !important; }
+  .status-confirmed-card { border-left: 6px solid var(--barber-dark-brown) !important; }
+
+  /* Avatar/Icon Circle */
+  .avatar-circle {
+    border-radius: 14px !important;
+    background-color: var(--barber-light-gray) !important;
+    color: var(--barber-black) !important;
+  }
+
+  .status-ongoing-card .avatar-circle { background-color: var(--barber-light-brown) !important; color: var(--barber-white) !important; }
+  .status-pending-card .avatar-circle { background-color: var(--barber-brown) !important; color: var(--barber-white) !important; }
+  .status-completed-card .avatar-circle { background-color: var(--barber-black) !important; color: var(--barber-white) !important; }
+  .status-confirmed-card .avatar-circle { background-color: var(--barber-dark-brown) !important; color: var(--barber-white) !important; }
+
+  /* Buttons */
+  .schedule-container .btn-primary {
+    background-color: var(--barber-black) !important;
+    border-color: var(--barber-black) !important;
+    color: var(--barber-white) !important;
+  }
+
+  .schedule-container .btn-primary:hover {
+    background-color: var(--barber-dark-brown) !important;
+    border-color: var(--barber-dark-brown) !important;
+  }
+
+  .schedule-container .btn-outline-primary {
+    color: var(--barber-brown) !important;
+    border-color: var(--barber-brown) !important;
+  }
+
+  .schedule-container .btn-outline-primary:hover {
+    background-color: var(--barber-brown) !important;
+    color: var(--barber-white) !important;
+  }
+
+  .schedule-container .btn-outline-danger {
+    color: var(--barber-brown) !important;
+    border-color: var(--barber-brown) !important;
+  }
+
+  .schedule-container .btn-outline-danger:hover {
+    background-color: var(--barber-brown) !important;
+    color: var(--barber-white) !important;
+  }
+
+  .schedule-container .btn-success {
+    background-color: var(--barber-black) !important;
+    border-color: var(--barber-black) !important;
+  }
+
+  .schedule-container .btn-dark-finish {
+    background-color: var(--barber-black) !important;
+    color: var(--barber-white) !important;
+  }
+
+  /* Badges */
+  .schedule-container .badge.bg-primary { background-color: var(--barber-dark-brown) !important; }
+  .schedule-container .badge.bg-success { background-color: var(--barber-black) !important; }
+  .schedule-container .badge.bg-info { background-color: var(--barber-light-brown) !important; }
+  .schedule-container .badge.bg-warning { background-color: var(--barber-brown) !important; color: var(--barber-white) !important; }
+  .schedule-container .badge.bg-danger { background-color: var(--barber-brown) !important; }
+
+  /* Text Colors */
+  .text-primary { color: var(--barber-brown) !important; }
+  .text-success { color: var(--barber-black) !important; }
+  .text-warning { color: var(--barber-brown) !important; }
+  .text-info { color: var(--barber-light-brown) !important; }
+  .text-muted { color: #888888 !important; }
+
+  .stat-icon-small.text-success { color: var(--barber-black) !important; }
+  .stat-icon-small.text-primary { color: var(--barber-brown) !important; }
+  .stat-icon-small.text-warning { color: var(--barber-brown) !important; }
+  .stat-icon-small.text-info { color: var(--barber-light-brown) !important; }
+
+  /* Service Details Box */
+  .service-details-box {
+    background-color: var(--barber-light-gray) !important;
+    border: 1px solid var(--barber-medium-gray) !important;
+  }
+
+  .service-details-box i.bi-scissors {
+    color: var(--barber-brown) !important;
+  }
+
+  /* Appointment Action Buttons */
+  .appointment-action-buttons .btn {
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.5px;
+  }
+
+  /* Status Badge Overrides */
+  .bg-orange-subtle { background-color: rgba(166, 124, 82, 0.15) !important; }
+  .text-orange { color: var(--barber-light-brown) !important; }
+
+  /* Dashboard-like Welcome Card Override */
+  .schedule-container .card.mb-4.shadow-sm:first-child {
+    background: var(--barber-white) !important;
+    color: var(--barber-black) !important;
+    border-left: 6px solid var(--barber-brown) !important;
+  }
+
+  /* Modals */
+  .modal-content {
+    border-radius: 24px !important;
+    border: none !important;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  .schedule-container .modal-header,
+  .modal-header.bg-danger {
+    background: linear-gradient(135deg, var(--barber-black) 0%, var(--barber-dark-brown) 100%) !important;
+    color: var(--barber-white) !important;
+    border: none !important;
+    padding: 1.5rem !important;
+  }
+
+  .modal-title {
+    font-weight: 800 !important;
+    letter-spacing: -0.5px;
+  }
+
+  .schedule-container .modal-header .btn-close,
+  .modal-header.bg-danger .btn-close {
+    filter: invert(1) brightness(2);
+  }
+
+  .modal-body {
+    padding: 1.5rem !important;
+  }
+
+  .modal-footer {
+    padding: 1.5rem !important;
+    border-top: 1px solid var(--barber-light-gray) !important;
+  }
+
+  .modal-footer .btn {
+    border-radius: 12px !important;
+    padding: 10px 20px !important;
+    font-weight: 600 !important;
+  }
+
+  .bg-black {
+    background-color: var(--barber-black) !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--barber-light-gray);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--barber-medium-gray);
+    border-radius: 10px;
+  }
+`;
+
 const LEGACY_ADDON_NAMES = {
   addon1: 'Beard Trim',
   addon2: 'Hot Towel Treatment',
@@ -182,10 +465,6 @@ const BarberSchedule = () => {
       if (location.state?.requestId) {
         console.log('📍 Highlighting appointment from navigation state:', location.state.requestId);
         setHighlightedId(location.state.requestId);
-
-        // Find the date of the appointment if it's not today or selectedDate
-        // This might require searching and updating selectedDate
-        // For now, assume it's on a loaded date or today
       }
 
       return () => {
@@ -197,6 +476,19 @@ const BarberSchedule = () => {
       };
     }
   }, [user, selectedDate]);
+
+  // Effect to scroll selected day into view in the horizontal picker
+  useEffect(() => {
+    if (weekDays.length > 0) {
+      const selectedIndex = weekDays.findIndex(date => isSelectedDate(date));
+      if (selectedIndex !== -1) {
+        const dayElement = document.getElementById(`day-picker-${selectedIndex}`);
+        if (dayElement) {
+          dayElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
+    }
+  }, [selectedDate, weekDays]);
 
   // Effect to scroll highlighted appointment into view
   useEffect(() => {
@@ -934,6 +1226,10 @@ const BarberSchedule = () => {
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
+    // Scroll to top when date changes to ensure schedule is visible
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   const handleCancelAppointment = (appointmentId) => {
@@ -1076,21 +1372,21 @@ const BarberSchedule = () => {
       );
     }
 
-    // Reschedule button - show for confirmed, scheduled, or any reschedulable status
-    // Exclude: pending (needs acceptance first), ongoing, completed, cancelled
-    if (status !== 'pending' && status !== 'ongoing' && status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done') {
+    // Adjust (Reschedule) button - show for confirmed, scheduled, pending or any reschedulable status
+    // Exclude: ongoing, completed, cancelled
+    if (status !== 'ongoing' && status !== 'completed' && status !== 'cancelled' && status !== 'cancel' && status !== 'done') {
       buttons.push(
         <button
           key="reschedule"
           className="btn btn-warning btn-sm"
           onClick={() => {
-            console.log('Reschedule button clicked for appointment:', appointment);
+            console.log('Adjust button clicked for appointment:', appointment);
             setRescheduleModal({ isOpen: true, appointment: appointment });
           }}
-          title="Reschedule Appointment"
+          title="Adjust Booking (Reschedule)"
         >
           <i className="bi bi-arrow-repeat me-1"></i>
-          Reschedule
+          Adjust
         </button>
       );
     }
@@ -1142,12 +1438,13 @@ const BarberSchedule = () => {
       if (!React.isValidElement(btn)) return btn;
       const originalClass = btn.props.className || '';
       return React.cloneElement(btn, {
-        className: `${originalClass} rounded-1 px-3 py-1 fw-medium btn-sm`
+        className: `${originalClass} rounded-2 px-3 py-2 fw-bold btn-sm flex-grow-1 shadow-sm d-flex align-items-center justify-content-center`,
+        style: { minHeight: '44px' }
       });
     });
 
     return (
-      <div className="d-flex gap-2 flex-wrap">
+      <div className="d-flex gap-2 flex-wrap w-100">
         {updatedButtons}
       </div>
     );
@@ -1158,51 +1455,47 @@ const BarberSchedule = () => {
   }
 
   return (
-    <div className="container-fluid px-2 px-md-4 py-3 py-md-4">
-      {/* Mobile-Optimized Header Card */}
-      <div className="card mb-4 shadow-sm">
-        <div className="card-body p-3">
-          <div className="d-flex flex-row flex-wrap align-items-center justify-content-between gap-2 gap-md-3">
-            <div className="flex-grow-1">
-              <h2
-                className="mb-1"
-                style={{ fontSize: 'clamp(1.1rem, 3.2vw, 1.5rem)' }}
-              >
-                <i className="bi bi-calendar-week me-2 text-primary"></i>
-                My Schedule
-              </h2>
-              <p
-                className="text-muted mb-0"
-                style={{ fontSize: 'clamp(0.75rem, 2.4vw, 0.9rem)' }}
-              >
-                <i className="bi bi-clock me-1"></i>
-                {selectedDate.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </p>
+    <div className="container-fluid px-2 px-md-4 py-3 py-md-4 schedule-container">
+      <style>{barberScheduleStyles}</style>
+      {/* Refined Header Section */}
+      <div className="schedule-header-card shadow-sm">
+        <div className="schedule-header-content">
+          <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+            <div className="d-flex align-items-center">
+              <div className="header-accent-icon">
+                <i className="bi bi-calendar2-week-fill"></i>
+              </div>
+              <div>
+                <h2 className="mb-0">My Schedule</h2>
+                <div className="text-muted small">
+                  <i className="bi bi-clock-history me-1"></i>
+                  {selectedDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </div>
+              </div>
             </div>
-            <div className="d-flex flex-row flex-md-column gap-2 align-items-stretch align-items-md-end justify-content-end ms-auto flex-shrink-0">
-              {getAppointmentsForDate(selectedDate).length > 0 && (
-                <button
-                  className="btn btn-outline-danger btn-sm d-flex align-items-center justify-content-center w-auto"
-                  onClick={() => setShowBulkCancelModal(true)}
-                  title="Cancel all appointments for this date"
-                >
-                  <i className="bi bi-x-circle me-1"></i>
-                  <span className="d-none d-sm-inline">Bulk Cancel</span>
-                  <span className="d-sm-none">Cancel All</span>
-                </button>
-              )}
+
+            <div className="schedule-header-actions d-flex gap-2">
               <button
-                className="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-center w-auto"
+                className="btn btn-primary d-flex align-items-center"
                 onClick={fetchAppointments}
               >
-                <i className="bi bi-arrow-clockwise me-1"></i>
-                <span>Refresh</span>
+                <i className="bi bi-arrow-clockwise me-2"></i>
+                Refresh
               </button>
+              {getAppointmentsForDate(selectedDate).length > 0 && (
+                <button
+                  className="btn btn-outline-danger d-flex align-items-center"
+                  onClick={() => setShowBulkCancelModal(true)}
+                >
+                  <i className="bi bi-calendar-x me-2"></i>
+                  Bulk Cancel
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1262,78 +1555,60 @@ const BarberSchedule = () => {
           </div>
         </div>
 
-        {/* Enhanced Week View */}
-        <div className="row g-2 g-md-3 mb-4">
-          {weekDays.map((date, index) => (
-            <div key={index} className="col-6 col-md">
-              <div
-                className={`day-card card h-100 shadow-sm ${isToday(date) ? 'border-primary border-2' : ''} ${isSelectedDate(date) ? 'bg-primary bg-opacity-10' : ''}`}
-                onClick={() => handleDateChange(date)}
-                style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-              >
-                <div className="card-header text-center p-2">
-                  <div className={`fw-bold ${isToday(date) ? 'text-primary' : ''}`}>
-                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                  </div>
-                  <div className={`${isToday(date) ? 'text-primary fw-bold' : 'text-muted'}`}>
-                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </div>
-                </div>
-                <div className="card-body p-2 text-center">
-                  {(() => {
-                    const dateAppointments = getAppointmentsForDate(date);
-                    if (dateAppointments.length === 0) {
-                      return (
-                        <div>
-                          <i className="bi bi-calendar-x text-muted fs-5"></i>
-                          <div className="small text-muted mt-1">No appointments</div>
-                        </div>
-                      );
-                    }
+        {/* Enhanced Week View - Horizontal Scroll on Mobile */}
+        <div className="week-view-container mb-2">
+          <div className="d-flex flex-nowrap overflow-auto gap-2 pb-2 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {weekDays.map((date, index) => {
+              const dateAppointments = getAppointmentsForDate(date);
+              const isSelected = isSelectedDate(date);
+              const today = isToday(date);
 
-                    const pendingCount = dateAppointments.filter(apt => apt.status === 'pending').length;
-                    const confirmedCount = dateAppointments.filter(apt => apt.status === 'confirmed').length;
-                    const ongoingCount = dateAppointments.filter(apt => apt.status === 'ongoing').length;
-                    const completedCount = dateAppointments.filter(apt => apt.status === 'completed').length;
-
-                    return (
-                      <div>
-                        <div className="badge bg-primary rounded-pill mb-1">
-                          {dateAppointments.length} {dateAppointments.length === 1 ? 'appt' : 'appts'}
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          {pendingCount > 0 && (
-                            <div className="badge bg-warning rounded-pill small">
-                              <i className="bi bi-clock me-1"></i>
-                              {pendingCount} pending
-                            </div>
-                          )}
-                          {confirmedCount > 0 && (
-                            <div className="badge bg-info rounded-pill small">
-                              <i className="bi bi-calendar-check me-1"></i>
-                              {confirmedCount} confirmed
-                            </div>
-                          )}
-                          {ongoingCount > 0 && (
-                            <div className="badge bg-info rounded-pill small">
-                              <i className="bi bi-scissors me-1"></i>
-                              {ongoingCount} ongoing
-                            </div>
-                          )}
-                          {completedCount > 0 && (
-                            <div className="badge bg-success rounded-pill small">
-                              <i className="bi bi-check-circle me-1"></i>
-                              {completedCount} done
-                            </div>
-                          )}
-                        </div>
+              return (
+                <div
+                  key={index}
+                  id={`day-picker-${index}`}
+                  className="flex-shrink-0 py-3"
+                  style={{ width: 'clamp(90px, 22vw, 130px)' }}
+                  onClick={() => handleDateChange(date)}
+                >
+                  <div
+                    className={`nav-day-card card h-100 border-0 shadow-sm text-center ${isSelected ? 'selected-day' : ''} ${today ? 'today-day' : ''}`}
+                    style={{
+                      cursor: 'pointer',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      borderRadius: '20px',
+                      background: isSelected ? 'linear-gradient(135deg, var(--barber-black), var(--barber-dark-brown))' : '#fff'
+                    }}
+                  >
+                    {dateAppointments.length > 0 && (
+                      <span className="appt-count-badge">
+                        {dateAppointments.length}
+                      </span>
+                    )}
+                    <div className="card-body p-2 d-flex flex-column align-items-center justify-content-center">
+                      <div className={`small fw-bold mb-1 ${isSelected ? 'text-white-50' : 'text-muted'}`}>
+                        {date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
                       </div>
-                    );
-                  })()}
+                      <div className={`fs-4 fw-bold mb-1 ${isSelected ? 'text-white' : 'text-dark'}`}>
+                        {date.getDate()}
+                      </div>
+                      <div className="d-flex gap-1 justify-content-center mt-1 flex-wrap" style={{ minHeight: '8px' }}>
+                        {dateAppointments.slice(0, 3).map((apt, i) => (
+                          <span
+                            key={i}
+                            className={`badge p-0 rounded-circle ${apt.status === 'ongoing' ? 'bg-info' :
+                              (apt.status === 'confirmed' || apt.status === 'scheduled' ? 'bg-primary' : 'bg-warning')
+                              }`}
+                            style={{ width: '6px', height: '6px' }}
+                          ></span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
 
         {/* Enhanced Day Schedule with Modern UI */}
@@ -1343,7 +1618,7 @@ const BarberSchedule = () => {
           <div className="bg-white text-dark p-3 p-md-4 rounded-top-4 border-bottom">
             <div className="d-flex align-items-center justify-content-between position-relative z-1">
               <div className="d-flex align-items-center gap-3">
-                <div className="bg-primary bg-opacity-10 text-primary p-2 rounded-3">
+                <div className="bg-light text-dark p-2 rounded-3">
                   <i className="bi bi-calendar3 fs-4"></i>
                 </div>
                 <div>
@@ -1360,31 +1635,36 @@ const BarberSchedule = () => {
             </div>
           </div>
 
-          {/* Stats Section Container */}
+          {/* Stats Bar Container */}
           {(() => {
             const dateAppointments = getAppointmentsForDate(selectedDate);
             if (dateAppointments.length === 0) return null;
 
             const totalMinutes = dateAppointments.reduce((total, apt) => total + (apt.total_duration || apt.service?.duration || 30), 0);
+            const confirmedCount = dateAppointments.filter(apt => apt.status === 'confirmed').length;
+            const completedCount = dateAppointments.filter(apt => apt.status === 'completed' || apt.status === 'done').length;
 
             return (
-              <div className="bg-white px-3 py-4 border-start border-end">
-                <div className="row g-3">
-                  <div className="col-6">
-                    <div className="card h-100 border-1 shadow-sm rounded-3">
-                      <div className="card-body text-center py-4">
-                        <div className="fs-2 fw-bold text-primary mb-1">{dateAppointments.length}</div>
-                        <div className="text-muted small fw-medium">Appointment{dateAppointments.length !== 1 ? 's' : ''}</div>
-                      </div>
-                    </div>
+              <div className="bg-white px-3 py-2 border-start border-end">
+                <div className="d-flex align-items-center justify-content-between p-3 bg-light rounded-4 shadow-sm mb-2">
+                  <div className="text-center flex-grow-1">
+                    <div className="fw-bold text-warning fs-5">{dateAppointments.filter(a => a.status === 'pending').length}</div>
+                    <div className="text-muted small" style={{ fontSize: '0.6rem' }}>PENDING</div>
                   </div>
-                  <div className="col-6">
-                    <div className="card h-100 border-1 shadow-sm rounded-3">
-                      <div className="card-body text-center py-4">
-                        <div className="fs-2 fw-bold text-primary mb-1">{totalMinutes}</div>
-                        <div className="text-muted small fw-medium">Minutes</div>
-                      </div>
-                    </div>
+                  <div className="border-end h-100" style={{ width: '1px', alignSelf: 'stretch', opacity: '0.1' }}></div>
+                  <div className="text-center flex-grow-1">
+                    <div className="fw-bold text-primary fs-5">{dateAppointments.filter(a => a.status === 'confirmed' || a.status === 'scheduled').length}</div>
+                    <div className="text-muted small" style={{ fontSize: '0.6rem' }}>CONFIRMED</div>
+                  </div>
+                  <div className="border-end h-100" style={{ width: '1px', alignSelf: 'stretch', opacity: '0.1' }}></div>
+                  <div className="text-center flex-grow-1">
+                    <div className="fw-bold text-info fs-5">{dateAppointments.filter(a => a.status === 'ongoing').length}</div>
+                    <div className="text-muted small" style={{ fontSize: '0.6rem' }}>ONGOING</div>
+                  </div>
+                  <div className="border-end h-100" style={{ width: '1px', alignSelf: 'stretch', opacity: '0.1' }}></div>
+                  <div className="text-center flex-grow-1">
+                    <div className="fw-bold text-success fs-5">{completedCount}</div>
+                    <div className="text-muted small" style={{ fontSize: '0.6rem' }}>DONE</div>
                   </div>
                 </div>
               </div>
@@ -1449,11 +1729,20 @@ const BarberSchedule = () => {
                     {dateAppointments.map((appointment) => {
                       const statusColor = getStatusColor(appointment.status);
                       const totalPrice = getTotalPrice(appointment);
-                      let queueNumber = (appointment.status === 'cancelled' || appointment.status === 'cancel') ? null : appointment.queue_position;
-                      if (queueNumber == null && appointment.appointment_type === 'queue' && appointment.status !== 'cancelled' && appointment.status !== 'cancel') {
-                        const computedIndex = activeQueueAppointments.findIndex(apt => apt.id === appointment.id);
-                        if (computedIndex !== -1) {
-                          queueNumber = computedIndex + 1;
+                      
+                      // Separate handling for numbering: 
+                      // 1. Ongoing is "Serving"
+                      // 2. Confirmed/Pending start from 1 for the first person WAITING
+                      let displayQueueNumber = null;
+                      if (appointment.status === 'ongoing') {
+                        displayQueueNumber = 'LIVE';
+                      } else if (appointment.status !== 'cancelled' && appointment.status !== 'cancel' && appointment.appointment_type === 'queue') {
+                        const waitingQueue = activeQueueAppointments.filter(apt => apt.status !== 'ongoing');
+                        const waitingIndex = waitingQueue.findIndex(apt => apt.id === appointment.id);
+                        if (waitingIndex !== -1) {
+                          displayQueueNumber = waitingIndex + 1;
+                        } else if (appointment.queue_position) {
+                          displayQueueNumber = appointment.queue_position;
                         }
                       }
 
@@ -1466,54 +1755,73 @@ const BarberSchedule = () => {
                         <div
                           key={`card-${appointment.id}`}
                           id={`appointment-${appointment.id}`}
-                          className={`appointment-card-simple mb-3 border rounded-4 shadow-sm ${appointment.status === 'ongoing' ? 'bg-primary bg-opacity-10 border-primary' : 'bg-white border-light-subtle'} ${highlightedId === appointment.id ? 'highlight-appointment' : ''}`}
-                          style={{ transition: 'all 0.2s ease', overflow: 'hidden' }}
+                          className={`appointment-card-premium mb-4 border-0 rounded-4 shadow-sm position-relative overflow-hidden ${appointment.status === 'ongoing' ? 'status-ongoing-card' :
+                            (appointment.status === 'pending' ? 'status-pending-card' :
+                              (appointment.status === 'completed' || appointment.status === 'done' ? 'status-completed-card' : 'status-confirmed-card'))
+                            }`}
+                          style={{
+                            transition: 'all 0.3s ease',
+                            background: '#fff',
+                            borderLeft: `6px solid ${appointment.status === 'ongoing' ? 'var(--barber-light-brown)' :
+                              (appointment.status === 'pending' ? 'var(--barber-brown)' :
+                                (appointment.status === 'completed' || appointment.status === 'done' ? 'var(--barber-black)' : 'var(--barber-dark-brown)'))
+                              }`
+                          }}
                         >
-                          <div className="p-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                              <div className="d-flex align-items-center gap-2 gap-sm-3">
-                                <div className={`d-flex align-items-center justify-content-center fw-bold flex-shrink-0 ${appointment.status === 'ongoing' ? 'bg-primary text-white' : 'bg-primary bg-opacity-10 text-primary'}`} style={{ width: '40px', height: '65px', borderRadius: '40px', fontSize: '1.2rem', backgroundColor: '#0d6efd', color: 'white' }}>
-                                  {queueNumber != null ? queueNumber : '-'}
+                          <div className="p-3 p-md-4">
+                            <div className="d-flex justify-content-between align-items-center mb-3">
+                              <div className="d-flex align-items-center gap-3">
+                                <div className={`avatar-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm ${appointment.status === 'ongoing' ? 'bg-info' :
+                                  (appointment.status === 'pending' ? 'bg-warning' :
+                                    (appointment.status === 'completed' || appointment.status === 'done' ? 'bg-success' : 'bg-primary'))
+                                  }`} style={{ 
+                                    width: '48px', 
+                                    height: '48px', 
+                                    borderRadius: '14px', 
+                                    fontSize: displayQueueNumber === 'LIVE' ? '0.75rem' : '1.2rem' 
+                                  }}>
+                                  {displayQueueNumber != null ? displayQueueNumber : (appointment.status === 'pending' ? '?' : '-')}
                                 </div>
                                 <div>
-                                  <h5 className="fw-bold mb-0 text-dark" style={{ letterSpacing: '-0.5px' }}>
-                                    {appointment.customer?.full_name || 'Unknown Customer'}
+                                  <h5 className="fw-bold mb-0 text-dark" style={{ letterSpacing: '-0.3px', fontSize: '1.2rem' }}>
+                                    {appointment.customer?.full_name || 'Guest Customer'}
                                   </h5>
-                                  <div className="text-muted small mt-1" style={{ lineHeight: '1.4' }}>
-                                    {serviceLabel}
+                                  <div className="d-flex gap-2 align-items-center flex-wrap">
+                                    <span className="text-muted small"><i className="bi bi-clock me-1"></i>{appointment.appointment_time ? formatTime(appointment.appointment_time) : (appointment.total_duration || 30) + ' min'}</span>
+                                    {appointment.is_urgent && <span className="badge bg-danger text-white rounded-pill px-2 py-1" style={{ fontSize: '0.6rem' }}>URGENT</span>}
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-end d-flex flex-column align-items-end gap-1">
-                                <span className={`badge bg-${statusColor} rounded-pill px-3 py-2 text-capitalize`} style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>
+                              <div className="text-end">
+                                <div className="fw-bold text-primary fs-4">₱{totalPrice.toLocaleString()}</div>
+                                <span className={`badge rounded-pill px-3 py-1 ${appointment.status === 'ongoing' ? 'bg-info-subtle text-info' :
+                                  (appointment.status === 'pending' ? 'bg-warning-subtle text-warning' :
+                                    (appointment.status === 'completed' || appointment.status === 'done' ? 'bg-black text-white px-3' : 'bg-primary-subtle text-primary'))
+                                  }`} style={{ fontSize: '0.75rem', fontWeight: '600' }}>
                                   {formatStatus(appointment.status)}
                                 </span>
-                                {appointment.is_urgent && (
-                                  <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2 py-1 mt-1" style={{ fontSize: '0.65rem' }}>
-                                    <i className="bi bi-lightning-fill me-1"></i>Urgent
-                                  </span>
-                                )}
                               </div>
                             </div>
 
-                            <div className="d-flex justify-content-between align-items-center mb-3 mt-2 px-1">
-                              <div className="text-muted" style={{ fontSize: '0.9rem' }}>
-                                {appointment.total_duration || appointment.service?.duration || '—'} min
-                                {appointment.appointment_time && (
-                                  <span className="ms-2 text-muted">
-                                    • {appointment.appointment_time.substring(0, 5)}
-                                  </span>
-                                )}
+                            <div className="service-details-box bg-light p-3 rounded-4 mb-3 border border-light-subtle">
+                              <div className="d-flex align-items-center gap-2 mb-2">
+                                <i className="bi bi-scissors text-primary"></i>
+                                <span className="fw-semibold text-dark-emphasis small">Services & Add-ons</span>
                               </div>
-                              <div className="fw-bold text-success fs-5">
-                                ₱{totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </div>
+                              <p className="mb-0 text-dark small fw-medium">{serviceLabel}</p>
+                              {appointment.notes && (
+                                <div className="mt-2 pt-2 border-top border-light-subtle">
+                                  <small className="text-muted d-block mb-1">Customer Notes:</small>
+                                  <p className="mb-0 small font-italic text-secondary">"{appointment.notes}"</p>
+                                </div>
+                              )}
                             </div>
 
-                            <FriendBookingDisplay appointment={appointment} variant="compact" />
-
-                            <div className="d-flex justify-content-end mt-2 pt-2 border-top-0">
-                              <div className="appointment-action-buttons">
+                            <div className="d-flex flex-wrap items-center justify-content-between gap-3 pt-2">
+                              <div>
+                                <FriendBookingDisplay appointment={appointment} variant="compact" />
+                              </div>
+                              <div className="appointment-action-buttons flex-grow-1 flex-md-grow-0 d-flex gap-2">
                                 {renderAppointmentActions(appointment)}
                               </div>
                             </div>

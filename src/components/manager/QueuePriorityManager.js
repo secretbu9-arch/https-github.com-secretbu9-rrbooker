@@ -3,6 +3,15 @@ import { supabase } from '../../supabaseClient';
 import { PushService } from '../../services/notifications/PushService';
 import { QUEUE_SETTINGS } from '../../constants/booking.constants';
 
+const LoadingSpinner = () => (
+  <div className="d-flex flex-column align-items-center justify-content-center p-5">
+    <div className="spinner-border text-dark mb-3" role="status" style={{ width: '3rem', height: '3rem', borderWidth: '0.2rem' }}>
+      <span className="visually-hidden">Loading...</span>
+    </div>
+    <div className="fw-800 text-muted small text-uppercase letter-spacing-1">Updating Queue...</div>
+  </div>
+);
+
 const QueuePriorityManager = () => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -10,21 +19,166 @@ const QueuePriorityManager = () => {
   const [success, setSuccess] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedBarber, setSelectedBarber] = useState('');
-  const [selectedPriority, setSelectedPriority] = useState('all'); // Add priority filter
+  const [selectedPriority, setSelectedPriority] = useState('all');
   const [barbers, setBarbers] = useState([]);
   const [queueStatus, setQueueStatus] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Premium Styles
+  const styles = {
+    container: {
+      padding: windowWidth < 576 ? '1.5rem 1rem' : '2rem 1.5rem',
+      backgroundColor: '#fcfcfc',
+      minHeight: '100vh',
+      fontFamily: "'Outfit', 'Inter', sans-serif"
+    },
+    headerCard: {
+      background: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+      border: '1px solid #f0f0f0',
+      marginBottom: '1.5rem',
+      display: 'flex',
+      flexDirection: windowWidth < 650 ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: windowWidth < 650 ? 'stretch' : 'center',
+      gap: '1rem'
+    },
+    card: {
+      backgroundColor: '#fff',
+      padding: '1.25rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      marginBottom: '1rem',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      position: 'relative',
+      overflow: 'hidden'
+    },
+    statCard: {
+      backgroundColor: '#fff',
+      padding: '1.5rem',
+      borderRadius: '24px',
+      border: '1px solid #eee',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
+      height: '100%',
+      transition: 'transform 0.3s ease',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
+    },
+    badge: (priority) => {
+      const colors = {
+        urgent: { bg: '#FFEBEE', text: '#B71C1C' },
+        normal: { bg: '#E3F2FD', text: '#0D47A1' },
+        high: { bg: '#FFF3E0', text: '#E65100' }
+      };
+      const color = colors[priority] || { bg: '#f5f5f5', text: '#666' };
+      return {
+        padding: '0.4rem 0.8rem',
+        borderRadius: '10px',
+        fontSize: '0.7rem',
+        fontWeight: '700',
+        backgroundColor: color.bg,
+        color: color.text,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      };
+    },
+    statusBadge: (status) => {
+      const colors = {
+        pending: { bg: '#FFF3E0', text: '#E65100' },
+        confirmed: { bg: '#E3F2FD', text: '#0D47A1' },
+        ongoing: { bg: '#F3E5F5', text: '#7B1FA2' },
+        completed: { bg: '#E8F5E9', text: '#1B5E20' },
+        cancelled: { bg: '#FFEBEE', text: '#B71C1C' }
+      };
+      const color = colors[status] || { bg: '#f5f5f5', text: '#666' };
+      return {
+        padding: '0.3rem 0.6rem',
+        borderRadius: '8px',
+        fontSize: '0.65rem',
+        fontWeight: '700',
+        backgroundColor: color.bg,
+        color: color.text,
+        textTransform: 'uppercase'
+      };
+    },
+    primaryBtn: {
+      backgroundColor: '#1a1a1a',
+      color: '#fff',
+      border: 'none',
+      padding: '0.8rem 1.25rem',
+      borderRadius: '16px',
+      fontWeight: '600',
+      fontSize: '0.9rem',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.6rem',
+      transition: 'all 0.3s'
+    },
+    secondaryBtn: {
+      backgroundColor: '#f5f5f5',
+      color: '#1a1a1a',
+      border: 'none',
+      padding: '0.5rem 0.8rem',
+      borderRadius: '12px',
+      fontWeight: '600',
+      fontSize: '0.8rem',
+      transition: 'all 0.2s',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    modalOverlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      backdropFilter: 'blur(8px)',
+      zIndex: 1060,
+      display: 'flex',
+      alignItems: windowWidth < 576 ? 'flex-end' : 'center',
+      justifyContent: 'center',
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: windowWidth < 576 ? '100%' : '500px',
+      backgroundColor: '#fff',
+      borderRadius: windowWidth < 576 ? '32px 32px 0 0' : '28px',
+      boxShadow: '0 -10px 40px rgba(0,0,0,0.1)',
+      maxHeight: windowWidth < 576 ? '92vh' : '90vh',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      animation: windowWidth < 576 ? 'slideUp 0.4s cubic-bezier(0, 0, 0.2, 1)' : 'scaleIn 0.3s ease-out'
+    }
+  };
 
   // Priority update modal state
   const [priorityModal, setPriorityModal] = useState({
     isOpen: false,
     appointment: null,
-    newPriority: null,
+    newPriority: 'normal',
     isLoading: false
   });
 
   // Track updating appointments
   const [updatingAppointments, setUpdatingAppointments] = useState(new Set());
+
+  // Get currently ongoing appointment
+  const ongoingAppointment = appointments.find(apt => apt.status === 'ongoing');
 
   // Fetch barbers
   const fetchBarbers = async () => {
@@ -34,11 +188,17 @@ const QueuePriorityManager = () => {
         .from('users')
         .select('id, full_name, email')
         .eq('role', 'barber')
+        .neq('archived', true)
         .order('full_name');
 
       if (error) throw error;
-      console.log('👥 Barbers found:', data?.length || 0, data);
+      console.log('👥 Active barbers found:', data?.length || 0, data);
       setBarbers(data || []);
+      
+      // Auto-select first barber if none selected
+      if (data && data.length > 0 && !selectedBarber) {
+        setSelectedBarber(data[0].id);
+      }
     } catch (error) {
       console.error('Error fetching barbers:', error);
     }
@@ -798,13 +958,19 @@ const QueuePriorityManager = () => {
   };
 
   // Move appointment up in queue
-  const moveUp = async (appointmentId, currentPosition) => {
-    if (currentPosition <= 1) return;
+  const moveUp = async (appointmentId) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+    const currentPosition = appointment.queue_position;
+    if (currentPosition <= (ongoingAppointment ? 2 : 1)) return;
     await moveToPosition(appointmentId, currentPosition - 1);
   };
 
   // Move appointment down in queue
-  const moveDown = async (appointmentId, currentPosition) => {
+  const moveDown = async (appointmentId) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+    const currentPosition = appointment.queue_position;
     const maxPosition = Math.max(...appointments.map(apt => apt.queue_position));
     if (currentPosition >= maxPosition) return;
     await moveToPosition(appointmentId, currentPosition + 1);
@@ -1007,625 +1173,422 @@ const QueuePriorityManager = () => {
   };
 
   return (
-    <div className="container-fluid py-4">
-      <div className="row">
-        <div className="col">
-          <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
-            <div>
-              <h2 className="mb-1 fw-bold">
-                <i className="bi bi-arrow-up-down me-2"></i>
-                Queue Priority Manager
-              </h2>
-              <p className="text-muted mb-0">Manage queue priorities and positions</p>
-            </div>
-          </div>
-          {/* Filters */}
-          <div className="card mb-4">
-            <div className="card-body">
-              <div className="row g-3">
-                <div className="col-md-2">
-                  <label htmlFor="selectedDate" className="form-label">
-                    <i className="bi bi-calendar3 me-2"></i>
-                    Select Date
-                  </label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    id="selectedDate"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                  />
-                </div>
-                <div className="col-md-2">
-                  <label htmlFor="selectedBarber" className="form-label">
-                    <i className="bi bi-scissors me-2"></i>
-                    Select Barber
-                  </label>
-                  <select
-                    className="form-select"
-                    id="selectedBarber"
-                    value={selectedBarber}
-                    onChange={(e) => setSelectedBarber(e.target.value)}
-                  >
-                    <option value="">All Barbers</option>
-                    {barbers.map(barber => (
-                      <option key={barber.id} value={barber.id}>
-                        {barber.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-2">
-                  <label htmlFor="selectedPriority" className="form-label">
-                    <i className="bi bi-flag me-2"></i>
-                    Priority Status
-                  </label>
-                  <select
-                    className="form-select"
-                    id="selectedPriority"
-                    value={selectedPriority}
-                    onChange={(e) => setSelectedPriority(e.target.value)}
-                  >
-                    <option value="all">All Priorities</option>
-                    <option value="urgent">Urgent</option>
-                    <option value="normal">Normal</option>
-                  </select>
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <button
-                    className="btn btn-primary w-100"
-                    onClick={fetchAppointments}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2"></span>
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <i className="bi bi-arrow-clockwise me-2"></i>
-                        Refresh Queue
-                      </>
-                    )}
-                  </button>
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <div className="form-check form-switch w-100">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="autoRefreshSwitch"
-                      checked={autoRefresh}
-                      onChange={() => setAutoRefresh(!autoRefresh)}
-                    />
-                    <label className="form-check-label" htmlFor="autoRefreshSwitch">
-                      <i className="bi bi-arrow-repeat me-2"></i>
-                      Auto-refresh (30s)
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Queue Status */}
-          {queueStatus && (
-            <div className="row mb-4">
-              <div className="col-12">
-                <div className="card bg-light border-0">
-                  <div className="card-body">
-                    <h6 className="card-title text-primary mb-3">
-                      <i className="bi bi-info-circle me-2"></i>
-                      Queue Status
-                    </h6>
-                    <div className="row g-3">
-                      <div className="col-md-2">
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="fw-bold text-primary fs-4">{queueStatus.total_in_queue}</div>
-                          <small className="text-muted">Total in Queue</small>
-                        </div>
-                      </div>
-                      <div className="col-md-2">
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="fw-bold text-success fs-4">{queueStatus.currently_serving}</div>
-                          <small className="text-muted">Currently Serving</small>
-                        </div>
-                      </div>
-                      <div className="col-md-2">
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="fw-bold text-warning fs-4">{queueStatus.waiting}</div>
-                          <small className="text-muted">Waiting</small>
-                        </div>
-                      </div>
-                      <div className="col-md-3">
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="fw-bold text-dark">{queueStatus.next_customer_name || 'None'}</div>
-                          <small className="text-muted">Next Customer</small>
-                        </div>
-                      </div>
-                      <div className="col-md-3">
-                        <div className="text-center p-2 bg-white rounded">
-                          <div className="fw-bold text-info fs-4">{formatWaitTime(queueStatus.estimated_wait_time)}</div>
-                          <small className="text-muted">Est. Wait Time</small>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              <i className="bi bi-exclamation-triangle me-2"></i>
-              {error}
-            </div>
-          )}
-
-          {/* Priority Statistics */}
-          {appointments.length > 0 && (
-            <div className="row mb-4">
-              <div className="col-md-4">
-                <div className="card border-0 bg-primary bg-opacity-10">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <h6 className="card-title text-muted mb-1">Total Appointments</h6>
-                        <h3 className="mb-0 text-primary">{appointments.length}</h3>
-                      </div>
-                      <div className="ms-auto">
-                        <i className="bi bi-people-fill text-primary fs-1"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-4">
-                <div className="card border-0 bg-danger bg-opacity-10">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <h6 className="card-title text-muted mb-1">Urgent Priority</h6>
-                        <h3 className="mb-0 text-danger">
-                          {appointments.filter(apt => apt.priority_level === 'urgent').length}
-                        </h3>
-                      </div>
-                      <div className="ms-auto">
-                        <i className="bi bi-exclamation-triangle-fill text-danger fs-1"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-4">
-                <div className="card border-0 bg-info bg-opacity-10">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <h6 className="card-title text-muted mb-1">Normal Priority</h6>
-                        <h3 className="mb-0 text-info">
-                          {appointments.filter(apt => (apt.priority_level || 'normal') === 'normal').length}
-                        </h3>
-                      </div>
-                      <div className="ms-auto">
-                        <i className="bi bi-circle-fill text-info fs-1"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {success && (
-            <div className="alert alert-success alert-dismissible fade show" role="alert">
-              <i className="bi bi-check-circle me-2"></i>
-              {success}
-              <button
-                type="button"
-                className="btn-close"
-                onClick={() => setSuccess('')}
-              ></button>
-            </div>
-          )}
-
-          {/* Pending Priority Requests Alert */}
-          {appointments.filter(apt => apt.priority_request_status === 'pending' && !apt.is_urgent).length > 0 && (
-            <div className="alert alert-warning mb-4" role="alert">
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <h5 className="alert-heading mb-1">
-                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                    Pending Priority Requests
-                  </h5>
-                  <p className="mb-0">
-                    {appointments.filter(apt => apt.priority_request_status === 'pending' && !apt.is_urgent).length} customer(s) have requested priority. Review and approve/reject below.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Queue List */}
-          <div className="card">
-            <div className="card-header">
-              <h5 className="mb-0">Queue Appointments ({appointments.length})</h5>
-            </div>
-            <div className="card-body p-0">
-              {loading ? (
-                <div className="text-center py-4">
-                  <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
-                  </div>
-                </div>
-              ) : appointments.length === 0 ? (
-                <div className="text-center py-5">
-                  <i className="bi bi-queue-list display-1 text-muted mb-3"></i>
-                  <h5>No appointments in queue</h5>
-                  <p className="text-muted">Select a date to view the queue for that day.</p>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th className="text-center" style={{ width: '80px' }}>Queue #</th>
-                        <th>Customer</th>
-                        <th>Barber</th>
-                        <th>Service</th>
-                        <th>Estimated Time</th>
-                        <th>Status</th>
-                        <th className="text-center">Priority Status</th>
-                        <th className="text-center">Priority</th>
-                        <th className="text-center">Wait Time</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {appointments.filter(a => a.status !== 'completed').map((appointment, index) => (
-                        <tr key={appointment.id} className={appointment.status === 'ongoing' ? 'table-primary shadow-sm' : ''}>
-                          <td className="text-center">
-                            <div className={`rounded-circle ${appointment.status === 'ongoing' ? 'bg-success' : 'bg-primary'} text-white d-flex align-items-center justify-content-center fw-bold mx-auto`}
-                              style={{ width: '40px', height: '40px', fontSize: '16px' }}>
-                              {appointment.queue_position}
-                            </div>
-                          </td>
-                          <td>
-                            <div>
-                              <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
-                              <small className="text-muted d-block">{appointment.customer?.email}</small>
-                              {appointment.customer?.phone && (
-                                <small className="text-muted d-block">
-                                  <i className="bi bi-telephone me-1"></i>
-                                  {appointment.customer.phone}
-                                </small>
-                              )}
-
-                              {/* Priority Request Status */}
-                              {appointment.priority_request_status === 'pending' && !appointment.is_urgent && (
-                                <div className="mt-2 p-2 bg-warning bg-opacity-10 rounded border border-warning">
-                                  <small className="text-warning fw-bold d-block">
-                                    <i className="bi bi-clock-history me-1"></i>
-                                    Priority Request Pending
-                                  </small>
-                                  <small className="text-muted d-block">
-                                    Requested: {appointment.priority_requested_at ? new Date(appointment.priority_requested_at).toLocaleString() : 'N/A'}
-                                  </small>
-                                  <div className="mt-2 d-flex gap-1">
-                                    <button
-                                      className="btn btn-sm btn-success"
-                                      onClick={() => approvePriorityRequest(appointment.id)}
-                                      disabled={updatingAppointments.has(appointment.id)}
-                                      title="Approve (₱100 fee)"
-                                    >
-                                      {updatingAppointments.has(appointment.id) ? (
-                                        <span className="spinner-border spinner-border-sm" role="status"></span>
-                                      ) : (
-                                        <>
-                                          <i className="bi bi-check-circle me-1"></i>
-                                          Approve
-                                        </>
-                                      )}
-                                    </button>
-                                    <button
-                                      className="btn btn-sm btn-danger"
-                                      onClick={() => {
-                                        const notes = window.prompt('Rejection reason (optional):');
-                                        rejectPriorityRequest(appointment.id, notes);
-                                      }}
-                                      disabled={updatingAppointments.has(appointment.id)}
-                                      title="Reject"
-                                    >
-                                      <i className="bi bi-x-circle me-1"></i>
-                                      Reject
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {appointment.priority_request_status === 'approved' && appointment.is_urgent && (
-                                <div className="mt-2 p-2 bg-success bg-opacity-10 rounded border border-success">
-                                  <small className="text-success fw-bold d-block">
-                                    <i className="bi bi-check-circle me-1"></i>
-                                    Priority Approved - ₱100 urgent fee applied
-                                  </small>
-                                  {appointment.total_price && (
-                                    <small className="text-muted d-block mt-1">
-                                      Total: ₱{Number(appointment.total_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </small>
-                                  )}
-                                </div>
-                              )}
-                              {appointment.priority_request_status === 'rejected' && (
-                                <div className="mt-2">
-                                  <small className="text-danger fw-bold d-block">
-                                    <i className="bi bi-x-circle me-1"></i>
-                                    Priority Rejected
-                                  </small>
-                                </div>
-                              )}
-
-                              {/* Show friend contact info if it's a "Book for Friend" appointment */}
-                              {(() => {
-                                const bookingType = getBookingType(appointment);
-                                const friendInfo = getFriendInfo(appointment);
-
-                                if (bookingType === 'Book for Friend' && friendInfo) {
-                                  return (
-                                    <div className="mt-2 p-2 bg-info bg-opacity-10 rounded border border-info">
-                                      <small className="text-info fw-bold d-block">
-                                        <i className="bi bi-person-heart me-1"></i>
-                                        Friend: {friendInfo.name}
-                                      </small>
-                                      <small className="text-muted d-block">
-                                        <i className="bi bi-telephone me-1"></i>
-                                        {friendInfo.phone}
-                                      </small>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="fw-medium">{appointment.barber?.full_name || 'Unknown'}</div>
-                          </td>
-                          <td>
-                            <div className="fw-medium">{appointment.service?.name || 'Unknown'}</div>
-                            {appointment.service?.duration && (
-                              <small className="text-muted d-block">
-                                {appointment.service.duration} min
-                              </small>
-                            )}
-                          </td>
-                          <td>
-                            <div className="fw-medium">{calculateEstimatedTime(appointment, appointments)}</div>
-                            {appointment.auto_inserted_at && (
-                              <small className="text-success d-block">
-                                <i className="bi bi-arrow-right-circle me-1"></i>
-                                Auto-inserted
-                              </small>
-                            )}
-                          </td>
-                          <td>
-                            <span className={`badge bg-${appointment.status === 'scheduled' || appointment.status === 'confirmed' ? 'success' :
-                              appointment.status === 'pending' ? 'warning' :
-                                appointment.status === 'ongoing' ? 'primary' :
-                                  appointment.status === 'cancelled' || appointment.status === 'cancel' ? 'danger' :
-                                    'secondary'
-                              }`}>
-                              {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                            </span>
-                          </td>
-                          <td className="text-center">
-                            <span className={`badge ${appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-primary'} fs-6 px-3 py-2`}>
-                              <i className={`bi bi-${appointment.priority_level === 'urgent' ? 'exclamation-triangle-fill' : 'circle-fill'} me-1`}></i>
-                              {appointment.priority_level ? appointment.priority_level.charAt(0).toUpperCase() + appointment.priority_level.slice(1) : 'Normal'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="d-flex flex-column gap-2">
-                              <div className="d-flex gap-1">
-                                <button
-                                  className={`btn btn-sm ${appointment.priority_level === 'normal' ? 'btn-primary' : 'btn-outline-primary'} ${updatingAppointments.has(appointment.id) ? 'disabled' : ''}`}
-                                  onClick={() => handlePriorityChange(appointment, 'normal')}
-                                  disabled={updatingAppointments.has(appointment.id) || appointment.priority_level === 'normal'}
-                                  title="Set to Normal Priority"
-                                  style={{ minWidth: '70px' }}
-                                >
-                                  {updatingAppointments.has(appointment.id) && appointment.priority_level === 'normal' ? (
-                                    <span className="spinner-border spinner-border-sm" role="status"></span>
-                                  ) : (
-                                    <>
-                                      <i className="bi bi-circle-fill me-1"></i>
-                                      Normal
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  className={`btn btn-sm ${appointment.priority_level === 'urgent' ? 'btn-danger' : 'btn-outline-danger'} ${updatingAppointments.has(appointment.id) ? 'disabled' : ''}`}
-                                  onClick={() => handlePriorityChange(appointment, 'urgent')}
-                                  disabled={updatingAppointments.has(appointment.id) || appointment.priority_level === 'urgent'}
-                                  title="Set to Urgent Priority"
-                                  style={{ minWidth: '70px' }}
-                                >
-                                  {updatingAppointments.has(appointment.id) && appointment.priority_level === 'urgent' ? (
-                                    <span className="spinner-border spinner-border-sm" role="status"></span>
-                                  ) : (
-                                    <>
-                                      <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                                      Urgent
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="text-center fw-bold">
-                            {formatWaitTime(appointment.estimated_wait_time)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tbody>
-                      {appointments.filter(a => a.status === 'completed').map((appointment, index) => (
-                        <tr key={appointment.id} className="table-secondary text-muted">
-                          <td className="text-center">
-                            <div className="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold mx-auto"
-                              style={{ width: '40px', height: '40px', fontSize: '16px' }}>
-                              <i className="bi bi-check-circle"></i>
-                            </div>
-                          </td>
-                          <td>
-                            <div>
-                              <div className="fw-bold">{appointment.customer?.full_name || 'Unknown'}</div>
-                              <small className="d-block">{appointment.customer?.email}</small>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="fw-medium">{appointment.barber?.full_name || 'Unknown'}</div>
-                          </td>
-                          <td>
-                            <div className="fw-medium">{appointment.service?.name || 'Unknown'}</div>
-                          </td>
-                          <td>
-                            <div className="fw-medium">{calculateEstimatedTime(appointment, appointments)}</div>
-                          </td>
-                          <td>
-                            <span className="badge bg-success">Completed</span>
-                          </td>
-                          <td className="text-center">
-                            <span className={`badge ${appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-primary'} fs-6 px-3 py-2`}>
-                              <i className={`bi bi-${appointment.priority_level === 'urgent' ? 'exclamation-triangle-fill' : 'circle-fill'} me-1`}></i>
-                              {appointment.priority_level ? appointment.priority_level.charAt(0).toUpperCase() + appointment.priority_level.slice(1) : 'Normal'}
-                            </span>
-                          </td>
-                          <td>
-                            <button className="btn btn-sm btn-outline-secondary" disabled>
-                              <i className="bi bi-check-circle me-1"></i>
-                              Completed
-                            </button>
-                          </td>
-                          <td className="text-center">
-                            N/A
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+    <div style={styles.container}>
+      {/* Header Section */}
+      <div style={styles.headerCard}>
+        <div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+            <i className="bi bi-arrow-up-down me-2" style={{ color: '#1a1a1a' }}></i>
+            Queue Priority Manager
+          </h2>
+          <p className="text-muted small mb-0">Manage queue tiers and appointment positions</p>
+        </div>
+        <div className="d-flex gap-2">
+            <button 
+                style={styles.primaryBtn} 
+                className="touch-btn"
+                onClick={fetchAppointments}
+                disabled={loading}
+            >
+                {loading ? <span className="spinner-border spinner-border-sm"></span> : <i className="bi bi-arrow-clockwise"></i>}
+                <span className="d-none d-sm-inline">REFRESH QUEUE</span>
+            </button>
         </div>
       </div>
 
-      {/* Priority Update Confirmation Modal */}
+      {error && (
+        <div className="alert alert-danger rounded-4 border-0 shadow-sm d-flex align-items-center mb-4">
+          <i className="bi bi-exclamation-circle-fill me-2"></i>
+          <span className="small fw-bold">{error}</span>
+          <button className="btn-close ms-auto" onClick={() => setError('')}></button>
+        </div>
+      )}
+
+      {success && (
+        <div className="alert alert-success rounded-4 border-0 shadow-sm d-flex align-items-center mb-4">
+          <i className="bi bi-check-circle-fill me-2"></i>
+          <span className="small fw-bold">{success}</span>
+          <button className="btn-close ms-auto" onClick={() => setSuccess('')}></button>
+        </div>
+      )}
+
+      {/* Priority Statistics Summary */}
+      <div className="row g-3 mb-4">
+          <div className="col-md-4">
+            <div style={styles.statCard} className="hover-lift">
+              <div className="text-muted small fw-bold text-uppercase mb-1">Total in Queue</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#1a1a1a' }}>
+                  {appointments.length}
+              </div>
+              <div className="small text-muted mt-1">Live current appointments</div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div style={styles.statCard} className="hover-lift">
+              <div className="text-muted small fw-bold text-uppercase mb-1">Urgent Tier</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#B71C1C' }}>
+                 {appointments.filter(apt => apt.priority_level === 'urgent').length}
+              </div>
+              <div className="small text-muted mt-1">Requiring immediate attention</div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div style={styles.statCard} className="hover-lift">
+              <div className="text-muted small fw-bold text-uppercase mb-1">Pending Requests</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#E65100' }}>
+                {appointments.filter(apt => apt.priority_request_status === 'pending' && !apt.is_urgent).length}
+              </div>
+              <div className="small text-muted mt-1">User requested priority upgrades</div>
+            </div>
+          </div>
+      </div>
+
+      {/* Modern Filters & Queue Status */}
+      <div style={styles.card}>
+        <div className="row g-3 align-items-center">
+          <div className="col-md-3">
+            <label className="text-muted small fw-bold mb-1 text-uppercase">Queue Date</label>
+            <input 
+              type="date" 
+              className="form-control rounded-4 bg-light border-0" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+          </div>
+          <div className="col-md-3">
+            <label className="text-muted small fw-bold mb-1 text-uppercase">Assigned Barber</label>
+            <select 
+              className="form-select rounded-4 bg-light border-0" 
+              value={selectedBarber}
+              onChange={(e) => setSelectedBarber(e.target.value)}
+            >
+              {barbers.length === 0 && <option value="">No Active Barbers</option>}
+              {barbers.map(barber => (
+                <option key={barber.id} value={barber.id}>{barber.full_name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-3">
+            <label className="text-muted small fw-bold mb-1 text-uppercase">Priority Filter</label>
+            <select 
+              className="form-select rounded-4 bg-light border-0" 
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
+            >
+              <option value="all">All Priorities</option>
+              <option value="urgent">Urgent Tier</option>
+              <option value="normal">Normal Tier</option>
+            </select>
+          </div>
+          {queueStatus && (
+              <div className="col-md-3">
+                  <div className="p-3 bg-light rounded-4 border d-flex justify-content-between align-items-center">
+                      <div>
+                          <div className="text-muted" style={{ fontSize: '0.65rem', fontWeight: '800' }}>EST. WAIT</div>
+                          <div className="fw-800" style={{ color: '#0D47A1' }}>{formatWaitTime(queueStatus.estimated_wait_time)}</div>
+                      </div>
+                      <div className="text-end">
+                          <div className="text-muted" style={{ fontSize: '0.65rem', fontWeight: '800' }}>SERVING</div>
+                          <div className="fw-800">{queueStatus.currently_serving || 0}</div>
+                      </div>
+                  </div>
+              </div>
+          )}
+        </div>
+      </div>
+
+      {/* Queue Appointments List */}
+      <div style={styles.card} className="p-0 overflow-hidden mt-4">
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h5 className="mb-0 fw-800">Queue List</h5>
+          <span className="badge rounded-pill bg-light text-dark border px-3 py-2 fw-bold" style={{ fontSize: '0.7rem' }}>
+            {appointments.length} TOTAL APPOINTMENTS
+          </span>
+        </div>
+
+        <div className="table-responsive premium-scroll">
+          <table className="table table-hover align-middle mb-0">
+            <thead>
+              <tr style={{ borderBottom: '2px solid #f8f9fa' }}>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.75rem', color: '#888', fontWeight: '800', width: '80px' }}>POS</th>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.75rem', color: '#888', fontWeight: '800' }}>CUSTOMER</th>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.75rem', color: '#888', fontWeight: '800' }}>BARBER / SERVICE</th>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.75rem', color: '#888', fontWeight: '800' }}>TIME & WAIT</th>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.75rem', color: '#888', fontWeight: '800', textAlign: 'center' }}>TIER</th>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.75rem', color: '#888', fontWeight: '800', textAlign: 'right' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="6" className="text-center py-5"><LoadingSpinner /></td></tr>
+              ) : appointments.length === 0 ? (
+                <tr>
+                   <td colSpan="6" className="text-center py-5">
+                      <i className="bi bi-inbox text-muted opacity-25" style={{ fontSize: '3rem' }}></i>
+                      <p className="text-muted fw-bold mt-2">No active queue appointments</p>
+                   </td>
+                </tr>
+              ) : (
+                appointments.map((appointment) => {
+                  const friendInfo = getFriendInfo(appointment);
+                  const isOngoing = appointment.status === 'ongoing';
+                  
+                  return (
+                    <tr key={appointment.id} style={{ transition: 'all 0.2s', backgroundColor: isOngoing ? '#f0f7ff' : 'transparent' }}>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div className={`d-flex align-items-center justify-content-center fw-800 rounded-circle`} 
+                             style={{ 
+                               width: '32px', 
+                               height: '32px', 
+                               fontSize: '0.85rem',
+                               background: isOngoing ? '#0D47A1' : '#f5f5f5',
+                               color: isOngoing ? '#fff' : '#1a1a1a',
+                               border: isOngoing ? 'none' : '1px solid #eee'
+                             }}>
+                          {appointment.queue_position}
+                        </div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div className="d-flex align-items-center gap-3">
+                          <div className="avatar-placeholder rounded-circle bg-light d-flex align-items-center justify-content-center fw-bold text-muted border" style={{ width: '40px', height: '40px', flexShrink: 0 }}>
+                            {appointment.customer?.full_name?.charAt(0) || '?'}
+                          </div>
+                          <div>
+                            <div className="fw-800 text-dark" style={{ fontSize: '0.95rem' }}>{appointment.customer?.full_name || 'Walk-in Guest'}</div>
+                            <div className="text-muted" style={{ fontSize: '0.75rem' }}>{appointment.customer?.phone || 'No phone'}</div>
+                            
+                            {friendInfo && (
+                                <div className="mt-1 d-inline-flex align-items-center gap-1 bg-info bg-opacity-10 text-info px-2 py-0.5 rounded-pill" style={{ fontSize: '0.65rem', fontWeight: '700' }}>
+                                    <i className="bi bi-person-fill"></i> BOOKED FOR: {friendInfo.name}
+                                </div>
+                            )}
+
+                            {appointment.priority_request_status === 'pending' && !appointment.is_urgent && (
+                                <div className="mt-2 d-flex flex-column gap-2 p-2 bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded-3">
+                                    <div className="text-warning fw-800" style={{ fontSize: '0.65rem' }}>
+                                        <i className="bi bi-lightning-charge-fill"></i> PRIORITY REQUESTED
+                                    </div>
+                                    <div className="d-flex gap-1">
+                                        <button 
+                                            className="btn btn-xs btn-success w-100 rounded-2 py-1 fw-800" 
+                                            style={{ fontSize: '0.6rem' }}
+                                            onClick={() => approvePriorityRequest(appointment.id)}
+                                            disabled={updatingAppointments.has(appointment.id)}
+                                        >APPROVE</button>
+                                        <button 
+                                            className="btn btn-xs btn-danger w-100 rounded-2 py-1 fw-800" 
+                                            style={{ fontSize: '0.6rem' }}
+                                            onClick={() => {
+                                                const notes = window.prompt('Rejection reason:');
+                                                if (notes !== null) rejectPriorityRequest(appointment.id, notes);
+                                            }}
+                                            disabled={updatingAppointments.has(appointment.id)}
+                                        >DECLINE</button>
+                                    </div>
+                                </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div className="fw-700 text-dark" style={{ fontSize: '0.85rem' }}>{appointment.barber?.full_name || 'Any Barber'}</div>
+                        <div className="text-muted" style={{ fontSize: '0.75rem' }}>{appointment.service?.name || 'Standard Service'}</div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div className="d-flex flex-column">
+                            <div className="fw-800" style={{ fontSize: '0.85rem', color: '#1a1a1a' }}>{calculateEstimatedTime(appointment, appointments)}</div>
+                            <div className="d-flex align-items-center gap-1 mt-1">
+                                <span className={`status-dot ${isOngoing ? 'serving' : 'waiting'}`}></span>
+                                <span className="text-muted fw-700" style={{ fontSize: '0.65rem' }}>
+                                    {isOngoing ? 'CURRENTLY SERVING' : `EST. WAIT: ${formatWaitTime(appointment.estimated_wait_time)}`}
+                                </span>
+                            </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center' }}>
+                         <span style={styles.badge(appointment.priority_level || 'normal')}>
+                            {appointment.priority_level || 'normal'}
+                         </span>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
+                        <div className="d-flex gap-2 justify-content-end">
+                            {appointment.priority_level !== 'urgent' ? (
+                                <button 
+                                    style={{ ...styles.secondaryBtn, color: '#B71C1C', background: '#FFEBEE' }} 
+                                    className="touch-btn" 
+                                    title="Upgrade to Urgent"
+                                    onClick={() => handlePriorityChange(appointment, 'urgent')}
+                                    disabled={updatingAppointments.has(appointment.id)}
+                                >
+                                    <i className="bi bi-lightning-fill"></i>
+                                </button>
+                            ) : (
+                                <button 
+                                    style={{ ...styles.secondaryBtn, color: '#0D47A1', background: '#E3F2FD' }} 
+                                    className="touch-btn" 
+                                    title="Downgrade to Normal"
+                                    onClick={() => handlePriorityChange(appointment, 'normal')}
+                                    disabled={updatingAppointments.has(appointment.id)}
+                                >
+                                    <i className="bi bi-arrow-down-circle"></i>
+                                </button>
+                            )}
+                            
+                            {/* Position Controls (Simplified) */}
+                            <div className="d-flex bg-light rounded-3 p-1">
+                                <button 
+                                    className="btn btn-xs p-1" 
+                                    disabled={appointment.queue_position <= (ongoingAppointment ? 2 : 1) || updatingAppointments.has(appointment.id)}
+                                    onClick={() => moveUp(appointment.id)}
+                                >
+                                    <i className="bi bi-chevron-up"></i>
+                                </button>
+                                <button 
+                                    className="btn btn-xs p-1"
+                                    disabled={appointment.queue_position >= appointments.length || updatingAppointments.has(appointment.id)}
+                                    onClick={() => moveDown(appointment.id)}
+                                >
+                                    <i className="bi bi-chevron-down"></i>
+                                </button>
+                            </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Priority Update Modal */}
       {priorityModal.isOpen && priorityModal.appointment && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  <i className={`bi bi-${priorityModal.newPriority === 'urgent' ? 'exclamation-triangle-fill text-danger' : 'circle-fill text-primary'} me-2`}></i>
-                  Update Priority Level
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={closePriorityModal}
-                  disabled={priorityModal.isLoading}
-                ></button>
+        <div style={styles.modalOverlay} onClick={closePriorityModal}>
+          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h5 className="mb-0 fw-800">Update Queue Tier</h5>
+                <p className="text-muted small mb-0">Re-order queue by changing tier</p>
               </div>
-              <div className="modal-body">
-                <div className="alert alert-info">
-                  <i className="bi bi-info-circle me-2"></i>
-                  Changing priority will automatically reorder the queue.
+              <button className="btn-close" onClick={closePriorityModal}></button>
+            </div>
+            
+            <div className="p-4 premium-scroll" style={{ overflowY: 'auto' }}>
+                <div className="d-flex align-items-center gap-3 mb-4 p-3 bg-light rounded-4 border">
+                    <div className="avatar-placeholder rounded-circle bg-white d-flex align-items-center justify-content-center fw-bold text-muted border" style={{ width: '50px', height: '50px' }}>
+                        {priorityModal.appointment.customer?.full_name?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                        <div className="fw-800 fs-5">{priorityModal.appointment.customer?.full_name || 'Customer'}</div>
+                        <div className="badge rounded-pill bg-white text-dark border px-2 py-1 small fw-bold">
+                            CURRENT POSITION: #{priorityModal.appointment.queue_position}
+                        </div>
+                    </div>
                 </div>
 
-                <div className="card mb-3">
-                  <div className="card-body">
-                    <h6 className="card-title">Appointment Details</h6>
-                    <div className="row">
-                      <div className="col-6">
-                        <small className="text-muted d-block">Customer</small>
-                        <strong>{priorityModal.appointment.customer?.full_name || 'Unknown'}</strong>
-                      </div>
-                      <div className="col-6">
-                        <small className="text-muted d-block">Queue Position</small>
-                        <strong>#{priorityModal.appointment.queue_position}</strong>
+                <div className="mb-4">
+                  <label className="text-muted small fw-bold mb-3 d-block text-uppercase">Select New Tier</label>
+                  <div className="row g-3">
+                    <div className="col-6">
+                      <div 
+                        className={`p-3 rounded-4 border text-center touch-btn cursor-pointer transition-all ${priorityModal.newPriority === 'normal' ? 'border-primary bg-primary bg-opacity-10' : 'bg-white'}`}
+                        onClick={() => setPriorityModal(prev => ({ ...prev, newPriority: 'normal' }))}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <i className={`bi bi-circle-fill fs-3 mb-2 d-block ${priorityModal.newPriority === 'normal' ? 'text-primary' : 'text-muted opacity-25'}`}></i>
+                        <div className="fw-800">NORMAL</div>
+                        <small className="text-muted">Standard Queue</small>
                       </div>
                     </div>
-                    <div className="row mt-2">
-                      <div className="col-6">
-                        <small className="text-muted d-block">Barber</small>
-                        <strong>{priorityModal.appointment.barber?.full_name || 'Unknown'}</strong>
-                      </div>
-                      <div className="col-6">
-                        <small className="text-muted d-block">Current Priority</small>
-                        <span className={`badge ${priorityModal.appointment.priority_level === 'urgent' ? 'bg-danger' : 'bg-primary'}`}>
-                          {priorityModal.appointment.priority_level || 'normal'}
-                        </span>
+                    <div className="col-6">
+                      <div 
+                        className={`p-3 rounded-4 border text-center touch-btn cursor-pointer transition-all ${priorityModal.newPriority === 'urgent' ? 'border-danger bg-danger bg-opacity-10' : 'bg-white'}`}
+                        onClick={() => setPriorityModal(prev => ({ ...prev, newPriority: 'urgent' }))}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <i className={`bi bi-lightning-charge-fill fs-3 mb-2 d-block ${priorityModal.newPriority === 'urgent' ? 'text-danger' : 'text-muted opacity-25'}`}></i>
+                        <div className="fw-800">URGENT</div>
+                        <small className="text-muted">High Priority</small>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="card border-0 bg-light">
-                  <div className="card-body">
-                    <h6 className="card-title">Change Priority To:</h6>
-                    <div className="d-flex gap-2">
-                      <div className={`card flex-fill text-center ${priorityModal.newPriority === 'normal' ? 'border-primary bg-primary bg-opacity-10' : 'border'}`}>
-                        <div className="card-body p-3">
-                          <i className="bi bi-circle-fill text-primary fs-4"></i>
-                          <div className="mt-2 fw-bold">Normal</div>
-                          <small className="text-muted">Standard priority</small>
-                        </div>
-                      </div>
-                      <div className={`card flex-fill text-center ${priorityModal.newPriority === 'urgent' ? 'border-danger bg-danger bg-opacity-10' : 'border'}`}>
-                        <div className="card-body p-3">
-                          <i className="bi bi-exclamation-triangle-fill text-danger fs-4"></i>
-                          <div className="mt-2 fw-bold">Urgent</div>
-                          <small className="text-muted">High priority</small>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="alert alert-info rounded-4 border-0 small py-3 px-3 d-flex gap-2">
+                    <i className="bi bi-info-circle-fill"></i>
+                    <div>Changing the tier will automatically shift other appointments to maintain queue integrity. The customer will be notified.</div>
                 </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={closePriorityModal}
-                  disabled={priorityModal.isLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${priorityModal.newPriority === 'urgent' ? 'btn-danger' : 'btn-primary'}`}
-                  onClick={confirmPriorityUpdate}
-                  disabled={priorityModal.isLoading}
-                >
-                  {priorityModal.isLoading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <i className={`bi bi-${priorityModal.newPriority === 'urgent' ? 'exclamation-triangle-fill' : 'check-circle-fill'} me-2`}></i>
-                      Update to {priorityModal.newPriority.charAt(0).toUpperCase() + priorityModal.newPriority.slice(1)}
-                    </>
-                  )}
-                </button>
-              </div>
+            </div>
+
+            <div className="p-4 border-top">
+              <button 
+                style={styles.primaryBtn} 
+                className="w-100 touch-btn"
+                onClick={confirmPriorityUpdate}
+                disabled={priorityModal.isLoading}
+              >
+                {priorityModal.isLoading ? <span className="spinner-border spinner-border-sm"></span> : <i className="bi bi-check2-circle"></i>}
+                CONFIRM TIER UPDATE
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        .fw-800 { font-weight: 800; }
+        .fw-700 { font-weight: 700; }
+        .touch-btn:active { transform: scale(0.96); }
+        .hover-lift:hover { transform: translateY(-3px); }
+        .cursor-pointer { cursor: pointer; }
+        .transition-all { transition: all 0.2s ease; }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.serving { background-color: #4CAF50; box-shadow: 0 0 8px #4CAF50; animation: blink 1.5s infinite; }
+        .status-dot.waiting { background-color: #888; }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        .table-hover tbody tr:hover {
+          background-color: #fcfcfc !important;
+          transform: scale(1.002);
+        }
+        .premium-scroll::-webkit-scrollbar { width: 4px; }
+        .premium-scroll::-webkit-scrollbar-thumb { background: #eee; border-radius: 10px; }
+        
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+
+        .btn-xs {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.7rem;
+        }
+
+        @media (max-width: 575.98px) {
+          .modal-dialog {
+            display: flex !important;
+            align-items: flex-end !important;
+            margin: 0 !important;
+            height: 100% !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

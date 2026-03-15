@@ -451,21 +451,126 @@ class AutoCancelNoShowService {
   }
 
   /**
-   * Run both checks (scheduled and queue appointments)
+   * Check and auto-cancel orders that weren't picked up
+   * @param {number} gracePeriodMinutes - Optional grace period override
+   * @returns {Promise<Object>} Result with cancelled orders count
+   */
+  async cancelNoShowOrders(gracePeriodMinutes = null) {
+    try {
+      const gracePeriod = gracePeriodMinutes || this.GRACE_PERIOD_MINUTES;
+      const now = new Date();
+      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      const currentTime = now.toTimeString().slice(0, 5);
+      const cutoffTime = this.subtractMinutes(currentTime, gracePeriod);
+
+      console.log('🔍 Checking for no-show orders...', { today, currentTime, gracePeriod });
+
+      // Find orders that are confirmed or ready for pickup but passed the pickup time
+      const { data: orders, error: fetchError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          customer:customer_id(id, full_name, email)
+        `)
+        .lte('pickup_date', today)
+        .in('status', ['confirmed', 'ready_for_pickup'])
+        .order('pickup_date', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      if (!orders || orders.length === 0) {
+        return { success: true, cancelledCount: 0, cancelledOrders: [] };
+      }
+
+      const cancelledOrders = [];
+
+      for (const order of orders) {
+        let shouldCancel = false;
+
+        // 1. Past date
+        if (order.pickup_date < today) {
+          shouldCancel = true;
+        }
+        // 2. Today and past pickup time + grace
+        else if (order.pickup_time) {
+          const pickupTime = order.pickup_time.slice(0, 5);
+          if (this.timeToMinutes(pickupTime) < this.timeToMinutes(cutoffTime)) {
+            shouldCancel = true;
+          }
+        }
+
+        if (shouldCancel) {
+          console.log(`❌ Auto-cancelling no-show order:`, {
+            id: order.id,
+            order_number: order.order_id,
+            date: order.pickup_date,
+            time: order.pickup_time
+          });
+
+          const { error: cancelError } = await supabase
+            .from('orders')
+            .update({
+              status: 'cancelled',
+              cancellation_reason: `Automatically cancelled: Order was not picked up by ${order.pickup_time} on ${order.pickup_date}.`,
+              cancelled_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', order.id);
+
+          if (!cancelError) {
+            cancelledOrders.push(order);
+
+            // Notify customer
+            if (order.customer_id) {
+              try {
+                const { default: CentralizedNotificationService } = await import('../notifications/CentralizedNotificationService');
+                await CentralizedNotificationService.createNotification({
+                  userId: order.customer_id,
+                  title: 'Order Cancelled 🛍️',
+                  message: `Your order #${order.order_id || order.id.slice(-8)} was automatically cancelled because it wasn't picked up on time.`,
+                  type: 'order',
+                  category: 'cancellation',
+                  orderId: order.id
+                });
+              } catch (notifError) {
+                console.error('Error creating order cancellation notification:', notifError);
+              }
+            }
+          }
+        }
+      }
+
+      return {
+        success: true,
+        cancelledCount: cancelledOrders.length,
+        cancelledOrders: cancelledOrders.map(o => ({ id: o.id, order_id: o.order_id }))
+      };
+    } catch (error) {
+      console.error('❌ Error in auto-cancel no-show orders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Run all no-show checks (appointments and orders)
    */
   async cancelAllNoShowAppointments(gracePeriodMinutes = null) {
     try {
-      // The main cancelNoShowAppointments now handles both scheduled and queue
+      // 1. Appointments check
       const result = await this.cancelNoShowAppointments(gracePeriodMinutes);
 
-      // Also run the separate queue check for additional coverage
+      // 2. Queue check
       const queueResult = await this.cancelNoShowQueueAppointments();
+
+      // 3. Orders check
+      const ordersResult = await this.cancelNoShowOrders(gracePeriodMinutes);
 
       return {
         success: true,
         scheduled: result,
         queue: queueResult,
-        totalCancelled: result.cancelledCount + queueResult.cancelledCount
+        orders: ordersResult,
+        totalCancelled: result.cancelledCount + queueResult.cancelledCount + ordersResult.cancelledCount
       };
     } catch (error) {
       console.error('❌ Error in cancelAllNoShowAppointments:', error);

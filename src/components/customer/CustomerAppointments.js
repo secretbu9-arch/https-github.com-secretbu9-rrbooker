@@ -1988,7 +1988,7 @@ const CustomerAppointments = () => {
                             onClick={() => handleCancel(appointment)}
                           >
                             <i className="bi bi-x me-1"></i>
-                            Retract Request
+                            Cancel Request
                           </button>
                         )}
 

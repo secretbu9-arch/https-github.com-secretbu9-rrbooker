@@ -945,9 +945,10 @@ const CustomerDashboard = () => {
             <Link
               to="/appointments"
               className="btn btn-sm btn-premium-brown fw-bold"
-              style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '0.9rem' }}
+              style={{ borderRadius: '12px', padding: '8px 12px', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="View Pending Requests"
             >
-              View
+              <i className="bi bi-eye"></i>
             </Link>
           </div>
         </div>

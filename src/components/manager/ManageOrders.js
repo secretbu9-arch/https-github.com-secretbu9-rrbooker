@@ -170,7 +170,7 @@ const ManageOrders = () => {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     const today = getTodayString();
-    
+
     switch (tab) {
       case 'today':
         setFilters(prev => ({ ...prev, dateFrom: today, dateTo: today }));
@@ -370,7 +370,7 @@ const ManageOrders = () => {
   const formatPrice = (price) => `₱${parseFloat(price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
   const formatDate = (dateString, style = 'short') => {
-    const options = style === 'long' 
+    const options = style === 'long'
       ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
       : { month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString('en-US', options);
@@ -393,8 +393,8 @@ const ManageOrders = () => {
           </h2>
           <p className="text-muted small mb-0">Track and fulfill product sales</p>
         </div>
-        <button 
-          style={styles.primaryBtn} 
+        <button
+          style={styles.primaryBtn}
           className="touch-btn"
           onClick={() => setShowWalkInProductModal(true)}
         >
@@ -431,7 +431,7 @@ const ManageOrders = () => {
           </div>
           <div className="col-md-4">
             <div style={styles.statCard} className="hover-lift">
-              <div className="text-muted small fw-bold text-uppercase mb-1">Avg Ticket</div>
+              <div className="text-muted small fw-bold text-uppercase mb-1">Avg Transaction</div>
               <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#1a1a1a' }}>{formatPrice(stats.averageOrderValue)}</div>
               <div className="small text-muted mt-1">Value per transaction</div>
             </div>
@@ -456,9 +456,9 @@ const ManageOrders = () => {
               <span className="input-group-text bg-white border-end-0 rounded-start-4">
                 <i className="bi bi-search text-muted"></i>
               </span>
-              <input 
-                type="text" 
-                className="form-control border-start-0 rounded-end-4 bg-white" 
+              <input
+                type="text"
+                className="form-control border-start-0 rounded-end-4 bg-white"
                 placeholder="Search customer name..."
                 value={filters.customerName}
                 onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
@@ -466,8 +466,8 @@ const ManageOrders = () => {
             </div>
           </div>
           <div className="col-md-3">
-            <select 
-              className="form-select form-select-sm rounded-4" 
+            <select
+              className="form-select form-select-sm rounded-4"
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
             >
@@ -480,15 +480,15 @@ const ManageOrders = () => {
             </select>
           </div>
           <div className="col-md-3">
-            <input 
-              type="date" 
+            <input
+              type="date"
               className="form-control form-control-sm rounded-4"
               value={filters.dateFrom}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
             />
           </div>
           <div className="col-md-2">
-            <button 
+            <button
               className="btn btn-light btn-sm w-100 rounded-4 fw-bold"
               onClick={() => setFilters({ status: 'all', dateFrom: '', dateTo: '', customerName: '' })}
             >
@@ -511,8 +511,8 @@ const ManageOrders = () => {
           <div className="row g-3">
             {orders.map(order => (
               <div key={order.id} className="col-12">
-                <div 
-                  style={styles.orderCard} 
+                <div
+                  style={styles.orderCard}
                   className="order-card-hover"
                 >
                   <div className="row g-0 align-items-center">
@@ -559,7 +559,7 @@ const ManageOrders = () => {
                       <div className="d-flex flex-column gap-1">
                         <div className="text-muted fw-bold mb-1" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>QUICK ACTION</div>
                         {order.status === 'pending' && (
-                          <button 
+                          <button
                             className="btn btn-sm btn-primary rounded-3 fw-bold touch-btn"
                             onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, 'confirmed'); }}
                             style={{ backgroundColor: '#0D47A1', border: 'none', padding: '0.4rem', fontSize: '0.75rem' }}
@@ -568,7 +568,7 @@ const ManageOrders = () => {
                           </button>
                         )}
                         {order.status === 'confirmed' && (
-                          <button 
+                          <button
                             className="btn btn-sm btn-success rounded-3 fw-bold touch-btn"
                             onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, 'ready_for_pickup'); }}
                             style={{ backgroundColor: '#1B5E20', border: 'none', padding: '0.4rem', fontSize: '0.75rem' }}
@@ -577,7 +577,7 @@ const ManageOrders = () => {
                           </button>
                         )}
                         {order.status === 'ready_for_pickup' && (
-                          <button 
+                          <button
                             className="btn btn-sm btn-dark rounded-3 fw-bold touch-btn"
                             onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, 'picked_up'); }}
                             style={{ backgroundColor: '#4A148C', border: 'none', padding: '0.4rem', fontSize: '0.75rem' }}
@@ -585,7 +585,7 @@ const ManageOrders = () => {
                             <i className="bi bi-bag-check me-1"></i> PICKED UP
                           </button>
                         )}
-                        <button 
+                        <button
                           className="btn btn-sm btn-light rounded-3 fw-bold touch-btn text-muted"
                           onClick={() => handleViewDetails(order)}
                           style={{ padding: '0.4rem', fontSize: '0.75rem' }}

@@ -110,7 +110,7 @@ const Notifications = () => {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(50);
 
       if (error) throw error;
 
@@ -203,13 +203,19 @@ const Notifications = () => {
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'appointment':
-        return 'bi-calendar-check';
+        return 'bi-calendar-check-fill';
       case 'queue':
-        return 'bi-people';
+        return 'bi-people-fill';
       case 'reminder':
-        return 'bi-bell';
+        return 'bi-bell-fill';
+      case 'booking':
+        return 'bi-calendar-plus-fill';
+      case 'announcement':
+        return 'bi-megaphone-fill';
+      case 'system':
+        return 'bi-gear-fill';
       default:
-        return 'bi-info-circle';
+        return 'bi-info-circle-fill';
     }
   };
 

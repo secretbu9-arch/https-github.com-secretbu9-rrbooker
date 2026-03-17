@@ -7,6 +7,7 @@ import RescheduleCancelModal from './RescheduleCancelModal';
 import RatingForm from '../common/RatingForm';
 import addOnsService from '../../services/booking/AddOnsService';
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
+import QueueTimeCalculator from '../../services/queue/QueueTimeCalculator';
 
 const CustomerAppointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -552,114 +553,122 @@ const CustomerAppointments = () => {
 
   const fetchQueuePositions = async () => {
     try {
-      // Get all queue appointments (not just today)
-      const queueAppointments = appointments.filter(apt =>
+      // Get active queue appointments
+      const activeAppointments = appointments.filter(apt =>
         apt.appointment_type === 'queue' &&
         (matchesStatus(apt, 'scheduled', 'confirmed', 'pending', 'ongoing'))
       );
 
+      if (activeAppointments.length === 0) return;
+
       const positions = {};
 
-      // Helper function to calculate add-ons duration
-      const calculateAddOnsDuration = (addOnsData) => {
+      // Process each appointment to get its real-time status in the global queue
+      // We use Promise.all to fetch them in parallel
+      await Promise.all(activeAppointments.map(async (appointment) => {
         try {
-          if (!addOnsData) return 0;
+          // Use QueueTimeCalculator to get global queue info for this barber/date
+          // We pass 0 for duration because we are checking an EXISTING appointment's status,
+          // though calculateQueueInfo is usually for new ones.
+          // Better yet: we build the same sorted list the calculator uses to find this appointment's specific rank.
+          const { data: globalQueue } = await supabase
+            .from('appointments')
+            .select('id, status, appointment_time, appointment_type, priority_level, created_at, total_duration')
+            .eq('barber_id', appointment.barber_id)
+            .eq('appointment_date', appointment.appointment_date)
+            .in('status', ['pending', 'scheduled', 'confirmed', 'ongoing']);
 
-          let addOnItems;
-          if (Array.isArray(addOnsData)) {
-            addOnItems = addOnsData;
-          } else if (typeof addOnsData === 'string') {
-            addOnItems = JSON.parse(addOnsData);
-          } else {
-            return 0;
-          }
+          if (!globalQueue) return;
 
-          if (!Array.isArray(addOnItems) || addOnItems.length === 0) return 0;
+          // Standard Sort Rule (Same as QueueTimeCalculator)
+          const sorted = globalQueue.sort((a, b) => {
+            if (a.status === 'ongoing') return -1;
+            if (b.status === 'ongoing') return 1;
 
-          const legacyDurationMapping = {
-            'addon1': 15, 'addon2': 10, 'addon3': 20, 'addon4': 15, 'addon5': 10,
-            'addon6': 15, 'addon7': 10, 'addon8': 10, 'addon9': 15, 'addon10': 20
-          };
+            const getPrio = (p) => (p === '1' ? 100 : p === 'urgent' ? 50 : 0);
+            const pA = getPrio(a.priority_level);
+            const pB = getPrio(b.priority_level);
+            if (pA !== pB) return pB - pA;
 
-          let totalDuration = 0;
-          addOnItems.forEach(item => {
-            if (legacyDurationMapping[item]) {
-              totalDuration += legacyDurationMapping[item];
-            }
+            return (a.appointment_time || a.created_at).localeCompare(b.appointment_time || b.created_at);
           });
 
-          return totalDuration;
-        } catch (error) {
-          console.error('Error calculating add-ons duration:', error);
-          return 0;
-        }
-      };
+          // Find this appointment in the sorted global line
+          const myIndex = sorted.findIndex(apt => apt.id === appointment.id);
+          if (myIndex === -1) return;
 
-      // Group appointments by barber and date
-      const appointmentsByBarberAndDate = {};
-      queueAppointments.forEach(apt => {
-        const key = `${apt.barber_id}_${apt.appointment_date}`;
-        if (!appointmentsByBarberAndDate[key]) {
-          appointmentsByBarberAndDate[key] = [];
-        }
-        appointmentsByBarberAndDate[key].push(apt);
-      });
-
-      // Calculate wait time for each appointment
-      for (const appointment of queueAppointments) {
-        const key = `${appointment.barber_id}_${appointment.appointment_date}`;
-        const sameBarberDateAppointments = appointmentsByBarberAndDate[key] || [];
-
-        // Sort by queue position
-        const sortedAppointments = sameBarberDateAppointments
-          .filter(apt => apt.queue_position != null)
-          .sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
-
-        const appointmentPosition = appointment.queue_position;
-        if (appointmentPosition == null) continue;
-
-        // Find position in sorted list
-        const position = sortedAppointments.findIndex(apt => apt.id === appointment.id) + 1;
-
-        // Calculate wait time based on all appointments before this one
-        let totalWaitTime = 0;
-        const appointmentsAhead = sortedAppointments.filter(apt => apt.id !== appointment.id && apt.queue_position < appointmentPosition);
-
-        for (let i = 0; i < appointmentsAhead.length; i++) {
-          const apt = appointmentsAhead[i];
-
-          // Use total_duration if available, otherwise calculate from service + add-ons
-          let duration = apt.total_duration;
-          if (!duration || duration === 0) {
-            const serviceDuration = apt.service?.duration || 30;
-            const addOnsDuration = calculateAddOnsDuration(apt.add_ons_data);
-            duration = serviceDuration + addOnsDuration;
+          const position = myIndex + 1;
+          
+          // Calculate wait time: sum of durations of everyone AHEAD in the sorted line
+          let totalWaitMinutes = 0;
+          for (let i = 0; i < myIndex; i++) {
+            totalWaitMinutes += (sorted[i].total_duration || 30);
           }
 
-          totalWaitTime += duration;
-
-          // Add buffer time between appointments (5 minutes) - only between appointments, not after the last one
-          // Add buffer after each appointment except the last one
-          if (i < appointmentsAhead.length - 1) {
-            totalWaitTime += 5;
+          // Format wait time text
+          let estimatedWaitText = '0 min';
+          if (totalWaitMinutes > 0) {
+            if (totalWaitMinutes < 60) {
+              estimatedWaitText = `${totalWaitMinutes} min`;
+            } else {
+              const h = Math.floor(totalWaitMinutes / 60);
+              const m = totalWaitMinutes % 60;
+              estimatedWaitText = m > 0 ? `${h}h ${m}m` : `${h}h`;
+            }
           }
-        }
 
-        // Format wait time
-        let estimatedWaitText;
-        if (totalWaitTime < 60) {
-          estimatedWaitText = `${totalWaitTime} min`;
-        } else {
-          const hours = Math.floor(totalWaitTime / 60);
-          const minutes = totalWaitTime % 60;
-          estimatedWaitText = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-        }
+          // Time utilities for arrival calculation
+          const timeToMinutes = (timeStr) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+          };
+          const minutesToTime = (mins) => {
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+          };
+          const convertTo12Hour = (timeStr) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            const period = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
+          };
 
-        positions[appointment.id] = {
-          position,
-          estimatedWait: estimatedWaitText
-        };
-      }
+          // Business constants
+          const LUNCH_START = 12 * 60; // 12:00 PM
+          const LUNCH_END = 13 * 60;   // 1:00 PM
+          const WORK_START = 8 * 60;   // 8:00 AM
+          const ARRIVAL_BUFFER = 10;   // 10 mins before
+
+          // Calculate start time
+          const now = new Date();
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          const isToday = appointment.appointment_date === now.toLocaleDateString('en-CA');
+          
+          let startTime = isToday ? Math.max(WORK_START, currentMinutes) : WORK_START;
+          
+          // Add wait time
+          startTime += totalWaitMinutes;
+
+          // Adjust for lunch break
+          if (startTime < LUNCH_END && (startTime + (appointment.total_duration || 30)) > LUNCH_START) {
+             startTime = LUNCH_END;
+          } else if (startTime >= LUNCH_START && startTime < LUNCH_END) {
+             startTime = LUNCH_END;
+          }
+
+          const arrivalMinutes = Math.max(isToday ? currentMinutes : 0, startTime - ARRIVAL_BUFFER);
+          const estimatedArrival = convertTo12Hour(minutesToTime(arrivalMinutes));
+
+          positions[appointment.id] = {
+            position,
+            estimatedWait: estimatedWaitText,
+            estimatedArrival: estimatedArrival
+          };
+        } catch (err) {
+          console.error(`Error fetching queue for appointment ${appointment.id}:`, err);
+        }
+      }));
 
       setQueuePositions(positions);
     } catch (err) {
@@ -1421,7 +1430,44 @@ const CustomerAppointments = () => {
           transform: scale(0.95);
         }
         .hover-scale-110:hover {
-          transform: scale(1.1);
+          transform: scale(1.02);
+        }
+        .status-badge-premium {
+          padding: 6px 12px;
+          border-radius: 8px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+          font-size: 0.72rem;
+          margin-bottom: 8px;
+        }
+        .minimal-card {
+           border: 1px solid #eee;
+           border-radius: 12px;
+           background: #fff;
+           transition: border-color 0.2s;
+           display: flex;
+           flex-direction: column;
+        }
+        .minimal-card:hover {
+           border-color: var(--premium-brown-light);
+        }
+        .queue-chip {
+           background: #f8f8f8;
+           border-radius: 8px;
+           padding: 10px;
+           display: flex;
+           justify-content: space-between;
+           align-items: center;
+        }
+        .action-footer {
+          margin-top: auto;
+          padding: 1rem;
+          background: #fafafa;
+          border-top: 1px solid #f0f0f0;
+          border-bottom-left-radius: 12px;
+          border-bottom-right-radius: 12px;
         }
       `}</style>
       <div className="d-flex flex-column gap-3 mb-4">
@@ -1767,26 +1813,14 @@ const CustomerAppointments = () => {
           <div className="row g-3 g-md-4">
             {getPaginatedAppointments().map((appointment) => (
               <div key={appointment.id} className="col-12 col-sm-6 col-lg-4">
-                <div className={`card appointment-card-premium h-100 shadow-sm ${appointment.status === 'ongoing' ? 'pulse-ongoing border-brown border-2' : ''}`}>
-                  <div className="card-header-premium p-3 border-bottom border-light">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <span className={`badge ${getStatusBadgeClass(appointment.status)} px-2 py-1 rounded-4 extra-small fw-bold`}>
-                        <i className={`bi ${getStatusIcon(appointment.status)} me-1`}></i>
-                        {appointment.status.toUpperCase()}
-                      </span>
-                      <div className="text-end">
-                        <div className="text-dark extra-small fw-bold mb-1">
-                          <i className="bi bi-calendar3 me-1 text-brown-premium"></i>
-                          {formatAppointmentDate(appointment.appointment_date)}
-                        </div>
-                        {appointment.appointment_type === 'scheduled' && appointment.appointment_time && (
-                          <div className="extra-small text-muted">
-                            <i className="bi bi-clock-fill me-1 text-brown-premium"></i>
-                            {new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                <div className={`minimal-card h-100 ${appointment.status === 'ongoing' ? 'border-brown' : ''}`}>
+                  <div className="p-3 border-bottom border-light d-flex justify-content-between align-items-center">
+                    <span className={`badge ${getStatusBadgeClass(appointment.status)} px-2 py-1 rounded-2 extra-small`}>
+                      {appointment.status.toUpperCase()}
+                    </span>
+                    <span className="extra-small text-muted fw-bold">
+                       {formatAppointmentDate(appointment.appointment_date)}
+                    </span>
                   </div>
 
                   <div className="card-body p-3">
@@ -1822,88 +1856,66 @@ const CustomerAppointments = () => {
                     )}
 
                     {appointment.appointment_type === 'queue' && (appointment.queue_position || getQueuePosition(appointment)) && (
-                      <div className="queue-status-card mb-3">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center">
-                            <div className="queue-mini-number me-3">
-                              #{appointment.queue_position || getQueuePosition(appointment)}
-                            </div>
-                            <div>
-                              <p className="mb-0 fw-bold small">Queue Position</p>
-                              <p className="mb-0 text-muted extra-small">Live Tracking</p>
-                            </div>
-                          </div>
-                          {getEstimatedWaitTime(appointment) && (
-                            <div className="text-end">
-                              <p className="mb-0 fw-bold small text-brown-premium">
-                                <i className="bi bi-hourglass-bottom me-1"></i>
-                                {getEstimatedWaitTime(appointment)}
-                              </p>
-                              <p className="mb-0 text-muted extra-small uppercase">Wait Time</p>
-                            </div>
-                          )}
+                      <div className="queue-chip my-2">
+                        <div className="d-flex flex-column">
+                           <span className="extra-small text-muted text-uppercase" style={{ fontSize: '0.65rem' }}>Position</span>
+                           <span className="fw-bold">#{appointment.queue_position || getQueuePosition(appointment)}</span>
                         </div>
+                        
+                        {(appointment.queue_position || getQueuePosition(appointment)) && queuePositions[appointment.id]?.estimatedArrival && (
+                           <div className="d-flex flex-column text-center">
+                              <span className="extra-small text-muted text-uppercase" style={{ fontSize: '0.65rem' }}>Arrival</span>
+                              <span className="fw-bold">{queuePositions[appointment.id].estimatedArrival}</span>
+                           </div>
+                        )}
+
+                        {getEstimatedWaitTime(appointment) && (
+                           <div className="d-flex flex-column text-end">
+                              <span className="extra-small text-muted text-uppercase" style={{ fontSize: '0.65rem' }}>Wait Time</span>
+                              <span className="fw-bold text-brown-premium">{getEstimatedWaitTime(appointment)}</span>
+                           </div>
+                        )}
                       </div>
                     )}
 
                     {appointment.status === 'confirmed' && (
-                      <div className="alert bg-dark text-white py-1 px-2 mb-2 border-0 opacity-90 rounded-3 d-flex align-items-center">
-                        <i className="bi bi-calendar-check me-2 text-brown-premium"></i>
-                        <small className="extra-small">Confirmed for today</small>
+                      <div className="status-badge-premium" style={{ background: '#e3f2fd', color: '#0d47a1' }}>
+                        <i className="bi bi-check-circle"></i>
+                        <span>Confirmed today</span>
                       </div>
                     )}
 
                     {appointment.status === 'ongoing' && (
-                      <div className="alert bg-dark text-white py-1 px-2 mb-2 border-0 d-flex align-items-center rounded-3">
-                        <div className="spinner-grow spinner-grow-sm me-2 text-brown-premium" style={{ width: '10px', height: '10px' }}></div>
-                        <span className="extra-small fw-bold">Live: In progress</span>
+                      <div className="status-badge-premium" style={{ background: '#f3e5f5', color: '#7b1fa2' }}>
+                        <i className="bi bi-play-circle"></i>
+                        <span>Processing Session</span>
                       </div>
                     )}
 
                     {appointment.status === 'completed' && (
-                      <div className="alert bg-light border-0 py-2 mb-2 d-flex align-items-center rounded-3">
-                        <i className="bi bi-check2-all me-2 text-brown-premium fs-5"></i>
-                        <small className="text-muted fw-semi-bold">
-                          Service completed
-                        </small>
+                      <div className="status-badge-premium" style={{ background: '#e8f5e9', color: '#2e7d32' }}>
+                        <i className="bi bi-check-all"></i>
+                        <span>Finished</span>
                       </div>
                     )}
 
-                    {appointment.status === 'cancelled' && (
-                      <div className="alert bg-light py-2 mb-2 border-start border-dark border-3">
-                        <small className="text-muted">
-                          <i className="bi bi-dash-circle me-1"></i>
-                          Session cancelled
-                          {appointment.cancellation_reason && (
-                            <><br /><span className="extra-small">Reason: {appointment.cancellation_reason}</span></>
-                          )}
-                        </small>
-                      </div>
-                    )}
-
-                    {/* Priority Request Status */}
+                    {/* Priority Request Details */}
                     {appointment.priority_request_status === 'pending' && (
-                      <div className="alert bg-dark text-brown-premium py-2 mb-2 border-0">
-                        <small className="fw-bold">
-                          <i className="bi bi-stars me-1"></i>
-                          Requesting Priority Access...
-                        </small>
+                      <div className="status-badge-premium" style={{ border: '1px solid #ffcc80', color: '#e65100', background: '#fff9f2' }}>
+                        <i className="bi bi-star"></i>
+                        <span>Priority Pending</span>
                       </div>
                     )}
                     {appointment.priority_request_status === 'approved' && appointment.is_urgent && (
-                      <div className="alert bg-brown-premium text-white py-2 mb-2 border-0">
-                        <small className="fw-bold">
-                          <i className="bi bi-lightning-charge-fill me-1"></i>
-                          Priority Access Confirmed
-                        </small>
+                      <div className="status-badge-premium" style={{ background: '#fff3e0', color: '#e65100' }}>
+                        <i className="bi bi-lightning-fill"></i>
+                        <span>Priority Granted</span>
                       </div>
                     )}
                     {appointment.priority_request_status === 'rejected' && (
-                      <div className="alert bg-light text-muted py-2 mb-2 border-0">
-                        <small>
-                          <i className="bi bi-info-circle me-1"></i>
-                          Priority request unavailable
-                        </small>
+                      <div className="status-badge-premium" style={{ background: '#f5f5f5', color: '#888', border: '1px solid #eee' }}>
+                        <i className="bi bi-info-circle"></i>
+                        <span>Priority not available for this session</span>
                       </div>
                     )}
 
@@ -1950,109 +1962,72 @@ const CustomerAppointments = () => {
                     )}
                   </div>
 
-                  <div className="card-footer bg-transparent">
-                    <div className="d-flex justify-content-between align-items-center">
-                      {/* Action buttons based on status */}
-                      <div className="d-flex gap-2 flex-wrap">
-                        {/* Request Priority Button */}
+                    {/* Minimalist Action Row */}
+                    <div className="action-footer d-flex gap-2">
                         {['scheduled', 'confirmed', 'pending'].includes(appointment.status) &&
                           !appointment.is_urgent &&
-                          appointment.priority_request_status !== 'approved' && // Don't show if already approved (becomes urgent)
+                          appointment.priority_request_status !== 'approved' &&
                           (appointment.priority_request_status === null ||
                             appointment.priority_request_status === undefined ||
                             appointment.priority_request_status === '' ||
-                            appointment.priority_request_status === 'rejected') && // Allow showing again if rejected
+                            appointment.priority_request_status === 'rejected') &&
                           appointment.queue_position !== null && (
                             <button
-                              className="btn btn-sm btn-brown-premium px-3 rounded-pill fw-bold btn-action-micro"
+                              className="btn btn-sm btn-brown-premium flex-fill rounded-2 fw-bold"
                               onClick={() => openPriorityRequestModal(appointment)}
                             >
-                              <i className="bi bi-lightning-charge-fill me-1"></i>
                               Get Priority
                             </button>
                           )}
 
                         {matchesStatus(appointment, 'scheduled', 'confirmed') && (
                           <button
-                            className="btn btn-sm btn-outline-dark px-3 rounded-pill"
+                            className="btn btn-sm btn-outline-dark flex-fill rounded-2"
                             onClick={() => handleCancel(appointment)}
                           >
-                            <i className="bi bi-x me-1"></i>
                             Cancel
                           </button>
                         )}
 
                         {appointment.status === 'pending' && (
                           <button
-                            className="btn btn-sm btn-outline-dark px-3 rounded-pill"
+                            className="btn btn-sm btn-outline-dark flex-fill rounded-2"
                             onClick={() => handleCancel(appointment)}
                           >
-                            <i className="bi bi-x me-1"></i>
                             Cancel Request
                           </button>
                         )}
 
                         {appointment.status === 'completed' && (
-                          <>
+                          <div className="w-100 d-flex gap-2">
                             <button
-                              className="btn btn-sm btn-brown-premium px-3 rounded-pill fw-bold btn-action-micro"
+                              className="btn btn-sm btn-brown-premium flex-fill rounded-2"
                               onClick={() => handleCloneAppointment(appointment)}
                             >
-                              <i className="bi bi-arrow-repeat me-1"></i>
                               Rebook
                             </button>
-                            {!appointment.is_reviewed ? (
+                            {!appointment.is_reviewed && (
                               <button
-                                className="btn btn-sm btn-outline-brown px-3 rounded-pill btn-action-micro"
+                                className="btn btn-sm btn-outline-brown flex-fill rounded-2"
                                 onClick={() => setRatingAppointment(appointment)}
                               >
-                                <i className="bi bi-pencil-square me-1"></i>
-                                Rate Session
+                                Rate
                               </button>
-                            ) : (
-                              <div className="d-flex align-items-center">
-                                <div className="me-2">
-                                  {[...Array(5)].map((_, i) => (
-                                    <i
-                                      key={i}
-                                      className={`bi bi-star-fill ${i < (appointment.customer_rating || 0) ? 'text-brown-premium' : 'text-light'
-                                        }`}
-                                      style={{ fontSize: '0.9rem' }}
-                                    ></i>
-                                  ))}
-                                </div>
-                                <small className="text-muted">Rated</small>
-                              </div>
                             )}
-                          </>
+                          </div>
                         )}
-
 
                         {appointment.status === 'cancelled' && (
                           <button
-                            className="btn btn-sm btn-brown-premium px-3 rounded-pill"
+                            className="btn btn-sm btn-brown-premium w-100 rounded-2"
                             onClick={() => handleCloneAppointment(appointment)}
                           >
-                            <i className="bi bi-arrow-repeat me-1"></i>
                             Try Again
                           </button>
                         )}
-
-                        {appointment.status === 'ongoing' && (
-                          <span className="text-brown-premium fw-bold small">
-                            <i className="bi bi-scissors me-1"></i>
-                            In Progress
-                          </span>
-                        )}
-                      </div>
-
-                      <small className="text-muted">
-                        {new Date(appointment.created_at).toLocaleDateString()}
-                      </small>
                     </div>
                   </div>
                 </div>
-              </div>
             ))}
           </div>
 

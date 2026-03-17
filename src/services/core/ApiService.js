@@ -643,8 +643,11 @@ class ApiService {
       .eq('role', 'barber');
 
     if (activeOnly) {
-      // "Active" means status is 'available'. We also treat NULL as available for legacy records.
-      query = query.or('barber_status.eq.available,barber_status.is.null');
+      // "Active" means status is 'available' and NOT archived.
+      query = query.neq('archived', true).or('barber_status.eq.available,barber_status.is.null');
+    } else {
+      // General list should also exclude archived unless specified (but following user request to remove archived)
+      query = query.neq('archived', true);
     }
 
     const { data, error } = await query.order('full_name');
@@ -708,6 +711,7 @@ class ApiService {
       .from('users')
       .select('id, full_name')
       .eq('role', 'barber')
+      .neq('archived', true)
       .or('barber_status.eq.available,barber_status.is.null')
       .order('full_name');
 

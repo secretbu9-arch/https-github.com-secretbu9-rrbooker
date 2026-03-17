@@ -1294,7 +1294,7 @@ textarea.form-control {
     /* Chrome, Safari and Opera */
   }
 
-  .barber-selection-row>.col-md-6 {
+  .barber-selection-row > * {
     flex: 0 0 85%;
     max-width: 85%;
   }

@@ -1,5 +1,6 @@
 // components/manager/ManageAppointments.js
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { apiService } from '../../services/core/ApiService';
 // REMOVED: PushService import - use only CentralizedNotificationService
@@ -17,6 +18,7 @@ import {
 } from '../../constants/booking.constants';
 
 const ManageAppointments = () => {
+  const location = useLocation();
   const [appointments, setAppointments] = useState([]);
   const [barbers, setBarbers] = useState([]);
   const [services, setServices] = useState([]);
@@ -28,7 +30,9 @@ const ManageAppointments = () => {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showUrgentModal, setShowUrgentModal] = useState(false);
   const [statusUpdateData, setStatusUpdateData] = useState({ appointmentId: null, newStatus: null });
+  const [urgentAppointmentData, setUrgentAppointmentData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -246,6 +250,37 @@ const ManageAppointments = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Helper to get full service names list
+  const getFullServicesList = (appointment) => {
+    if (!appointment.services_data || !Array.isArray(appointment.services_data)) {
+      return appointment.service ? [appointment.service.name] : [];
+    }
+    return appointment.services_data.map(id => {
+      const s = services.find(srv => srv.id === id);
+      return s ? s.name : 'Unknown Service';
+    });
+  };
+
+  // Helper to get add-ons names list
+  const getAddOnsList = (appointment) => {
+    const rawAddOns = parseAddOnsData(appointment.add_ons_data);
+    if (!rawAddOns || rawAddOns.length === 0) return [];
+    
+    return rawAddOns.map(id => {
+      // Try to find by UUID or legacy ID
+      const addon = addOns.find(a => a.id === id || a.id === mapLegacyAddonIds(id));
+      return addon ? addon.name : (typeof id === 'string' ? id.replace('addon', 'Add-on ') : 'Add-on');
+    });
+  };
+
+  // Helper for summary display
+  const getServicesSummary = (appointment) => {
+    const serviceList = getFullServicesList(appointment);
+    if (serviceList.length === 0) return '--';
+    if (serviceList.length === 1) return serviceList[0];
+    return `${serviceList[0]} (+${serviceList.length - 1} more)`;
+  };
+
   useEffect(() => {
     fetchInitialData();
 
@@ -287,6 +322,55 @@ const ManageAppointments = () => {
     }
   }, [formData.barber_id, formData.appointment_date]);
 
+  // Handle direct navigation to a specific appointment ID
+  useEffect(() => {
+    const handleUrlId = async () => {
+      const queryParams = new URLSearchParams(location.search);
+      const appointmentId = queryParams.get('id');
+      
+      if (appointmentId) {
+        // Try to find in existing list first
+        const existingApt = appointments.find(a => a.id === appointmentId);
+        if (existingApt) {
+          setSelectedAppointment(existingApt);
+          setShowDetailsModal(true);
+          return;
+        }
+
+        // If not found, fetch it specifically
+        try {
+          const { data, error } = await supabase
+            .from('appointments')
+            .select(`
+              *,
+              customer:customer_id(id, full_name, email, phone),
+              barber:barber_id(id, full_name, email, phone),
+              service:service_id(id, name, price, duration, description)
+            `)
+            .eq('id', appointmentId)
+            .single();
+
+          if (data) {
+            setSelectedAppointment(normalizeAppointmentRecord(data));
+          } else {
+            setError('Appointment not found');
+            setShowDetailsModal(false);
+          }
+        } catch (err) {
+          console.error('Error fetching appointment from URL:', err);
+          setError('Failed to load appointment details');
+        }
+      }
+    };
+
+    if (!loading && location.search.includes('id=')) {
+      handleUrlId();
+      if (!selectedAppointment) {
+        setShowDetailsModal(true);
+      }
+    }
+  }, [location.search, appointments, loading]);
+
   // Fetch customers when component mounts
 
 
@@ -295,7 +379,7 @@ const ManageAppointments = () => {
       setLoading(true);
 
       // Fetch all in parallel
-      const [barbersResult, servicesResult, customersResult, addOnsResult] = await Promise.all([
+      const [barbersResult, servicesResult, addOnsResult] = await Promise.all([
         fetchBarbers(),
         fetchServices(),
         fetchAddOns()
@@ -386,8 +470,7 @@ const ManageAppointments = () => {
           barber:barber_id(id, full_name, email, phone),
           service:service_id(id, name, price, duration, description)
         `)
-        .order('appointment_date', { ascending: false })
-        .order('appointment_time', { ascending: true });
+        .order('appointment_date', { ascending: false });
 
       // Apply status filter
       if (filters.status) {
@@ -433,23 +516,27 @@ const ManageAppointments = () => {
 
       if (error) throw error;
 
-      // Debug: Log double booking appointments
-      const doubleBookings = data?.filter(apt => apt.is_double_booking);
-      if (doubleBookings && doubleBookings.length > 0) {
-        console.log('🔍 Double booking appointments found:', doubleBookings);
-        console.log('📊 Double booking data structure:', doubleBookings.map(apt => ({
-          id: apt.id,
-          is_double_booking: apt.is_double_booking,
-          double_booking_data: apt.double_booking_data,
-          customer_name: apt.customer?.full_name,
-          customer_phone: apt.customer?.phone,
-          customer_data: apt.customer
-        })));
-      } else {
-        console.log('❌ No double booking appointments found in current data');
-      }
+      const rawData = data || [];
+      
+      // Smart sorting: Ongoing first, then by earliest arrival/queue position
+      const sortedAppointments = [...rawData].sort((a, b) => {
+        // 1. Ongoing status takes absolute priority
+        if (a.status === 'ongoing' && b.status !== 'ongoing') return -1;
+        if (b.status === 'ongoing' && a.status !== 'ongoing') return 1;
 
-      const normalizedAppointments = (data || []).map(normalizeAppointmentRecord);
+        // 2. Then sort by date (though filter usually handles this, for 'week' or 'month' it matters)
+        if (a.appointment_date !== b.appointment_date) {
+          return new Date(a.appointment_date) - new Date(b.appointment_date);
+        }
+
+        // 3. For the same date, sort by queue position (for queue type) or appointment time
+        const aVal = a.queue_position || (a.appointment_time ? parseInt(a.appointment_time.replace(':', '')) : 9999);
+        const bVal = b.queue_position || (b.appointment_time ? parseInt(b.appointment_time.replace(':', '')) : 9999);
+        
+        return aVal - bVal;
+      });
+
+      const normalizedAppointments = sortedAppointments.map(normalizeAppointmentRecord);
       setAppointments(normalizedAppointments);
 
     } catch (error) {
@@ -737,32 +824,30 @@ const ManageAppointments = () => {
     }
   };
 
-  const handleApproveEmergency = async (appointment) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (appointment.appointment_date < today) {
-      alert("Cannot approve Urgent Priority for past appointments.");
-      return;
-    }
+  const handleApproveEmergency = (appointment) => {
+    setUrgentAppointmentData(appointment);
+    setShowUrgentModal(true);
+  };
 
-    if (!window.confirm(`Are you sure you want to approve this appointment for Urgent Priority? This will shift the entire schedule.`)) {
-      return;
-    }
-
+  const confirmUrgentApproval = async () => {
+    if (!urgentAppointmentData) return;
+    
     try {
       setLoading(true);
       const managerId = (await supabase.auth.getUser()).data.user?.id;
 
       await PriorityQueueService.approveEmergencyBooking(
-        appointment.id,
+        urgentAppointmentData.id,
         managerId || 'system',
         'Manager urgent override'
       );
 
-      alert('Urgent Priority request approved. Queue has been recalculated.');
+      setShowUrgentModal(false);
+      setUrgentAppointmentData(null);
       fetchAppointments();
     } catch (error) {
       console.error('Emergency approval failed:', error);
-      alert('Failed to approve emergency: ' + error.message);
+      setError('Failed to approve emergency: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -950,14 +1035,23 @@ const ManageAppointments = () => {
                     .map(appointment => {
                       const canonicalStatus = normalizeStatus(appointment.status) || appointment.status;
                       return (
-                        <tr key={appointment.id} style={{ transition: 'all 0.2s' }}>
+                        <tr key={appointment.id} style={{ 
+                          transition: 'all 0.2s',
+                          backgroundColor: appointment.status === 'ongoing' ? 'rgba(93, 64, 55, 0.03)' : 'transparent',
+                          borderLeft: appointment.status === 'ongoing' ? '4px solid #5D4037' : 'none'
+                        }}>
                           <td style={{ padding: '1.25rem' }}>
                             <div className="fw-800" style={{ fontSize: '0.9rem', color: '#1a1a1a' }}>{formatDate(appointment.appointment_date)}</div>
                             <div className="small text-muted fw-bold" style={{ fontSize: '0.75rem' }}>
                               <i className="bi bi-clock me-1"></i> {formatTime(appointment.appointment_time) || 'QUEUE'}
                             </div>
                             {appointment.queue_position && (
-                              <span className="badge bg-dark rounded-pill mt-1" style={{ fontSize: '0.6rem' }}>Q#{appointment.queue_position}</span>
+                              <div className="mt-1 d-flex gap-1 flex-wrap">
+                                <span className="badge bg-dark rounded-pill" style={{ fontSize: '0.65rem' }}>Q#{appointment.queue_position}</span>
+                                {appointment.status === 'ongoing' && (
+                                  <span className="badge bg-brown-premium rounded-pill" style={{ fontSize: '0.6rem' }}>CURRENTLY SERVING</span>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td style={{ padding: '1.25rem' }}>
@@ -978,8 +1072,18 @@ const ManageAppointments = () => {
                             <div className="small fw-700" style={{ color: '#5D4037' }}>{appointment.barber?.full_name || '--'}</div>
                           </td>
                           <td style={{ padding: '1.25rem' }}>
-                            <div className="small fw-800" style={{ fontSize: '0.85rem' }}>{appointment.service?.name || '--'}</div>
-                            <div className="small text-muted" style={{ fontSize: '0.7rem' }}>₱{appointment.service?.price || 0} • {appointment.service?.duration || 0}m</div>
+                            <div className="small fw-800" style={{ fontSize: '0.85rem' }}>
+                              {getServicesSummary(appointment)}
+                            </div>
+                            <div className="small text-muted" style={{ fontSize: '0.7rem' }}>
+                              ₱{appointment.total_price || appointment.service?.price || 0} • {appointment.total_duration || appointment.service?.duration || 0}m
+                            </div>
+                            {appointment.add_ons_data && parseAddOnsData(appointment.add_ons_data).length > 0 && (
+                              <div className="extra-small text-info fw-bold mt-1">
+                                <i className="bi bi-plus-circle me-1"></i>
+                                {parseAddOnsData(appointment.add_ons_data).length} Add-on(s)
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '1.25rem' }}>
                             <span style={styles.badge(canonicalStatus)}>{canonicalStatus}</span>
@@ -1003,7 +1107,13 @@ const ManageAppointments = () => {
                                 </button>
                               )}
 
-                              {['pending', 'confirmed'].includes(canonicalStatus) && (
+                              {canonicalStatus === 'confirmed' && (
+                                <button style={{ ...styles.secondaryBtn, color: '#FFD700', background: '#000' }} className="touch-btn" title="Start Service" onClick={() => handleStatusChange(appointment.id, 'ongoing')}>
+                                  <i className="bi bi-play-fill"></i>
+                                </button>
+                              )}
+
+                              {['pending', 'confirmed', 'ongoing'].includes(canonicalStatus) && (
                                 <button style={{ ...styles.secondaryBtn, color: '#1B5E20', background: '#E8F5E9' }} className="touch-btn" title="Mark Done" onClick={() => handleStatusChange(appointment.id, 'completed')}>
                                   <i className="bi bi-check2-circle"></i>
                                 </button>
@@ -1026,10 +1136,10 @@ const ManageAppointments = () => {
       </div>
 
       {/* Modals Container */}
-      {(showDetailsModal || showEditModal || showStatusModal) && (
+      {(showDetailsModal || showEditModal || showStatusModal || showUrgentModal) && (
         <div style={styles.modalOverlay} onClick={(e) => {
           if (e.target === e.currentTarget && !loading) {
-            setShowDetailsModal(false); setShowEditModal(false); setShowStatusModal(false);
+            setShowDetailsModal(false); setShowEditModal(false); setShowStatusModal(false); setShowUrgentModal(false);
           }
         }}>
           <div style={styles.modalContent}>
@@ -1046,14 +1156,21 @@ const ManageAppointments = () => {
                 {showDetailsModal && 'Appointment Details'}
                 {showEditModal && 'Edit Appointment'}
                 {showStatusModal && 'Update Status'}
+                {showUrgentModal && 'Approve Urgent Priority'}
               </h5>
               <button className="btn-close" disabled={loading} onClick={() => {
-                setShowDetailsModal(false); setShowEditModal(false); setShowStatusModal(false);
+                setShowDetailsModal(false); setShowEditModal(false); setShowStatusModal(false); setShowUrgentModal(false);
               }}></button>
             </div>
 
             {/* Modal Body */}
             <div className="p-4 overflow-auto premium-scroll">
+              {showDetailsModal && !selectedAppointment && (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-dark mb-3" role="status"></div>
+                  <p className="text-muted small fw-bold text-uppercase">Fetching details...</p>
+                </div>
+              )}
               {showDetailsModal && selectedAppointment && (
                 <div className="d-flex flex-column gap-4">
                   <div className="d-flex align-items-center gap-3">
@@ -1062,8 +1179,11 @@ const ManageAppointments = () => {
                     </div>
                     <div>
                       <h4 className="fw-800 m-0">{selectedAppointment.customer?.full_name || 'Anonymous'}</h4>
-                      <div className="text-muted small fw-bold mt-1">
-                        <i className="bi bi-telephone me-1"></i> {selectedAppointment.customer?.phone || '--'}
+                      <div className="d-flex align-items-center gap-2 mt-1">
+                        <span style={styles.badge(selectedAppointment.status)}>{selectedAppointment.status}</span>
+                        <div className="text-muted small fw-bold">
+                          <i className="bi bi-telephone me-1"></i> {selectedAppointment.customer?.phone || '--'}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1075,10 +1195,23 @@ const ManageAppointments = () => {
                         <div className="fw-800 small">{selectedAppointment.barber?.full_name || '--'}</div>
                       </div>
                     </div>
-                    <div className="col-6">
+                    <div className="col-12">
                       <div className="p-3 bg-light rounded-4">
-                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-1">SERVICE</div>
-                        <div className="fw-800 small text-truncate">{selectedAppointment.service?.name || '--'}</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#888', letterSpacing: '1px' }} className="mb-1">SERVICES & ADD-ONS</div>
+                        <div className="fw-800 small text-truncate">
+                          {getFullServicesList(selectedAppointment).join(', ')}
+                        </div>
+                        {getAddOnsList(selectedAppointment).length > 0 && (
+                          <div className="text-info small fw-bold mt-1" style={{ fontSize: '0.75rem' }}>
+                            + {getAddOnsList(selectedAppointment).join(', ')}
+                          </div>
+                        )}
+                        <div className="mt-2 pt-2 border-top border-secondary border-opacity-10 d-flex justify-content-between">
+                          <span className="text-muted extra-small">TOTAL</span>
+                          <span className="fw-800 small text-dark">
+                            ₱{selectedAppointment.total_price || 0} • {selectedAppointment.total_duration || 0}m
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <div className="col-6">
@@ -1187,6 +1320,45 @@ const ManageAppointments = () => {
                       disabled={loading}
                     >
                       {loading ? 'UPDATING...' : 'CONFIRM UPDATE'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {showUrgentModal && (
+                <div className="text-center py-2">
+                  <div className="mb-4">
+                    <div className="rounded-circle bg-warning bg-opacity-10 d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: '80px', height: '80px' }}>
+                      <i className="bi bi-lightning-charge-fill fs-1 text-warning"></i>
+                    </div>
+                    <h5 className="fw-800">Approve Urgent Priority?</h5>
+                    <p className="text-muted small mt-2">
+                      Approving this will bump <strong>{urgentAppointmentData?.customer?.full_name}</strong> to the top of the queue.
+                      This will shift the wait times for all other customers today.
+                    </p>
+                    <div className="p-3 bg-light rounded-4 mt-3 text-start">
+                      <div className="d-flex justify-content-between mb-1">
+                        <span className="text-muted small">Customer:</span>
+                        <span className="fw-800 small">{urgentAppointmentData?.customer?.full_name}</span>
+                      </div>
+                      <div className="d-flex justify-content-between mb-1">
+                        <span className="text-muted small">Service:</span>
+                        <span className="fw-800 small">{urgentAppointmentData?.service?.name}</span>
+                      </div>
+                      <div className="d-flex justify-content-between pt-2 mt-2 border-top">
+                        <span className="text-muted small">Urgent Fee:</span>
+                        <span className="fw-800 small text-danger">₱100.00</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-light flex-fill rounded-4 py-3 fw-800 small" onClick={() => setShowUrgentModal(false)} disabled={loading}>CANCEL</button>
+                    <button 
+                      className="btn btn-warning flex-fill rounded-4 py-3 fw-800 small text-dark" 
+                      onClick={confirmUrgentApproval} 
+                      disabled={loading}
+                    >
+                      {loading ? 'APPROVING...' : 'APPROVE URGENT'}
                     </button>
                   </div>
                 </div>

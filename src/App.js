@@ -61,6 +61,7 @@ import ManageOrders from './components/manager/ManageOrders';
 // User Profile and Settings components
 import Profile from './components/pages/Profile';
 import Settings from './components/pages/Settings';
+import NotificationsPage from './components/pages/NotificationsPage';
 import { PushService } from './services/notifications/PushService';
 import AutoCancelNoShowService from './services/automation/AutoCancelNoShowService';
 import AutoCancelService from './services/automation/AutoCancelService';
@@ -571,6 +572,10 @@ function App() {
             element={session ? <Settings /> : <Navigate to="/login" replace />}
           />
 
+          <Route
+            path="/notifications"
+            element={session ? <NotificationsPage /> : <Navigate to="/login" replace />}
+          />
           {/* Debug Route */}
           <Route
             path="/debug"

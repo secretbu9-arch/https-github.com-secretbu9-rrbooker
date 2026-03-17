@@ -386,11 +386,11 @@ const ManagerDashboard = () => {
           .select('*', { count: 'exact', head: true })
           .eq('role', 'customer'),
 
-        // Total barbers (Active only - status 'available')
         supabase
           .from('users')
           .select('*', { count: 'exact', head: true })
           .eq('role', 'barber')
+          .neq('archived', true)
           .or('barber_status.eq.available,barber_status.is.null'),
 
         // Calculate Gross Revenue (all non-cancelled appointments)
@@ -625,9 +625,8 @@ const ManagerDashboard = () => {
           barber_status
         `)
         .eq('role', 'barber')
-        .or('barber_status.eq.available,barber_status.is.null')
-        .not('average_rating', 'is', null)
-        .order('average_rating', { ascending: false });
+        .neq('archived', true)
+        .order('average_rating', { ascending: false, nullsFirst: false });
 
       if (error) {
         console.error('Error fetching barber ratings:', error);
@@ -913,7 +912,7 @@ const ManagerDashboard = () => {
           {/* Main Content Area */}
           <div className="col-lg-8">
             <div className="section-title">
-              <i className="bi bi-lightning-fill"></i> ACTIVE SESSIONS
+              <i className="bi bi-calendar-check-fill"></i> RECENT APPOINTMENTS
             </div>
 
             <div className="modern-table-card mb-4">
@@ -923,6 +922,7 @@ const ManagerDashboard = () => {
                     <tr>
                       <th className="border-0 px-4 py-3">Customer</th>
                       <th className="border-0 px-4 py-3">Service</th>
+                      <th className="border-0 px-4 py-3">Schedule</th>
                       <th className="border-0 px-4 py-3">Status</th>
                       <th className="border-0 px-4 py-3 text-end">Action</th>
                     </tr>
@@ -930,7 +930,7 @@ const ManagerDashboard = () => {
                   <tbody>
                     {recentAppointments.length === 0 ? (
                       <tr>
-                        <td colSpan="4" className="text-center py-5 text-muted">No recent sessions</td>
+                        <td colSpan="6" className="text-center py-5 text-muted">No recent appointments</td>
                       </tr>
                     ) : (
                       recentAppointments.slice(0, 6).map((apt) => (
@@ -942,6 +942,10 @@ const ManagerDashboard = () => {
                           <td className="px-4 py-3">
                             <div className="small fw-bold">{apt.service?.name}</div>
                             <div className="small text-muted">₱{apt.total_price || apt.service?.price}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="small fw-bold">{apt.appointment_date}</div>
+                            <div className="small text-muted">{apt.appointment_time || 'Queue'}</div>
                           </td>
                           <td className="px-4 py-3">
                             <span className={`status-pill ${apt.status === 'completed' ? 'pill-success' :
@@ -962,7 +966,7 @@ const ManagerDashboard = () => {
                                   <i className="bi bi-check-lg text-dark"></i>
                                 </button>
                               )}
-                              <button className="action-btn-circle" onClick={() => navigate(`/appointments/${apt.id}`)}>
+                              <button className="action-btn-circle" onClick={() => navigate(`/manage/appointments?id=${apt.id}`)}>
                                 <i className="bi bi-eye text-dark"></i>
                               </button>
                             </div>
@@ -1067,7 +1071,7 @@ const ManagerDashboard = () => {
             <div className="premium-card p-4">
               <div className="mb-4">
                 <div className="d-flex justify-content-between mb-2">
-                  <span className="small fw-black">GLOBAL CAPACITY</span>
+                  <span className="small fw-black">SHOP STATUS</span>
                   <span className="small fw-bold">{stats.activeQueues > 0 ? 'ACTIVE' : 'IDLE'}</span>
                 </div>
                 <div className="progress bg-light" style={{ height: '6px', borderRadius: '10px' }}>
@@ -1079,7 +1083,7 @@ const ManagerDashboard = () => {
               </div>
 
               <div className="d-flex flex-column gap-3">
-                {barberRatings.slice(0, 3).map((barber) => (
+                {barberRatings.map((barber) => (
                   <div key={barber.id} className="d-flex justify-content-between align-items-center p-2 rounded-3 bg-light">
                     <span className="small fw-black">{barber.full_name}</span>
                     <div className="d-flex align-items-center gap-1">

@@ -5,8 +5,8 @@ class QueueTimeCalculator {
   constructor() {
     this.BUSINESS_HOURS = { start: '08:00', end: '17:00' };
     this.LUNCH_BREAK = { start: '12:00', end: '13:00' };
-    this.BUFFER_TIME = 5; // 5 minutes buffer between appointments
-    this.ARRIVAL_BUFFER = 15; // 15 minutes buffer before service starts (for arrival time)
+    this.BUFFER_TIME = 0; // No buffer between queue appointments to ensure strict duration summing
+    this.ARRIVAL_BUFFER = 10; // 10 minutes buffer before service starts (for arrival time)
     this.FIRST_QUEUE_START = '08:00'; // First customer service start time
   }
 
@@ -16,9 +16,10 @@ class QueueTimeCalculator {
    * @param {string} date - Date in YYYY-MM-DD format
    * @param {number} serviceDuration - Duration of the new service in minutes
    * @param {boolean} isUrgent - Whether the appointment is urgent
+   * @param {string} excludeAppointmentId - Optional appointment ID to exclude from timeline
    * @returns {Promise<Object>} Queue information with estimated times
    */
-  async calculateQueueInfo(barberId, date, serviceDuration, isUrgent = false, customerId = null) {
+  async calculateQueueInfo(barberId, date, serviceDuration, isUrgent = false, excludeAppointmentId = null) {
     try {
       console.log('🕐 Calculating queue info for:', { barberId, date, serviceDuration, isUrgent });
 
@@ -33,11 +34,10 @@ class QueueTimeCalculator {
       // Rule 3: Manual sort in JS is better for complex hierarchy
       let allAppointments = appointments || [];
 
-      // If customerId is provided, exclude their existing appointments from being "ahead" of them
-      // This is crucial for rebooking or refreshing status
+      // If excludeAppointmentId is provided, exclude it from being "ahead"
       const originalAppointments = [...allAppointments];
-      if (customerId) {
-        allAppointments = allAppointments.filter(apt => apt.customer_id !== customerId);
+      if (excludeAppointmentId) {
+        allAppointments = allAppointments.filter(apt => apt.id !== excludeAppointmentId);
       }
 
       const sortedAppointments = allAppointments.sort((a, b) => {
@@ -68,7 +68,7 @@ class QueueTimeCalculator {
 
       // Calculate timeline
       const timeline = this.buildTimeline(scheduledAppointments, queueAppointments, date);
-      const newAppointmentInfo = this.findBestPosition(timeline, serviceDuration, isUrgent, date, customerId);
+      const newAppointmentInfo = this.findBestPosition(timeline, serviceDuration, isUrgent, date);
 
       return {
         queuePosition: newAppointmentInfo.queuePosition,
@@ -98,7 +98,8 @@ class QueueTimeCalculator {
 
     // Get current time for real-time calculations
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    // Use local YYYY-MM-DD to avoid UTC date shift issues
+    const today = now.toLocaleDateString('en-CA');
     const isToday = targetDate === today;
 
     const firstQueueStartMinutes = this.timeToMinutes(this.FIRST_QUEUE_START);
@@ -263,7 +264,8 @@ class QueueTimeCalculator {
 
     // Get current time for real-time calculations
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    // Use local YYYY-MM-DD to avoid UTC date shift issues
+    const today = now.toLocaleDateString('en-CA');
     const isToday = targetDate === today;
 
     const currentHour = now.getHours();
@@ -287,12 +289,13 @@ class QueueTimeCalculator {
       // Start from work start or current time (if today), whichever is later
       startTime = baseStartTime;
 
-      // If we're in lunch break, start after lunch
+      // If we're currently in lunch break, just start after lunch (not a conflict, just waiting)
       if (startTime >= lunchStart && startTime < lunchEnd) {
         startTime = lunchEnd;
-        wasPushedByLunch = true;
+        wasPushedByLunch = false; 
         availBeforeLunch = 0;
       } else if (startTime < lunchStart && (startTime + serviceDuration) > lunchStart) {
+        // If it starts before lunch but would end during/after lunch, that's a "bump"
         console.log('🍽️ Urgent appointment crosses lunch break, moving to 1:00 PM');
         wasPushedByLunch = true;
         availBeforeLunch = Math.max(0, lunchStart - startTime);
@@ -339,9 +342,12 @@ class QueueTimeCalculator {
           if (startTime < lunchStart) {
             wasPushedByLunch = true;
             availBeforeLunch = Math.max(0, lunchStart - startTime);
+            startTime = lunchEnd;
+            conflict = true;
+          } else {
+            startTime = lunchEnd;
+            conflict = true;
           }
-          startTime = lunchEnd;
-          conflict = true;
           continue;
         }
 
@@ -360,16 +366,28 @@ class QueueTimeCalculator {
     } // Closes else (regular appointments)
 
     // After determining the startTime, we calculate their queuePosition correctly.
-    // E.g. If their startTime is before someone else in the queue, their position should be 2, and the other person becomes 3.
-    // For now, in order to show them as 2nd instead of 3rd etc., we calculate how many people start BEFORE them.
-    let numPeopleStartingBeforeMe = 0;
+    // A person is only "ahead of me" if:
+    // 1. They are ONGOING (already in the chair)
+    // 2. They have HIGHER priority than me
+    // 3. They have SAME priority but arrived earlier (lower original position)
+    let numPeopleAhead = 0;
     for (const item of timeline) {
-      if (item.isQueue && item.startMinutes < startTime) {
-        numPeopleStartingBeforeMe++;
+      if (item.isOngoing) {
+        numPeopleAhead++;
+      } else if (item.isQueue) {
+        // If I am urgent, only other urgent/ongoing people are ahead
+        if (isUrgent) {
+          const itemPriority = item.priority_level === 'urgent' || item.priority_level === '1';
+          if (itemPriority) {
+            numPeopleAhead++;
+          }
+        } else {
+          // If I am normal, everyone currently in the queue is ahead
+          numPeopleAhead++;
+        }
       }
     }
-    // If Urgent they are 1. We handled urgent earlier. But if they fill a gap, they should be the Nth person in the line.
-    queuePosition = numPeopleStartingBeforeMe + 1;
+    queuePosition = numPeopleAhead + 1;
 
     // Check for lunch break - if start time falls during lunch, move to after lunch
     if (startTime >= lunchStart && startTime < lunchEnd) {
@@ -388,10 +406,9 @@ class QueueTimeCalculator {
     estimatedStartTime = this.minutesToTime(startTime);
     estimatedEndTime = this.minutesToTime(startTime + serviceDuration);
 
-    // Calculate wait time based on when they will actually start
-    // For future dates, wait time is 0 (no wait since it's a new day)
-    const waitTime = isToday ? Math.max(0, startTime - currentMinutes) : 0;
-    estimatedWaitTime = waitTime;
+    // Calculate wait time based on the total duration of people ahead
+    // This is the "Line Wait" - the sum of service durations ahead of you
+    estimatedWaitTime = startTime - baseStartTime;
 
     // Calculate arrival time (15 minutes before service start)
     // For position 1 on future dates, arrival is 7:45 AM (15 min before 8:00 AM)

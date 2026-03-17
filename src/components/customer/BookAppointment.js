@@ -608,7 +608,17 @@ const BookAppointment = () => {
     const estimatedEndTime = totalQueueTime + minServiceDuration;
     const workingHours = 9 * 60; // 9 hours in minutes (8 AM to 5 PM)
 
-    return estimatedEndTime <= workingHours;
+    // Check if it overflows closing time
+    if (estimatedEndTime > workingHours) return false;
+
+    // Check if it bumps lunch (starts before 12 PM but ends after 12 PM)
+    // totalQueueTime is minutes since 8:00 AM
+    const lunchStartMinutes = 4 * 60; // 12:00 PM is 4 hours after 8:00 AM
+    if (totalQueueTime < lunchStartMinutes && estimatedEndTime > lunchStartMinutes) {
+      return false;
+    }
+
+    return true;
   }, []);
 
   // Fetch barber queues
@@ -713,8 +723,11 @@ const BookAppointment = () => {
         const maxQueueSize = 15; // Standardized queue capacity // Maximum queue size
         const isFullyScheduled = remainingTime < minServiceDuration || queueAppointments.length >= maxQueueSize;
 
-        // Check if barber is at full capacity (queue full OR fully scheduled OR service overflows closing time)
-        const isFullCapacity = isFullyScheduled || (remainingTime < minServiceDuration && queueAppointments.length > 0) || queueAnalysis.isOverflowingWorkHours;
+        // Check if barber is at full capacity (queue full OR fully scheduled OR service overflows closing time OR bumps lunch)
+        const isFullCapacity = isFullyScheduled || 
+                              (remainingTime < minServiceDuration && queueAppointments.length > 0) || 
+                              queueAnalysis.isOverflowingWorkHours ||
+                              queueAnalysis.wasPushedByLunch;
 
         const queueInfo = {
           queueCount,
@@ -2528,6 +2541,24 @@ const BookAppointment = () => {
       // CRITICAL: Check barber capacity and working hours boundaries
       await validateBarberCapacityAndBoundaries(bookingData.selectedBarber, bookingData.selectedDate, appointmentType, bookingData.selectedTimeSlot);
 
+      // Final strict check for lunch and closing using QueueTimeCalculator
+      const serviceDurationForSubmit = calculateTotalDuration(bookingData.selectedServices, bookingData.selectedAddOns, services, addOns);
+      const queueInfoForSubmit = await QueueTimeCalculator.calculateQueueInfo(
+        bookingData.selectedBarber,
+        bookingData.selectedDate,
+        serviceDurationForSubmit,
+        bookingData.isUrgent || false,
+        user?.id
+      );
+
+      if (queueInfoForSubmit.isOverflowingWorkHours) {
+        throw new Error('This appointment cannot be booked because it exceeds closing time (5:00 PM).');
+      }
+
+      if (queueInfoForSubmit.wasPushedByLunch) {
+        throw new Error('This appointment cannot be booked because it conflicts with the lunch break (12:00 PM - 1:00 PM).');
+      }
+
       // For queue appointments, check if barber has any availability at all
       await validateBarberQueueAvailability(bookingData.selectedBarber, bookingData.selectedDate);
 
@@ -4120,7 +4151,7 @@ const Step1DateTypeAndBarber = ({
                 </div>
 
                 {showRecommendations && (
-                  <div className="row g-3 barber-selection-row overflow-hidden">
+                  <div className="row g-3 barber-selection-row">
                     {barberRecommendations && barberRecommendations.length > 0 ? (
                       (() => {
                         const serviceDuration = bookingData.selectedServices.length > 0
@@ -4199,7 +4230,7 @@ const Step1DateTypeAndBarber = ({
                         <span className="badge badge-premium">{activeBarbers.length} Available</span>
                       </div>
 
-                      <div className="row g-3 barber-selection-row overflow-hidden">
+                      <div className="row g-3 barber-selection-row">
                         {activeBarbers.length > 0 ? (
                           activeBarbers.map((barber) => {
                             const queue = barberQueues[barber.id];
@@ -4786,14 +4817,25 @@ const Step3QueueSummary = ({
               bookingData.selectedDate,
               serviceDuration,
               bookingData.isUrgent || false,
-              user?.id
+              isRebooking ? rebookingAppointment?.id : null
             );
 
             // Convert to 12-hour format if needed
             const startTime = queueInfo.estimatedStartTime;
-            const formattedStartTime = startTime && startTime.includes(':')
-              ? (startTime.length === 5 ? convertTo12Hour(startTime) : startTime)
-              : startTime;
+            let formattedStartTime = startTime;
+            
+            if (startTime && startTime.includes(':')) {
+              // Extract hours and minutes (handles HH:mm and HH:mm:ss)
+              const [h, m] = startTime.split(':').map(Number);
+              const totalMinutes = h * 60 + m - 10;
+              
+              // Format back to 24-hour string for convertTo12Hour
+              const newH = Math.floor(totalMinutes / 60);
+              const newM = totalMinutes % 60;
+              const time24 = `${String(newH).padStart(2, '0')}:${String(newM < 0 ? 0 : newM).padStart(2, '0')}`;
+              
+              formattedStartTime = convertTo12Hour(time24);
+            }
 
             setEstimatedStartTime(formattedStartTime);
             setEstimatedEndTime(queueInfo.estimatedEndTime);
@@ -5321,7 +5363,7 @@ const Step3QueueSummary = ({
                   <button
                     type="submit"
                     className="btn btn-dark btn-lg w-100 py-3 rounded-pill fw-bold shadow-sm"
-                    disabled={loading || statusLoading || !bookingData.selectedBarber || bookingData.selectedServices.length === 0}
+                    disabled={loading || statusLoading || !bookingData.selectedBarber || bookingData.selectedServices.length === 0 || realTimeStatus.availability?.isOverflowingWorkHours || realTimeStatus.availability?.wasPushedByLunch}
                     onClick={onSubmit}
                   >
                     {loading ? (

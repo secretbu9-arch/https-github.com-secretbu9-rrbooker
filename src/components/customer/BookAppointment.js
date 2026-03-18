@@ -4800,6 +4800,7 @@ const Step3QueueSummary = ({
   useEffect(() => {
     const loadAsyncData = async () => {
       if (bookingData.selectedBarber) {
+        let formattedStartTime = '';
         try {
           setStatusLoading(true);
 
@@ -4821,8 +4822,8 @@ const Step3QueueSummary = ({
             );
 
             // Convert to 12-hour format if needed
+            formattedStartTime = queueInfo.estimatedStartTime;
             const startTime = queueInfo.estimatedStartTime;
-            let formattedStartTime = startTime;
             
             if (startTime && startTime.includes(':')) {
               // Extract hours and minutes (handles HH:mm and HH:mm:ss)

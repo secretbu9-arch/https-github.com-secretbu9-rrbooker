@@ -69,7 +69,7 @@ const QueuePosition = ({ appointmentId }) => {
       setAppointment(appointmentData);
 
       // If appointment is in queue, get queue status
-      if (appointmentData?.queue_position && appointmentData?.status === 'scheduled') {
+      if (appointmentData?.queue_position && (appointmentData?.status === 'scheduled' || appointmentData?.status === 'ongoing')) {
         const { data: queueStatus, error: queueError } = await supabase
           .rpc('get_barber_queue_status', {
             p_barber_id: appointmentData.barber_id,
@@ -95,6 +95,10 @@ const QueuePosition = ({ appointmentId }) => {
     const position = appointment.queue_position;
     const totalInQueue = queuePosition.total_in_queue;
     const currentlyServing = queuePosition.currently_serving;
+
+    if (appointment.status === 'ongoing') {
+      return "You're currently in the chair! Relax, your service is under way.";
+    }
 
     if (position === 1 && currentlyServing === 0) {
       return "You're next! Please be ready.";
@@ -150,8 +154,8 @@ const QueuePosition = ({ appointmentId }) => {
   const getEstimatedStartTime = () => {
     if (!appointment) return null;
 
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const nowLocal = new Date();
+    const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth() + 1).padStart(2, '0') + '-' + String(nowLocal.getDate()).padStart(2, '0');
     const isToday = appointment.appointment_date === today;
 
     // Start from 8:00 AM (480 mins)
@@ -159,7 +163,7 @@ const QueuePosition = ({ appointmentId }) => {
     let baselineTime = openingTime;
 
     if (isToday) {
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const currentMinutes = nowLocal.getHours() * 60 + nowLocal.getMinutes();
       baselineTime = Math.max(openingTime, currentMinutes);
     }
 
@@ -229,7 +233,7 @@ const QueuePosition = ({ appointmentId }) => {
   }
 
   // If appointment is not in queue
-  if (!appointment.queue_position || appointment.status !== 'scheduled') {
+  if (!appointment.queue_position || (appointment.status !== 'scheduled' && appointment.status !== 'ongoing')) {
     return (
       <div className="card">
         <div className="card-body text-center">
@@ -409,8 +413,17 @@ const QueuePosition = ({ appointmentId }) => {
         <div className="main-number-container">
           <div className="main-number-bg pulse-soft"></div>
           <div className="d-flex flex-column align-items-center">
-            <span className="number-glamour">#{appointment.queue_position}</span>
-            <span className="number-sub">Your Position</span>
+            {appointment.status === 'ongoing' ? (
+              <div className="text-success text-center">
+                <i className="bi bi-scissors fs-1 d-block mb-1"></i>
+                <span className="fw-black text-uppercase" style={{ fontSize: '1.2rem', letterSpacing: '1px' }}>Serving</span>
+              </div>
+            ) : (
+              <>
+                <span className="number-glamour">#{appointment.queue_position}</span>
+                <span className="number-sub">Your Position</span>
+              </>
+            )}
           </div>
         </div>
 

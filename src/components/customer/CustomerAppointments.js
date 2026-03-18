@@ -597,7 +597,10 @@ const CustomerAppointments = () => {
           const myIndex = sorted.findIndex(apt => apt.id === appointment.id);
           if (myIndex === -1) return;
 
-          const position = myIndex + 1;
+          // If someone is being served, the next person in line should see Q#1
+          const hasOngoing = sorted.some(apt => apt.status === 'ongoing');
+          const isUserOngoing = sorted[myIndex].status === 'ongoing';
+          const position = (hasOngoing && !isUserOngoing) ? myIndex : myIndex + 1;
           
           // Calculate wait time: sum of durations of everyone AHEAD in the sorted line
           let totalWaitMinutes = 0;
@@ -641,9 +644,10 @@ const CustomerAppointments = () => {
           const ARRIVAL_BUFFER = 10;   // 10 mins before
 
           // Calculate start time
-          const now = new Date();
-          const currentMinutes = now.getHours() * 60 + now.getMinutes();
-          const isToday = appointment.appointment_date === now.toLocaleDateString('en-CA');
+          const nowLocal = new Date();
+          const currentMinutes = nowLocal.getHours() * 60 + nowLocal.getMinutes();
+          const todayString = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth() + 1).padStart(2, '0') + '-' + String(nowLocal.getDate()).padStart(2, '0');
+          const isToday = appointment.appointment_date === todayString;
           
           let startTime = isToday ? Math.max(WORK_START, currentMinutes) : WORK_START;
           

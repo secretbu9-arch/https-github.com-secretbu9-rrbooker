@@ -401,7 +401,7 @@ const ManagerDashboard = () => {
             is_urgent,
             service:service_id(price)
           `)
-          .neq('status', 'cancelled'),
+          .eq('status', 'completed'),
 
         // Recent appointments
         supabase
@@ -452,7 +452,7 @@ const ManagerDashboard = () => {
         supabase
           .from('orders')
           .select('total_amount')
-          .neq('status', 'cancelled'),
+          .eq('status', 'picked_up'),
 
         // Recent orders
         supabase
@@ -495,7 +495,7 @@ const ManagerDashboard = () => {
       }, 0) || 0;
 
       // Calculate today's revenue specifically
-      const todayAppointmentsData = appointments?.filter(apt => apt.appointment_date === todayString && apt.status !== 'cancelled') || [];
+      const todayAppointmentsData = appointments?.filter(apt => apt.appointment_date === todayString && apt.status === 'completed') || [];
       const todayApptRevenue = todayAppointmentsData.reduce((sum, apt) => {
         if (apt.total_price !== null && apt.total_price !== undefined && Number(apt.total_price) > 0) {
           return sum + Number(apt.total_price);
@@ -505,7 +505,7 @@ const ManagerDashboard = () => {
         return sum + price + urgentFee;
       }, 0);
 
-      const todayOrdersData = recentOrdersData?.filter(o => o.created_at?.startsWith(todayString) && o.status !== 'cancelled') || [];
+      const todayOrdersData = recentOrdersData?.filter(o => o.created_at?.startsWith(todayString) && o.status === 'picked_up') || [];
       const todayOrderRevenue = todayOrdersData.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
       const todayRevenue = todayApptRevenue + todayOrderRevenue;

@@ -71,10 +71,20 @@ const ResetPassword = () => {
     if (!otpCode || otpCode.length < 6) { setError('Invalid OTP'); return; }
     setLoading(true);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('reset-password-with-otp', {
-        body: { email, code: otpCode, newPassword }
+      const { data, error: rpcError } = await supabase.rpc('reset_password_with_otp', {
+        target_email: email,
+        otp_code: otpCode,
+        new_password: newPassword
       });
-      if (functionError || data?.error) throw new Error(functionError?.message || data?.error);
+
+      if (rpcError) {
+        if (rpcError.code === 'PGRST202' || rpcError.message.includes('Could not find')) {
+          throw new Error('Database service is not ready. Please check if the SQL script is correctly installed in your Supabase Editor.');
+        }
+        throw new Error(rpcError.message || 'Verification failed. Please try again.');
+      }
+
+      if (data?.error) throw new Error(data.error);
       setSuccess('Password reset successful! Redirecting...');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
@@ -114,6 +124,21 @@ const ResetPassword = () => {
                 <input type={showPassword ? "text" : "password"} placeholder="New Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
                 <button type="button" className="premium-password-toggle" onClick={() => setShowPassword(!showPassword)}><i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i></button>
               </div>
+
+              {newPassword && (
+                <div className="premium-password-indicators" style={{ marginBottom: '1rem' }}>
+                  <div className="password-strength-bar">
+                    <div className="password-strength-fill" style={{ width: `${(checkPasswordStrength(newPassword).score / 6) * 100}%`, backgroundColor: checkPasswordStrength(newPassword).color }}></div>
+                  </div>
+                  <div className="requirements-grid">
+                    {Object.entries({ length: '8+ Chars', lowercase: 'Lower', uppercase: 'Upper', number: 'Number', special: 'Special', noSpaces: 'No Spaces' }).map(([key, label]) => (
+                      <span key={key} className={`req-item ${checkPasswordStrength(newPassword).checks[key] ? 'met' : ''}`}>
+                        <i className={`bi bi-${checkPasswordStrength(newPassword).checks[key] ? 'check-circle' : 'circle'}`}></i> {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="premium-input-group">
                 <i className="bi bi-lock-fill"></i>
                 <input type={showConfirmPassword ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />

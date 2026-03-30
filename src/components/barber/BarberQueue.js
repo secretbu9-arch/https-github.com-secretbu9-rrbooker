@@ -10,205 +10,284 @@ import dateService from '../../services/core/DateService';
 import appointmentTypeManager from '../../services/booking/AppointmentTypeManager';
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
+import { formatPrice, toISODateString } from '../utils/helpers';
 import RescheduleModal from './RescheduleModal';
 
 const barberQueueStyles = `
   :root {
-    --barber-black: #000000;
+    --barber-black: #0a0a0a;
     --barber-brown: #2c1810;
-    --barber-light-brown: #4d3a31;
+    --barber-gold: #d4af37;
     --barber-white: #ffffff;
-    --barber-light-gray: #f8f9fa;
-    --barber-gray: #e9ecef;
-    --barber-dark-gray: #6c757d;
+    --barber-light-gray: #f8fafc;
+    --barber-gray: #f1f5f9;
+    --barber-dark-gray: #64748b;
+    --barber-accent: #1e293b;
+    --premium-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
   }
 
   .queue-container {
-    background-color: var(--barber-light-gray);
+    background-color: #fafbfc;
     min-height: 100vh;
     padding-bottom: 5rem;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
   /* Premium Cards */
   .premium-card {
     background: var(--barber-white);
-    border: none;
-    border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 24px;
+    box-shadow: var(--premium-shadow);
     overflow: hidden;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .premium-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 30px 40px -10px rgba(0, 0, 0, 0.08);
   }
 
   /* Stat Cards - Interactive */
   .stat-card-modern {
     background: var(--barber-white);
-    border-radius: 20px;
-    padding: 1rem 1.25rem;
-    border: 1px solid rgba(0,0,0,0.05);
+    border-radius: 24px;
+    padding: 1.5rem;
+    border: 1px solid rgba(0,0,0,0.03);
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
     height: 100%;
-    min-width: 0;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-    user-select: none;
-    scroll-snap-align: center;
-    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (min-width: 768px) {
+    .stat-card-modern {
+      flex-direction: row;
+      align-items: center;
+      gap: 1.25rem;
+    }
   }
 
   .stat-card-modern:hover {
-    transform: translateY(-2px);
-    border-color: var(--barber-brown);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
-  }
-
-  .stat-card-modern:active {
-    transform: scale(0.96);
-    background: var(--barber-gray);
+    transform: translateY(-5px);
+    border-color: var(--barber-gold);
+    box-shadow: var(--premium-shadow);
   }
 
   .stat-icon-box {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     transition: all 0.3s ease;
+    flex-shrink: 0;
   }
 
   /* Serving Card - High Focus */
   .serving-card-premium {
-    background: var(--barber-black);
+    background: linear-gradient(135deg, #111 0%, #000 100%);
     color: var(--barber-white);
-    border-radius: 24px;
-    padding: 2rem;
-    margin-bottom: 2rem;
+    border-radius: 32px;
+    padding: 2.5rem;
+    margin-bottom: 2.5rem;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
   }
 
-  .serving-card-premium::before {
+  @media (min-width: 992px) {
+    .serving-card-premium {
+      flex-direction: row;
+      align-items: stretch;
+      padding: 3.5rem;
+    }
+    
+    .serving-main-content {
+      flex: 1;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      padding-right: 3rem;
+    }
+    
+    .serving-side-content {
+      width: 320px;
+      padding-left: 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+  }
+
+  .serving-card-premium::after {
     content: '';
     position: absolute;
-    top: 0;
-    right: 0;
-    width: 150px;
-    height: 150px;
-    background: linear-gradient(135deg, transparent, rgba(255,255,255,0.05));
-    border-radius: 0 0 0 100%;
+    top: -50%;
+    right: -20%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.05) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
   }
 
   .serving-label {
     text-transform: uppercase;
-    letter-spacing: 2px;
-    font-size: 0.75rem;
+    letter-spacing: 3px;
+    font-size: 0.8rem;
     font-weight: 800;
-    color: var(--barber-dark-gray);
-    margin-bottom: 0.5rem;
+    color: var(--barber-gold);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   /* Queue Item - Minimalist */
   .queue-item-minimal {
     background: var(--barber-white);
-    border-radius: 16px;
-    padding: 1rem 1.5rem;
-    margin-bottom: 1rem;
+    border-radius: 20px;
+    padding: 1.25rem 1.75rem;
+    margin-bottom: 1.25rem;
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 1.5rem;
     border: 1px solid rgba(0,0,0,0.03);
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .queue-item-minimal:hover {
-    transform: translateX(5px);
-    border-color: var(--barber-brown);
+    transform: scale(1.01) translateX(8px);
+    border-color: var(--barber-gold);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.05);
   }
 
   .queue-number-badge {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: var(--barber-light-gray);
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: var(--barber-gray);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 800;
+    font-weight: 900;
     color: var(--barber-black);
-    font-size: 1.1rem;
+    font-size: 1.25rem;
+    flex-shrink: 0;
   }
 
   /* Buttons */
   .btn-premium-primary {
-    background: var(--barber-brown);
+    background: var(--barber-black);
     color: var(--barber-white);
     border: none;
-    border-radius: 12px;
-    padding: 0.75rem 1.5rem;
+    border-radius: 16px;
+    padding: 1rem 2rem;
     font-weight: 700;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.9rem;
   }
 
   .btn-premium-primary:hover {
-    background: var(--barber-black);
+    background: var(--barber-gold);
     transform: translateY(-2px);
-    color: var(--barber-white);
+    color: var(--barber-black);
+    box-shadow: 0 10px 20px -5px rgba(212, 175, 55, 0.3);
   }
 
   .btn-premium-finish {
     background: var(--barber-white);
     color: var(--barber-black);
     border: none;
-    border-radius: 14px;
-    padding: 1rem 2rem;
-    font-weight: 800;
+    border-radius: 18px;
+    padding: 1.25rem 2rem;
+    font-weight: 900;
     width: 100%;
-    margin-top: 1rem;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    text-transform: uppercase;
+    letter-spacing: 2px;
   }
 
   .btn-premium-finish:hover {
-    background: var(--barber-gray);
-    transform: translateY(-2px);
+    background: var(--barber-gold);
+    color: var(--barber-black);
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(212, 175, 55, 0.4);
   }
 
   .section-title {
     font-weight: 900;
     letter-spacing: -0.5px;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    color: var(--barber-black);
+    font-size: 1.25rem;
   }
 
   .empty-state-minimal {
-    padding: 3rem;
+    padding: 5rem 2rem;
     text-align: center;
-    background: rgba(0,0,0,0.02);
-    border-radius: 20px;
-    border: 2px dashed rgba(0,0,0,0.05);
+    background: var(--barber-white);
+    border-radius: 32px;
+    border: 2px dashed var(--barber-gray);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
   }
 
-  /* New 2x2 Grid for Mobile */
+  /* Stats Grid Responsive */
   .stats-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    padding: 0 0 1.5rem;
+    gap: 1rem;
+    padding: 0 0 2rem;
   }
 
-  .stats-row::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (min-width: 768px) {
+  @media (min-width: 992px) {
     .stats-row {
       grid-template-columns: repeat(4, 1fr);
       gap: 1.5rem;
+    }
+  }
+
+  /* Custom Transitions */
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Web Premium Header */
+  .web-header {
+    background: white;
+    padding: 4rem 0 3rem;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    margin-bottom: 3rem;
+  }
+
+  @media (max-width: 768px) {
+    .web-header {
+      padding: 2rem 0;
+      margin-bottom: 2rem;
     }
   }
 `;
@@ -248,7 +327,7 @@ const BarberQueue = () => {
   useEffect(() => {
     if (!user) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
 
     // Initial data fetch
     fetchQueueData();
@@ -395,10 +474,12 @@ const BarberQueue = () => {
         setQueueStats(queueData.stats);
         setEfficiency(queueData.efficiency || 0);
 
-        // Update legacy state for compatibility - filter by appointment_type
+        // Update legacy state for compatibility - include both queue and scheduled types
         setQueuedAppointments(queueData.timeline.filter(apt =>
-          apt.appointment_type === 'queue' &&
+          (apt.appointment_type === 'queue' || apt.appointment_type === 'scheduled') &&
           apt.status !== 'completed' &&
+          apt.status !== 'done' &&
+          apt.status !== 'ongoing' &&
           apt.status !== 'cancelled' &&
           apt.status !== 'cancel'
         ));
@@ -502,7 +583,7 @@ const BarberQueue = () => {
   };
 
   // Component to display add-ons with async loading
-  const AddOnsDisplay = ({ appointment }) => {
+  const AddOnsDisplay = ({ appointment, className = "text-muted" }) => {
     const [addOnsText, setAddOnsText] = useState('');
     const [loading, setLoading] = useState(true);
 
@@ -526,10 +607,10 @@ const BarberQueue = () => {
       };
 
       loadAddOns();
-    }, [appointment.add_ons_data]);
+    }, [appointment.add_ons_data, appointment.id]); // added id to dependency to be safe
 
     if (loading) {
-      return <div className="text-muted small">Loading add-ons...</div>;
+      return <div className={`${className} small`}>Loading add-ons...</div>;
     }
 
     if (!addOnsText) {
@@ -537,7 +618,7 @@ const BarberQueue = () => {
     }
 
     return (
-      <div className="text-muted small">{addOnsText}</div>
+      <div className={`${className} small`}>{addOnsText}</div>
     );
   };
 
@@ -674,17 +755,27 @@ const BarberQueue = () => {
         throw new Error('Appointment not found');
       }
 
-      console.log(`🔄 Queue updating appointment ${appointmentId} to ${status}`);
+      // Prepare update data
+      const updateData = { status };
 
-      // Check if starting an appointment (ongoing) is for today only
       if (status === 'ongoing') {
-        const today = new Date().toISOString().split('T')[0];
-        const appointmentDate = appointment.appointment_date || '';
+        const now = new Date();
+        const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        const currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        
+        // Extract date portion safely
+        const appointmentDate = appointment.appointment_date ? appointment.appointment_date.split(' ')[0].split('T')[0] : '';
 
-        if (appointmentDate !== today) {
-          setError('You can only start appointments scheduled for today.');
+        console.log('🗓️ Starting session date check:', { today, appointmentDate, currentTime });
+
+        // Allow today or past appointments (late night shifts)
+        if (appointmentDate > today) {
+          setError(`You cannot start future appointments. This appointment is for ${appointmentDate}.`);
           return;
         }
+
+        // Always record the actual start time
+        updateData.appointment_time = currentTime;
       }
 
       // Optimistic updates
@@ -695,13 +786,15 @@ const BarberQueue = () => {
       if (status === 'ongoing') {
         const appointmentToStart = queuedAppointments.find(apt => apt.id === appointmentId);
         if (appointmentToStart) {
-          setCurrentAppointment(appointmentToStart);
+          setCurrentAppointment({
+            ...appointmentToStart,
+            status: 'ongoing',
+            appointment_time: updateData.appointment_time
+          });
           setQueuedAppointments(prev => prev.filter(apt => apt.id !== appointmentId));
         }
       }
 
-      // Database update - simplified approach
-      const updateData = { status };
       if (status === 'cancelled' || status === 'cancel') {
         updateData.queue_position = null;
       }
@@ -821,48 +914,51 @@ const BarberQueue = () => {
     <div className="queue-container">
       <style>{barberQueueStyles}</style>
       
-      {/* Premium Header */}
-      <div className="bg-white border-bottom mb-4">
-        <div className="container py-4">
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h1 className="h3 fw-black mb-1" style={{ letterSpacing: '-1px' }}>QUEUE</h1>
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-black rounded-pill px-3 py-1" style={{ fontSize: '0.7rem' }}>
-                  {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+      {/* Web Premium Header */}
+      <div className="web-header">
+        <div className="container">
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-4">
+            <div className="fade-in-up">
+              <h1 className="display-5 fw-black mb-1" style={{ letterSpacing: '-2px' }}>BARBER QUEUE</h1>
+              <div className="d-flex align-items-center gap-3">
+                <span className="badge bg-black rounded-pill px-4 py-2" style={{ fontSize: '0.8rem', letterSpacing: '1px' }}>
+                  {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </span>
                 {efficiency > 0 && (
-                  <span className="text-muted small fw-bold">
-                    <i className="bi bi-lightning-charge-fill text-warning me-1"></i>
-                    {efficiency}% Efficiency
-                  </span>
+                  <div className="d-flex align-items-center gap-2 py-1 px-3 bg-warning bg-opacity-10 rounded-pill">
+                    <i className="bi bi-lightning-charge-fill text-warning"></i>
+                    <span className="text-dark small fw-bold">{efficiency}% Performance</span>
+                  </div>
                 )}
               </div>
             </div>
-            <div className="d-flex gap-2">
-              <button 
-                className="btn btn-light rounded-circle p-0 d-flex align-items-center justify-content-center" 
-                style={{ width: '45px', height: '45px' }}
-                onClick={() => {
-                  const d = new Date(selectedDate);
-                  d.setDate(d.getDate() - 1);
-                  setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-                }}
-              >
-                <i className="bi bi-chevron-left"></i>
-              </button>
-              <button 
-                className="btn btn-light rounded-circle p-0 d-flex align-items-center justify-content-center" 
-                style={{ width: '45px', height: '45px' }}
-                onClick={() => {
-                  const d = new Date(selectedDate);
-                  d.setDate(d.getDate() + 1);
-                  setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-                }}
-              >
-                <i className="bi bi-chevron-right"></i>
-              </button>
-              <button className="btn btn-black text-white rounded-circle ms-2" style={{ width: '45px', height: '45px' }} onClick={fetchQueueData}>
+            <div className="d-flex gap-3 fade-in-up" style={{ animationDelay: '0.1s' }}>
+              <div className="btn-group rounded-pill overflow-hidden shadow-sm">
+                <button 
+                  className="btn btn-white border-end px-3 py-2" 
+                  onClick={() => {
+                    const d = new Date(selectedDate);
+                    d.setDate(d.getDate() - 1);
+                    setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+                  }}
+                >
+                  <i className="bi bi-chevron-left"></i>
+                </button>
+                <button className="btn btn-white px-4 fw-bold small text-uppercase" style={{ letterSpacing: '1px' }}>
+                  Today
+                </button>
+                <button 
+                  className="btn btn-white border-start px-3 py-2" 
+                  onClick={() => {
+                    const d = new Date(selectedDate);
+                    d.setDate(d.getDate() + 1);
+                    setSelectedDate(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+                  }}
+                >
+                  <i className="bi bi-chevron-right"></i>
+                </button>
+              </div>
+              <button className="btn btn-black text-white rounded-circle shadow-sm" style={{ width: '50px', height: '50px' }} onClick={fetchQueueData}>
                 <i className="bi bi-arrow-clockwise"></i>
               </button>
             </div>
@@ -883,14 +979,14 @@ const BarberQueue = () => {
         )}
 
         {/* Minimalist Stats */}
-        <div className="stats-row mb-5">
+        <div className="stats-row mb-5 fade-in-up" style={{ animationDelay: '0.2s' }}>
           <div className="stat-card-modern">
             <div className="stat-icon-box bg-success bg-opacity-10 text-success">
               <i className="bi bi-check2-circle"></i>
             </div>
             <div>
-              <div className="text-muted small fw-bold text-uppercase">Finished</div>
-              <div className="h4 mb-0 fw-black">{stats.completed || 0}</div>
+              <div className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>Completed</div>
+              <div className="h3 mb-0 fw-black">{stats.completed || 0}</div>
             </div>
           </div>
           <div className="stat-card-modern">
@@ -898,129 +994,150 @@ const BarberQueue = () => {
               <i className="bi bi-people"></i>
             </div>
             <div>
-              <div className="text-muted small fw-bold text-uppercase">Waiting</div>
-              <div className="h4 mb-0 fw-black">{stats.remaining || 0}</div>
+              <div className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>In Queue</div>
+              <div className="h3 mb-0 fw-black">{stats.remaining || 0}</div>
             </div>
           </div>
           <div className="stat-card-modern">
             <div className="stat-icon-box bg-warning bg-opacity-10 text-warning">
-              <i className="bi bi-hourglass-split"></i>
+              <i className="bi bi-bell-fill"></i>
             </div>
             <div>
-              <div className="text-muted small fw-bold text-uppercase">Pending</div>
-              <div className="h4 mb-0 fw-black">{stats.pendingRequests || 0}</div>
+              <div className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>Requests</div>
+              <div className="h3 mb-0 fw-black">{stats.pendingRequests || 0}</div>
             </div>
           </div>
           <div className="stat-card-modern">
             <div className="stat-icon-box bg-info bg-opacity-10 text-info">
-              <i className="bi bi-clock"></i>
+              <i className="bi bi-clock-history"></i>
             </div>
             <div>
-              <div className="text-muted small fw-bold text-uppercase">Work Time</div>
-              <div className="h4 mb-0 fw-black">{stats.totalTime}m</div>
+              <div className="text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>Workload</div>
+              <div className="h3 mb-0 fw-black">{stats.totalTime}m</div>
             </div>
           </div>
         </div>
 
-        <div className="row g-4">
+        <div className="row g-5">
           {/* Main Column */}
-          <div className="col-lg-8">
+          <div className="col-lg-8 fade-in-up" style={{ animationDelay: '0.3s' }}>
             {/* CURRENTLY SERVING */}
-            <div className="section-title text-black">
-              <i className="bi bi-scissors"></i> NOW SERVING
+            <div className="section-title">
+              <span className="p-2 bg-black rounded-3 text-white">
+                <i className="bi bi-scissors fs-5"></i>
+              </span>
+              <span>ACTIVE SESSION</span>
             </div>
             
             {currentAppointment ? (
               <div className="serving-card-premium">
-                <div className="serving-label">Active Session</div>
-                <div className="d-flex justify-content-between align-items-start mb-4">
-                  <div>
-                    <h2 className="display-6 fw-black mb-1">{currentAppointment.customer?.full_name}</h2>
-                    <div className="d-flex align-items-center gap-2 opacity-75">
-                      <i className="bi bi-clock"></i>
-                      <span>Started {formatTime(currentAppointment.appointment_time)}</span>
+                <div className="serving-main-content">
+                  <div className="serving-label">
+                    <span className="px-2 py-1 bg-warning bg-opacity-10 rounded text-warning" style={{ fontSize: '0.6rem' }}>LIVE</span>
+                    Current Client
+                  </div>
+                  <h2 className="display-4 fw-black mb-3">{currentAppointment.customer?.full_name}</h2>
+                  <div className="d-flex flex-wrap align-items-center gap-4 mb-4">
+                    <div className="d-flex align-items-center gap-2 px-3 py-2 bg-white bg-opacity-10 rounded-pill">
+                      <i className="bi bi-clock text-warning"></i>
+                      <span className="small">Started at {formatTime(currentAppointment.appointment_time)}</span>
+                    </div>
+                    <div className="d-flex align-items-center gap-2 px-3 py-2 bg-white bg-opacity-10 rounded-pill">
+                      <i className="bi bi-cash-stack text-success"></i>
+                      <span className="small fw-bold">{formatPrice(Number(getTotalPrice(currentAppointment)))}</span>
                     </div>
                   </div>
-                  <div className="text-end">
-                    <div className="h2 mb-0 fw-black text-white">₱{Number(getTotalPrice(currentAppointment)).toLocaleString()}</div>
-                    <div className="small opacity-50 fw-bold">TOTAL PRICE</div>
+                  
+                  <div className="p-4 bg-white rounded-4 shadow-sm border-0">
+                    <div className="small fw-bold text-uppercase text-muted mb-3" style={{ letterSpacing: '2px', fontSize: '0.7rem' }}>Selected Services</div>
+                    <div className="h4 mb-2 fw-bold text-black">{getServicesDisplay(currentAppointment)}</div>
+                    <AddOnsDisplay appointment={currentAppointment} className="text-secondary" />
                   </div>
                 </div>
-                
-                <div className="p-3 bg-white bg-opacity-10 rounded-4 mb-4">
-                  <div className="small fw-bold text-uppercase opacity-50 mb-2" style={{ letterSpacing: '1px' }}>Requested Services</div>
-                  <div className="h5 mb-2">{getServicesDisplay(currentAppointment)}</div>
-                  <AddOnsDisplay appointment={currentAppointment} />
-                </div>
 
-                <button 
-                  className="btn-premium-finish"
-                  onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
-                >
-                  FINISH SESSION <i className="bi bi-check-all ms-2"></i>
-                </button>
+                <div className="serving-side-content">
+                  <div className="text-center mb-4 d-none d-lg-block">
+                    <div className="display-1 opacity-25 fw-black">01</div>
+                    <div className="small fw-bold opacity-50">STATION</div>
+                  </div>
+                  <button 
+                    className="btn-premium-finish group"
+                    onClick={() => handleAppointmentStatus(currentAppointment.id, 'completed')}
+                  >
+                    COMPLETE SESSION 
+                    <i className="bi bi-check-circle-fill ms-2"></i>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="empty-state-minimal mb-5">
-                <i className="bi bi-cup-hot display-4 text-muted opacity-25 mb-3 d-block"></i>
-                <h5 className="fw-bold text-muted">No active customer</h5>
-                <p className="text-muted small">Select a customer from the waiting list to start serving.</p>
+                <div className="display-1 text-light mb-4">
+                  <i className="bi bi-cup-hot"></i>
+                </div>
+                <h3 className="fw-black text-dark">Take a Break</h3>
+                <p className="text-muted mb-4 mx-auto" style={{ maxWidth: '400px' }}>
+                  There is no active session right now. You can start the next customer from the waiting list when you're ready.
+                </p>
                 {queuedAppointments.length > 0 && (
                   <button 
-                    className="btn btn-premium-primary mt-3"
+                    className="btn btn-premium-primary"
                     onClick={() => handleAppointmentStatus(queuedAppointments[0].id, 'ongoing')}
                   >
-                    START NEXT CUSTOMER
+                    START NEXT CUSTOMER <i className="bi bi-play-fill ms-2"></i>
                   </button>
                 )}
               </div>
             )}
 
             {/* WAITING LIST */}
-            <div className="section-title mt-5">
-              <i className="bi bi-list-task"></i> WAITING LIST
-              <span className="badge bg-light text-dark ms-auto border rounded-pill px-3">
-                {queuedAppointments.length} Total
+            <div className="section-title mt-5 pt-4">
+              <span className="p-2 bg-primary bg-opacity-10 rounded-3 text-primary">
+                <i className="bi bi-list-stars fs-5"></i>
+              </span>
+              <span>WAITING LIST</span>
+              <span className="badge bg-light text-dark ms-auto border rounded-pill px-4 py-2" style={{ fontSize: '0.8rem' }}>
+                {queuedAppointments.length} Customers Waiting
               </span>
             </div>
 
             {queuedAppointments.length === 0 ? (
               <div className="empty-state-minimal">
-                <p className="text-muted mb-0">No one is waiting in the queue.</p>
+                <p className="text-muted mb-0 fw-bold">The waiting list is empty.</p>
               </div>
             ) : (
               <div className="queue-list-container">
                 {queuedAppointments.map((apt, index) => (
-                  <div key={apt.id} className={`queue-item-minimal ${apt.is_urgent ? 'border-danger border-opacity-50' : ''}`}>
+                  <div key={apt.id} className={`queue-item-minimal ${apt.is_urgent ? 'border-danger border-opacity-25' : ''}`}>
                     <div className={`queue-number-badge ${apt.is_urgent ? 'bg-danger text-white' : ''}`}>
                       {apt.queue_position || (index + 1)}
                     </div>
                     <div className="flex-grow-1">
-                      <div className="d-flex align-items-center gap-2">
-                        <h6 className="mb-0 fw-black">{apt.customer?.full_name}</h6>
-                        {apt.is_urgent && <span className="badge bg-danger rounded-pill" style={{ fontSize: '0.6rem' }}>URGENT</span>}
-                        {apt.is_rebooking && <span className="badge bg-info rounded-pill" style={{ fontSize: '0.6rem' }}>REBOOK</span>}
+                      <div className="d-flex align-items-center gap-3 mb-1">
+                        <h5 className="mb-0 fw-black">{apt.customer?.full_name}</h5>
+                        {apt.is_urgent && <span className="badge bg-danger rounded-pill px-3 py-1" style={{ fontSize: '0.6rem', letterSpacing: '1px' }}>URGENT</span>}
+                        {apt.is_rebooking && <span className="badge bg-info text-white rounded-pill px-3 py-1" style={{ fontSize: '0.6rem', letterSpacing: '1px' }}>REBOOK</span>}
                       </div>
-                      <div className="text-muted small truncate" style={{ maxWidth: '200px' }}>
-                        {getServicesDisplay(apt)}
+                      <div className="text-muted small d-flex align-items-center gap-2">
+                        <i className="bi bi-tag-fill opacity-50"></i>
+                        <span>{getServicesDisplay(apt)}</span>
                       </div>
                     </div>
-                    <div className="text-end me-3 d-none d-md-block">
-                      <div className="fw-bold text-dark">₱{Number(getTotalPrice(apt)).toLocaleString()}</div>
-                      <div className="small text-muted">{apt.total_duration || 30}m</div>
+                    <div className="text-end me-4 d-none d-md-block">
+                      <div className="h5 mb-0 fw-black text-black">{formatPrice(Number(getTotalPrice(apt)))}</div>
+                      <div className="small text-muted fw-bold">{apt.total_duration || 30} MINS</div>
                     </div>
                     <div className="d-flex gap-2">
                       {!currentAppointment && index === 0 && (
                         <button 
-                          className="btn btn-premium-primary btn-sm rounded-pill px-3"
+                          className="btn btn-black text-white rounded-pill px-4 fw-bold"
                           onClick={() => handleAppointmentStatus(apt.id, 'ongoing')}
                         >
                           Start
                         </button>
                       )}
                       <button 
-                        className="btn btn-light btn-sm rounded-circle" 
-                        style={{ width: '32px', height: '32px' }}
+                        className="btn btn-light rounded-circle shadow-sm" 
+                        style={{ width: '40px', height: '40px' }}
                         onClick={() => setRescheduleModal({ isOpen: true, appointment: apt })}
                       >
                         <i className="bi bi-clock-history"></i>
@@ -1033,42 +1150,54 @@ const BarberQueue = () => {
           </div>
 
           {/* Side Column */}
-          <div className="col-lg-4">
+          <div className="col-lg-4 fade-in-up" style={{ animationDelay: '0.4s' }}>
             {/* PENDING REQUESTS */}
             <div className="section-title">
-              <i className="bi bi-bell-fill"></i> RECENT REQUESTS
+              <span className="p-2 bg-warning bg-opacity-10 rounded-3 text-warning">
+                <i className="bi bi-lightning-fill fs-5"></i>
+              </span>
+              <span>INCOMING REQUESTS</span>
             </div>
 
             {pendingRequests.length === 0 ? (
-              <div className="empty-state-minimal p-4 mb-4">
-                <p className="text-muted small mb-0">No pending requests</p>
+              <div className="empty-state-minimal p-5 mb-5" style={{ padding: '3rem !important' }}>
+                <div className="opacity-50 mb-3">
+                  <i className="bi bi-inbox display-6"></i>
+                </div>
+                <p className="text-muted small mb-0 fw-bold">All caught up!</p>
               </div>
             ) : (
-              <div className="mb-4">
+              <div className="mb-5">
                 {pendingRequests.map(request => (
-                  <div key={request.id} className="premium-card p-3 mb-3 border">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <h6 className="fw-bold mb-0">{request.customer?.full_name}</h6>
-                      <span className="badge bg-warning bg-opacity-20 text-warning-emphasis">NEW</span>
+                  <div key={request.id} className="premium-card p-4 mb-4">
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <div>
+                        <h6 className="fw-black mb-1">{request.customer?.full_name}</h6>
+                        <div className="badge bg-warning bg-opacity-10 text-dark-emphasis rounded-pill" style={{ fontSize: '0.65rem' }}>NEW REQUEST</div>
+                      </div>
+                      <div className="text-end">
+                        <div className="fw-black text-black">{formatPrice(Number(getTotalPrice(request)))}</div>
+                      </div>
                     </div>
-                    <div className="text-muted small mb-3">
+                    <div className="text-muted small mb-4 p-3 bg-light rounded-3">
+                      <i className="bi bi-info-circle me-2"></i>
                       {getServicesDisplay(request)}
                     </div>
-                    <div className="d-flex gap-2">
+                    <div className="d-flex gap-3">
                       <button 
-                        className="btn btn-black text-white btn-sm flex-grow-1 fw-bold py-2 rounded-3"
+                        className="btn btn-black text-white flex-grow-1 fw-bold py-2 rounded-3 shadow-sm"
                         onClick={() => handleBookingResponse(request.id, 'accept')}
                       >
                         Accept
                       </button>
                       <button 
-                        className="btn btn-light btn-sm px-3 rounded-3"
+                        className="btn btn-light border-0 fw-bold py-2 rounded-3"
                         onClick={() => {
                           const reason = prompt('Decline reason (optional):');
                           if (reason !== null) handleBookingResponse(request.id, 'decline', reason);
                         }}
                       >
-                        <i className="bi bi-x-lg"></i>
+                        Decline
                       </button>
                     </div>
                   </div>
@@ -1077,46 +1206,58 @@ const BarberQueue = () => {
             )}
 
             {/* QUICK HISTORY */}
-            <div className="section-title mt-4">
-              <i className="bi bi-clock-history"></i> COMPLETED TODAY
+            <div className="section-title">
+              <span className="p-2 bg-primary bg-opacity-10 rounded-3 text-primary">
+                <i className="bi bi-clock-history fs-5"></i>
+              </span>
+              <span>HISTORY TODAY</span>
             </div>
             
-            <div className="premium-card p-0" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <div className="premium-card border-0 shadow-none bg-transparent" style={{ maxHeight: '500px', overflowY: 'auto' }}>
               {completedAppointments.length === 0 ? (
-                <div className="p-4 text-center text-muted small">
-                  Your work history will appear here.
+                <div className="p-5 text-center text-muted small bg-white rounded-4 border dashed">
+                  Work history will appear here.
                 </div>
               ) : (
-                completedAppointments.slice(0, 10).map(apt => (
-                  <div key={apt.id} className="p-3 border-bottom d-flex align-items-center gap-2">
-                    <div className="bg-success bg-opacity-10 text-success p-2 rounded-circle">
-                      <i className="bi bi-check-lg"></i>
+                <div className="d-flex flex-column gap-3">
+                  {completedAppointments.slice(0, 10).map(apt => (
+                    <div key={apt.id} className="p-3 bg-white rounded-4 border-0 shadow-sm d-flex align-items-center gap-3">
+                      <div className="bg-success bg-opacity-10 text-success p-3 rounded-4">
+                        <i className="bi bi-check2"></i>
+                      </div>
+                      <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                        <div className="fw-black small text-uppercase truncate">{apt.customer?.full_name}</div>
+                        <div className="text-muted fw-bold" style={{ fontSize: '0.7rem' }}>{formatTime(apt.appointment_time)}</div>
+                      </div>
+                      <div className="text-end">
+                        <div className="fw-black text-black small">{formatPrice(Number(getTotalPrice(apt)))}</div>
+                      </div>
                     </div>
-                    <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                      <div className="fw-bold small truncate">{apt.customer?.full_name}</div>
-                      <div className="text-muted" style={{ fontSize: '0.6rem' }}>{formatTime(apt.appointment_time)}</div>
-                    </div>
-                    <div className="fw-black small text-dark">₱{Number(getTotalPrice(apt)).toLocaleString()}</div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
 
             {/* SYSTEM ACTIONS */}
-            <div className="mt-5 p-4 bg-black text-white rounded-4 shadow-sm">
-              <h6 className="mb-3 fw-black" style={{ letterSpacing: '1px' }}>QUEUE INFO</h6>
-              <div className="d-flex justify-content-between mb-2 small opacity-75">
-                <span>Total Workload</span>
-                <span>{stats.totalTime} min</span>
+            <div className="mt-5 p-5 bg-black text-white rounded-4 shadow-lg position-relative overflow-hidden">
+              <div className="position-relative z-1">
+                <h5 className="mb-4 fw-black" style={{ letterSpacing: '2px' }}>INSIGHTS</h5>
+                <div className="d-flex justify-content-between mb-3 small opacity-75">
+                  <span className="fw-bold">DAILY WORKLOAD</span>
+                  <span className="fw-black">{stats.totalTime} MIN</span>
+                </div>
+                <div className="d-flex justify-content-between mb-4 small opacity-75">
+                  <span className="fw-bold">CURRENT PACE</span>
+                  <span className="fw-black">OPTIMAL</span>
+                </div>
+                <div className="border-top border-white border-opacity-10 pt-4 mt-2">
+                  <Link to="/schedule" className="btn btn-white w-100 fw-black rounded-pill text-black text-decoration-none text-center d-block py-3 shadow-sm hover-scale">
+                    VIEW FULL SCHEDULE
+                  </Link>
+                </div>
               </div>
-              <div className="d-flex justify-content-between mb-2 small opacity-75">
-                <span>Avg. Duration</span>
-                <span>30 min</span>
-              </div>
-              <div className="border-top border-white border-opacity-10 pt-3 mt-3">
-                <Link to="/schedule" className="btn btn-white w-100 fw-bold rounded-pill text-black text-decoration-none text-center d-block">
-                  View Full Schedule
-                </Link>
+              <div className="position-absolute bottom-0 end-0 opacity-10" style={{ transform: 'translate(20%, 20%)' }}>
+                <i className="bi bi-graph-up-arrow display-1"></i>
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 // components/customer/BookAppointment.js - Step-by-Step Booking Flow
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getTodayISOString } from '../utils/helpers';
 import { supabase } from '../../supabaseClient';
 
 import UnifiedSlotBookingService from '../../services/booking/UnifiedSlotBookingService';
@@ -624,7 +625,7 @@ const BookAppointment = () => {
   // Fetch barber queues
   const fetchBarberQueues = useCallback(async (barbersList = [], selectedDate = null) => {
     try {
-      const dateToFetch = selectedDate || new Date().toISOString().split('T')[0];
+      const dateToFetch = selectedDate || getTodayISOString();
 
       console.log('🔄 fetchBarberQueues called with:', { barbersList, selectedDate, dateToFetch });
 

@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { apiService } from '../../services/core/ApiService';
 // REMOVED: PushService import - use only CentralizedNotificationService
-import { formatDate, formatTime, getStatusColor, parseAddOnsData, mapLegacyAddonIds } from '../utils/helpers';
+import { formatDate, formatTime, getStatusColor, parseAddOnsData, mapLegacyAddonIds, getTodayISOString, toISODateString, formatPrice } from '../utils/helpers';
 import { APPOINTMENT_STATUS } from '../utils/constants';
 import LoadingSpinner from '../common/LoadingSpinner';
 import SearchAndFilter from '../common/SearchAndFilter';
@@ -33,7 +33,7 @@ const ManageAppointments = () => {
   const [showUrgentModal, setShowUrgentModal] = useState(false);
   const [statusUpdateData, setStatusUpdateData] = useState({ appointmentId: null, newStatus: null });
   const [urgentAppointmentData, setUrgentAppointmentData] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayISOString());
   const [availableSlots, setAvailableSlots] = useState([]);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
@@ -224,9 +224,11 @@ const ManageAppointments = () => {
     status: '',
     barber_id: '',
     date_range: 'today',
+    date: '',
     search: '',
     double_booking_only: false,
-    add_on_id: ''
+    add_on_id: '',
+    sort_by: 'operational' // Default to operational for the initial "Today" view
   });
 
   const [formData, setFormData] = useState({
@@ -469,8 +471,15 @@ const ManageAppointments = () => {
           customer:customer_id(id, full_name, email, phone),
           barber:barber_id(id, full_name, email, phone),
           service:service_id(id, name, price, duration, description)
-        `)
-        .order('appointment_date', { ascending: false });
+        `);
+
+      // Apply sorting based on latest entry if requested
+      if (filters.sort_by === 'latest_entry') {
+        query = query.order('created_at', { ascending: false });
+      } else {
+        // Operational view sorts by date ascending (queue order)
+        query = query.order('appointment_date', { ascending: true });
+      }
 
       // Apply status filter
       if (filters.status) {
@@ -482,22 +491,24 @@ const ManageAppointments = () => {
         query = query.eq('barber_id', filters.barber_id);
       }
 
-      // Apply date range filter
-      if (filters.date_range) {
-        const today = new Date().toISOString().split('T')[0];
+      // Apply date filter (overrides range if specific date is picked)
+      if (filters.date) {
+        query = query.eq('appointment_date', filters.date);
+      } else if (filters.date_range) {
+        const today = getTodayISOString();
 
         if (filters.date_range === 'today') {
           query = query.eq('appointment_date', today);
         } else if (filters.date_range === 'week') {
           const weekLater = new Date();
           weekLater.setDate(weekLater.getDate() + 7);
-          const weekLaterStr = weekLater.toISOString().split('T')[0];
+          const weekLaterStr = toISODateString(weekLater);
 
           query = query.gte('appointment_date', today).lte('appointment_date', weekLaterStr);
         } else if (filters.date_range === 'month') {
           const monthLater = new Date();
           monthLater.setMonth(monthLater.getMonth() + 1);
-          const monthLaterStr = monthLater.toISOString().split('T')[0];
+          const monthLaterStr = toISODateString(monthLater);
 
           query = query.gte('appointment_date', today).lte('appointment_date', monthLaterStr);
         } else if (filters.date_range === 'custom' && filters.start_date && filters.end_date) {
@@ -518,13 +529,18 @@ const ManageAppointments = () => {
 
       const rawData = data || [];
       
-      // Smart sorting: Ongoing first, then by earliest arrival/queue position
+      // Smart sorting: Ongoing first, then respect the selected sort order
       const sortedAppointments = [...rawData].sort((a, b) => {
         // 1. Ongoing status takes absolute priority
         if (a.status === 'ongoing' && b.status !== 'ongoing') return -1;
         if (b.status === 'ongoing' && a.status !== 'ongoing') return 1;
 
-        // 2. Then sort by date (though filter usually handles this, for 'week' or 'month' it matters)
+        if (filters.sort_by === 'latest_entry') {
+          // Sort by creation time (primary) then fallback to date
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        }
+
+        // 2. Default: sort by date
         if (a.appointment_date !== b.appointment_date) {
           return new Date(a.appointment_date) - new Date(b.appointment_date);
         }
@@ -756,6 +772,13 @@ const ManageAppointments = () => {
   };
 
   const handleStatusChange = (appointmentId, status) => {
+    // Basic guard: If trying to mark as completed, ensure it's ongoing
+    const appointmentToModify = appointments.find(a => a.id === appointmentId);
+    if (status === 'completed' && appointmentToModify?.status !== 'ongoing') {
+      setError('Appointments must be marked as "ongoing" before they can be completed.');
+      return;
+    }
+
     // Show modal for status update
     setStatusUpdateData({ appointmentId, newStatus: status });
     setShowStatusModal(true);
@@ -938,16 +961,16 @@ const ManageAppointments = () => {
 
       {/* Navigation Tabs */}
       <div className="d-flex gap-2 mb-3 overflow-auto pb-2" style={{ whiteSpace: 'nowrap' }}>
-        <div style={styles.tab(filters.date_range === 'today')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'today' }))}>TODAY</div>
-        <div style={styles.tab(filters.date_range === 'week')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'week' }))}>UPCOMING</div>
-        <div style={styles.tab(filters.date_range === 'month')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'month' }))}>MONTHLY</div>
-        <div style={styles.tab(filters.date_range === 'all')} onClick={() => setFilters(prev => ({ ...prev, date_range: 'all' }))}>VIEW ALL</div>
+        <div style={styles.tab(filters.date_range === 'today' && !filters.date)} onClick={() => setFilters(prev => ({ ...prev, date_range: 'today', date: '', sort_by: 'operational' }))}>TODAY</div>
+        <div style={styles.tab(filters.date_range === 'week' && !filters.date)} onClick={() => setFilters(prev => ({ ...prev, date_range: 'week', date: '', sort_by: 'operational' }))}>UPCOMING</div>
+        <div style={styles.tab(filters.date_range === 'month' && !filters.date)} onClick={() => setFilters(prev => ({ ...prev, date_range: 'month', date: '', sort_by: 'operational' }))}>MONTHLY</div>
+        <div style={styles.tab(filters.date_range === 'all' && !filters.date)} onClick={() => setFilters(prev => ({ ...prev, date_range: 'all', date: '', sort_by: 'latest_entry' }))}>VIEW ALL</div>
       </div>
 
       {/* Filters & Search Card */}
       <div style={{ ...styles.headerCard, padding: '1rem', background: '#fff' }}>
         <div className="row g-2 w-100 align-items-center">
-          <div className="col-md-6">
+          <div className="col-md-3">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-white border-end-0 rounded-start-4">
                 <i className="bi bi-search text-muted"></i>
@@ -962,6 +985,31 @@ const ManageAppointments = () => {
             </div>
           </div>
           <div className="col-md-3">
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-white border-end-0 rounded-start-4">
+                <i className="bi bi-calendar-event text-muted"></i>
+              </span>
+              <input 
+                type="date" 
+                className="form-control border-start-0 bg-white" 
+                value={filters.date}
+                onChange={(e) => setFilters(prev => ({ ...prev, date: e.target.value, date_range: e.target.value ? 'custom' : prev.date_range }))}
+              />
+              {filters.date && (
+                <button 
+                  className="btn btn-outline-secondary border-start-0 rounded-end-4 bg-white" 
+                  type="button"
+                  onClick={() => setFilters(prev => ({ ...prev, date: '', date_range: 'all' }))}
+                >
+                  <i className="bi bi-x-lg small text-danger"></i>
+                </button>
+              )}
+              {!filters.date && (
+                 <span className="input-group-text bg-white border-start-0 rounded-end-4"></span>
+              )}
+            </div>
+          </div>
+          <div className="col-md-2">
             <select 
               className="form-select form-select-sm rounded-4" 
               value={filters.status}
@@ -973,7 +1021,7 @@ const ManageAppointments = () => {
               ))}
             </select>
           </div>
-          <div className="col-md-3">
+          <div className="col-md-2">
             <select 
               className="form-select form-select-sm rounded-4" 
               value={filters.barber_id}
@@ -983,6 +1031,16 @@ const ManageAppointments = () => {
               {barbers.map(b => (
                 <option key={b.id} value={b.id}>{b.full_name}</option>
               ))}
+            </select>
+          </div>
+          <div className="col-md-2">
+            <select 
+              className="form-select form-select-sm rounded-4" 
+              value={filters.sort_by}
+              onChange={(e) => setFilters(prev => ({ ...prev, sort_by: e.target.value }))}
+            >
+              <option value="latest_entry">Latest Entry</option>
+              <option value="operational">Operational</option>
             </select>
           </div>
         </div>
@@ -1076,7 +1134,7 @@ const ManageAppointments = () => {
                               {getServicesSummary(appointment)}
                             </div>
                             <div className="small text-muted" style={{ fontSize: '0.7rem' }}>
-                              ₱{appointment.total_price || appointment.service?.price || 0} • {appointment.total_duration || appointment.service?.duration || 0}m
+                              {formatPrice(Number(appointment.total_price || appointment.service?.price || 0))} • {appointment.total_duration || appointment.service?.duration || 0}m
                             </div>
                             {appointment.add_ons_data && parseAddOnsData(appointment.add_ons_data).length > 0 && (
                               <div className="extra-small text-info fw-bold mt-1">
@@ -1087,6 +1145,13 @@ const ManageAppointments = () => {
                           </td>
                           <td style={{ padding: '1.25rem' }}>
                             <span style={styles.badge(canonicalStatus)}>{canonicalStatus}</span>
+                            {canonicalStatus === 'cancelled' && appointment.cancellation_reason && (
+                              <div className="extra-small text-danger mt-1 fw-700" style={{ maxWidth: '150px', whiteSpace: 'normal', fontSize: '0.65rem' }}>
+                                {appointment.cancellation_reason.substring(0, 50)}
+                                {appointment.cancellation_reason.length > 50 ? '...' : ''}
+                                <i className="bi bi-info-circle ms-1" title={appointment.cancellation_reason}></i>
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '1.25rem', textAlign: 'right' }}>
                             <div className="d-flex gap-2 justify-content-end">
@@ -1101,7 +1166,7 @@ const ManageAppointments = () => {
                               {appointment.priority_level !== '1' && 
                                appointment.status !== 'ongoing' && 
                                !['completed', 'cancelled', 'cancel', 'done'].includes(appointment.status?.toLowerCase()) && 
-                               appointment.appointment_date >= new Date().toISOString().split('T')[0] && (
+                               appointment.appointment_date >= getTodayISOString() && (
                                 <button style={{ ...styles.secondaryBtn, color: '#E65100', background: '#FFF3E0' }} className="touch-btn" title="Approve Urgent" onClick={() => handleApproveEmergency(appointment)}>
                                   <i className="bi bi-lightning-charge-fill"></i>
                                 </button>
@@ -1113,7 +1178,7 @@ const ManageAppointments = () => {
                                 </button>
                               )}
 
-                              {['pending', 'confirmed', 'ongoing'].includes(canonicalStatus) && (
+                              {canonicalStatus === 'ongoing' && (
                                 <button style={{ ...styles.secondaryBtn, color: '#1B5E20', background: '#E8F5E9' }} className="touch-btn" title="Mark Done" onClick={() => handleStatusChange(appointment.id, 'completed')}>
                                   <i className="bi bi-check2-circle"></i>
                                 </button>
@@ -1209,7 +1274,7 @@ const ManageAppointments = () => {
                         <div className="mt-2 pt-2 border-top border-secondary border-opacity-10 d-flex justify-content-between">
                           <span className="text-muted extra-small">TOTAL</span>
                           <span className="fw-800 small text-dark">
-                            ₱{selectedAppointment.total_price || 0} • {selectedAppointment.total_duration || 0}m
+                            ₱{Number(selectedAppointment.total_price || 0).toFixed(2)} • {selectedAppointment.total_duration || 0}m
                           </span>
                         </div>
                       </div>
@@ -1248,6 +1313,13 @@ const ManageAppointments = () => {
                     </div>
                   )}
 
+                  {selectedAppointment.status === 'cancelled' && selectedAppointment.cancellation_reason && (
+                    <div className="p-3 border border-danger rounded-4 bg-danger bg-opacity-10">
+                      <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#B71C1C', letterSpacing: '1px' }} className="mb-2">CANCELLATION REASON</div>
+                      <p className="small m-0 text-danger fw-700">{selectedAppointment.cancellation_reason}</p>
+                    </div>
+                  )}
+
                   <div className="d-flex gap-2 mt-2">
                     <button style={{ ...styles.primaryBtn, flex: 1 }} onClick={() => { setShowDetailsModal(false); handleEdit(selectedAppointment); }}>
                       <i className="bi bi-pencil"></i> EDIT APPOINTMENT
@@ -1276,7 +1348,7 @@ const ManageAppointments = () => {
                       <select className="form-select rounded-3" name="service_id" value={formData.service_id} onChange={handleChange} required>
                         <option value="">Select Service</option>
                         {services.map(s => (
-                          <option key={s.id} value={s.id}>{s.name} - ₱{s.price}</option>
+                          <option key={s.id} value={s.id}>{s.name} - ₱{Number(s.price || 0).toFixed(2)}</option>
                         ))}
                       </select>
                     </div>
@@ -1287,9 +1359,16 @@ const ManageAppointments = () => {
                     <div className="col-6">
                       <label className="small fw-bold mb-1">Status</label>
                       <select className="form-select rounded-3" name="status" value={formData.status} onChange={handleChange} required>
-                        {ALLOWED_STATUSES.map(s => (
-                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                        ))}
+                        {ALLOWED_STATUSES.map(s => {
+                          const isCompleted = s === APPOINTMENT_STATUS.COMPLETED;
+                          const isOngoing = selectedAppointment?.status === 'ongoing';
+                          const disabled = isCompleted && !isOngoing;
+                          return (
+                            <option key={s} value={s} disabled={disabled}>
+                              {s.charAt(0).toUpperCase() + s.slice(1)} {disabled ? '(Ongoing required)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div className="col-12">

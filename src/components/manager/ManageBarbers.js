@@ -26,6 +26,8 @@ const ManageBarbers = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [expandedProfileBarber, setExpandedProfileBarber] = useState(null);
+  const [modalSuccess, setModalSuccess] = useState('');
+  const [modalError, setModalError] = useState('');
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -240,6 +242,7 @@ const ManageBarbers = () => {
           .from('users')
           .update({
             full_name: formData.full_name,
+            email: formData.email,
             phone: formData.phone,
             skills: formData.skills,
             profile_picture_url: formData.profile_picture_url
@@ -286,7 +289,8 @@ const ManageBarbers = () => {
                 role: 'barber',
                 phone: formData.phone || '',
                 skills: formData.skills || ''
-              }
+              },
+              emailRedirectTo: 'https://rrbooker.vercel.app/login'
             }
           });
 
@@ -538,6 +542,8 @@ const ManageBarbers = () => {
     setFormErrors({});
     setIsEditing(false);
     setSelectedBarber(null);
+    setModalSuccess('');
+    setModalError('');
     setShowModal(false);
   };
 
@@ -596,11 +602,18 @@ const ManageBarbers = () => {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
-      setSuccessMessage(`Password reset email sent to ${formData.email}.`);
-      setShowSuccessModal(true);
+      if (showModal) {
+        setModalSuccess(`Reset link sent to ${formData.email}.`);
+        setTimeout(() => setModalSuccess(''), 5000);
+      } else {
+        setSuccessMessage(`Password reset email sent to ${formData.email}.`);
+        setShowSuccessModal(true);
+      }
     } catch (err) {
       console.error('Error sending reset email:', err);
-      setError('Failed to send password reset email: ' + err.message);
+      const msg = 'Failed to send password reset email: ' + err.message;
+      if (showModal) setModalError(msg);
+      else setError(msg);
     } finally {
       setLoading(false);
     }
@@ -626,12 +639,12 @@ const ManageBarbers = () => {
         throw error;
       }
 
-      setSuccessMessage(`Password for ${formData.full_name} has been directly updated.`);
-      setShowSuccessModal(true);
+      setModalSuccess(`Password for ${formData.full_name} updated successfully.`);
       setFormData(prev => ({ ...prev, new_password: '' }));
+      setTimeout(() => setModalSuccess(''), 5000);
     } catch (err) {
       console.error('Error overriding password:', err);
-      setError(err.message || 'Failed to override password.');
+      setModalError(err.message || 'Failed to override password.');
     } finally {
       setLoading(false);
     }
@@ -847,7 +860,7 @@ const ManageBarbers = () => {
         </div>
       </div>
 
-      {error && (
+      {error && !showModal && (
         <div className="alert-mobile-custom mb-3 shake" style={{
           backgroundColor: '#fff',
           borderLeft: '4px solid #d32f2f',
@@ -1014,6 +1027,18 @@ const ManageBarbers = () => {
                 <button type="button" className="btn-close" onClick={resetFormAndCloseModal}></button>
               </div>
               <div className="modal-body p-4 scroll-mobile-modal" style={{maxHeight: windowWidth < 576 ? '80vh' : 'auto', overflowY: 'auto'}}>
+                {modalSuccess && (
+                  <div className="alert alert-success border-0 rounded-4 shadow-sm mb-4 py-3 fade-in d-flex align-items-center">
+                    <i className="bi bi-check-circle-fill fs-5 me-3"></i>
+                    <div className="small fw-bold">{modalSuccess}</div>
+                  </div>
+                )}
+                {modalError && (
+                  <div className="alert alert-danger border-0 rounded-4 shadow-sm mb-4 py-3 fade-in d-flex align-items-center">
+                    <i className="bi bi-exclamation-circle-fill fs-5 me-3"></i>
+                    <div className="small fw-bold">{modalError}</div>
+                  </div>
+                )}
                 <form onSubmit={handleSubmit}>
                   {isEditing && (
                     <div className="text-center mb-4">
@@ -1050,13 +1075,12 @@ const ManageBarbers = () => {
                   <div className="form-floating mb-3">
                     <input
                       type="email"
-                      className="form-control premium-input"
+                      className="form-control premium-input text-lowercase"
                       id="email"
                       placeholder="name@example.com"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
-                      disabled={isEditing}
                       required
                     />
                     <label htmlFor="email">Email Address</label>
@@ -1111,21 +1135,34 @@ const ManageBarbers = () => {
 
                   {isEditing && (
                     <div className="admin-zone p-3 mb-4 rounded-4">
-                      <div className="small fw-bold text-danger mb-2 d-flex align-items-center">
+                      <div className="small fw-bold text-danger mb-3 d-flex align-items-center">
                         <i className="bi bi-shield-lock-fill me-2"></i>
                         ADMIN SECURITY OVERRIDE
                       </div>
-                      <div className="input-group">
+                      
+                      <div className="input-group mb-3">
                         <input
                           type="password"
                           className="form-control border-0 bg-white"
-                          placeholder="New Strength Password"
+                          placeholder="Force New Password"
                           name="new_password"
                           value={formData.new_password}
                           onChange={handleChange}
                         />
-                        <button className="btn btn-danger px-3" type="button" onClick={handleForcePasswordUpdate}>
-                          RESET
+                        <button className="btn btn-danger px-3 fw-bold" type="button" onClick={handleForcePasswordUpdate}>
+                          UPDATE
+                        </button>
+                      </div>
+
+                      <div className="d-grid">
+                        <button 
+                          type="button" 
+                          className="btn btn-outline-dark btn-sm border-0 py-2 fw-bold"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.03)' }}
+                          onClick={handleResetPassword}
+                        >
+                          <i className="bi bi-envelope-paper-fill me-2"></i>
+                          SEND RESET LINK VIA EMAIL
                         </button>
                       </div>
                     </div>
@@ -1249,9 +1286,6 @@ const ManageBarbers = () => {
               <div className="p-4 bg-white" style={{marginTop: '-40px', borderRadius: '40px 40px 0 0', position: 'relative', zIndex: 10, minHeight: '40vh'}}>
                 <div className="d-flex justify-content-between align-items-center">
                    <h2 className="fw-800 mb-0">{expandedProfileBarber.full_name}</h2>
-                   <span className="badge bg-light text-dark shadow-sm py-2 px-3 rounded-pill fw-800" style={{fontSize: '1rem'}}>
-                      <i className="bi bi-star-fill text-warning me-1"></i> NEW
-                   </span>
                 </div>
                 <p className="text-secondary mt-2 mb-4 d-flex align-items-center">
                    <i className="bi bi-shield-check-fill text-dark me-2"></i> Verified Professional Team Member

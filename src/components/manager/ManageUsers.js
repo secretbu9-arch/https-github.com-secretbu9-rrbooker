@@ -26,8 +26,13 @@ const ManageUsers = () => {
     const [formData, setFormData] = useState({
         full_name: '',
         role: '',
-        phone: ''
+        phone: '',
+        password: '',
+        new_password: ''
     });
+
+    const [modalSuccess, setModalSuccess] = useState('');
+    const [modalError, setModalError] = useState('');
 
     const [addFormData, setAddFormData] = useState({
         full_name: '',
@@ -200,8 +205,12 @@ const ManageUsers = () => {
         setFormData({
             full_name: user.full_name || '',
             role: user.role || 'customer',
-            phone: user.phone || ''
+            phone: user.phone || '',
+            password: '',
+            new_password: ''
         });
+        setModalSuccess('');
+        setModalError('');
         setShowEditModal(true);
     };
 
@@ -259,6 +268,12 @@ const ManageUsers = () => {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
+        
+        // Final confirmation before creation
+        if (!window.confirm(`Are you sure you want to create a new ${addFormData.role} account for ${addFormData.full_name}? A confirmation email will be sent to ${addFormData.email}.`)) {
+            return;
+        }
+
         try {
             setSaving(true);
             setError(null);
@@ -271,7 +286,7 @@ const ManageUsers = () => {
                         role: addFormData.role,
                         phone: addFormData.phone
                     },
-                    emailRedirectTo: `${window.location.origin}/dashboard`
+                    emailRedirectTo: 'https://rrbooker.vercel.app/login'
                 }
             });
             if (authError) throw authError;
@@ -286,17 +301,22 @@ const ManageUsers = () => {
                         role: addFormData.role
                     }]);
                 if (dbError) throw dbError;
-                setSuccessMessage(`User created successfully! Auth email sent to ${addFormData.email}.`);
-                setShowSuccessModal(true);
-                setShowAddModal(false);
+                
+                setModalSuccess(`User created successfully! Auth email sent to ${addFormData.email}.`);
+                fetchUsers();
+                // Optionally close after a delay
+                setTimeout(() => {
+                    setShowAddModal(false);
+                    setModalSuccess('');
+                }, 3000);
+                
                 setAddFormData({
                     full_name: '', email: '', password: '', phone: '', role: 'customer'
                 });
-                fetchUsers();
             }
         } catch (error) {
             console.error('Error creating user:', error);
-            setError('Failed to create user: ' + error.message);
+            setModalError('Failed to create user: ' + error.message);
         } finally {
             setSaving(false);
         }
@@ -320,11 +340,47 @@ const ManageUsers = () => {
             setUsers(prev => prev.map(u =>
                 u.id === selectedUser.id ? { ...u, ...formData, updated_at: new Date().toISOString() } : u
             ));
-            setShowEditModal(false);
-            setSelectedUser(null);
+            setModalSuccess('Profile updated successfully.');
+            setTimeout(() => {
+                setShowEditModal(false);
+                setModalSuccess('');
+                setSelectedUser(null);
+            }, 2000);
         } catch (error) {
             console.error('Error updating user:', error);
-            alert('Failed to update user.');
+            setModalError('Failed to update user.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+
+    const handleForcePasswordUpdate = async () => {
+        if (!formData.new_password || formData.new_password.length < 8) {
+            setModalError('New password must be at least 8 characters.');
+            return;
+        }
+
+        try {
+            setSaving(true);
+            const { error } = await supabase.rpc('update_user_password', {
+                target_user_id: selectedUser.id,
+                new_password: formData.new_password
+            });
+
+            if (error) {
+                if (error.code === 'PGRST202' || error.message.includes('Could not find')) {
+                    throw new Error('Database reset function unavailable. Use the email reset option instead.');
+                }
+                throw error;
+            }
+
+            setModalSuccess(`Password for ${formData.full_name} updated successfully.`);
+            setFormData(prev => ({ ...prev, new_password: '' }));
+            setTimeout(() => setModalSuccess(''), 5000);
+        } catch (err) {
+            console.error('Error overriding password:', err);
+            setModalError(err.message || 'Failed to override password.');
         } finally {
             setSaving(false);
         }
@@ -402,7 +458,11 @@ const ManageUsers = () => {
                     </h2>
                     <p className="text-muted small mb-0">Total system accounts: {users.length}</p>
                 </div>
-                <button style={styles.primaryBtn} className="touch-btn" onClick={() => setShowAddModal(true)}>
+                <button style={styles.primaryBtn} className="touch-btn" onClick={() => {
+                    setModalSuccess('');
+                    setModalError('');
+                    setShowAddModal(true);
+                }}>
                     <i className="bi bi-person-plus"></i> ADD NEW USER
                 </button>
             </div>
@@ -571,12 +631,25 @@ const ManageUsers = () => {
 
                         {/* Modal Body */}
                         <div className="p-4 overflow-auto premium-scroll">
+                            {modalSuccess && (
+                                <div className="alert alert-success border-0 rounded-4 shadow-sm mb-4 py-3 d-flex align-items-center">
+                                    <i className="bi bi-check-circle-fill fs-5 me-3"></i>
+                                    <div className="small fw-bold">{modalSuccess}</div>
+                                </div>
+                            )}
+                            {modalError && (
+                                <div className="alert alert-danger border-0 rounded-4 shadow-sm mb-4 py-3 d-flex align-items-center">
+                                    <i className="bi bi-exclamation-circle-fill fs-5 me-3"></i>
+                                    <div className="small fw-bold">{modalError}</div>
+                                </div>
+                            )}
+
                             {showAddModal && (
                                 <form onSubmit={handleCreateUser} className="d-flex flex-column gap-3">
                                     <div><label className="small fw-bold mb-1">Full Name</label><input type="text" className="form-control rounded-3" name="full_name" value={addFormData.full_name} onChange={handleAddFormChange} required /></div>
                                     <div><label className="small fw-bold mb-1">Email</label><input type="email" className="form-control rounded-3" name="email" value={addFormData.email} onChange={handleAddFormChange} required /></div>
                                     <div><label className="small fw-bold mb-1">Password</label><input type="password" className="form-control rounded-3" name="password" value={addFormData.password} onChange={handleAddFormChange} required minLength={8} /></div>
-                                    <div><label className="small fw-bold mb-1">Phone</label><input type="text" className="form-control rounded-3" name="phone" value={addFormData.phone} onChange={handleAddFormChange} /></div>
+                                    <div><label className="small fw-bold mb-1">Phone</label><input type="tel" className="form-control rounded-3" name="phone" value={addFormData.phone} onChange={handleAddFormChange} placeholder="9xx xxx xxxx" /></div>
                                     <div><label className="small fw-bold mb-1">Role</label><select className="form-select rounded-3" name="role" value={addFormData.role} onChange={handleAddFormChange} required><option value="customer">Customer</option><option value="barber">Barber</option><option value="manager">Manager</option></select></div>
                                     <button style={{ ...styles.primaryBtn, marginTop: '1rem' }} type="submit" disabled={saving}>{saving ? 'Creating...' : 'CREATE USER'}</button>
                                 </form>
@@ -584,8 +657,31 @@ const ManageUsers = () => {
                             {showEditModal && (
                                 <form onSubmit={handleSaveEdit} className="d-flex flex-column gap-3">
                                     <div><label className="small fw-bold mb-1">Full Name</label><input type="text" className="form-control rounded-3" name="full_name" value={formData.full_name} onChange={handleFormChange} required /></div>
-                                    <div><label className="small fw-bold mb-1">Phone</label><input type="text" className="form-control rounded-3" name="phone" value={formData.phone} onChange={handleFormChange} /></div>
+                                    <div><label className="small fw-bold mb-1">Phone</label><input type="tel" className="form-control rounded-3" name="phone" value={formData.phone} onChange={handleFormChange} placeholder="9xx xxx xxxx" /></div>
                                     <div><label className="small fw-bold mb-1">Role</label><select className="form-select rounded-3" name="role" value={formData.role} onChange={handleFormChange} required><option value="customer">Customer</option><option value="barber">Barber</option><option value="manager">Manager</option></select></div>
+                                    
+                                    <div className="admin-zone p-3 mt-3 rounded-4 shadow-sm" style={{ backgroundColor: '#fff5f5', border: '1px dashed #feb2b2' }}>
+                                        <div className="small fw-bold text-danger mb-3 d-flex align-items-center">
+                                            <i className="bi bi-shield-lock-fill me-2"></i>
+                                            ADMIN SECURITY OVERRIDE
+                                        </div>
+                                        
+                                        <div className="input-group mb-3">
+                                            <input
+                                                type="password"
+                                                className="form-control border-0 bg-white"
+                                                placeholder="Force New Password"
+                                                name="new_password"
+                                                value={formData.new_password}
+                                                onChange={handleFormChange}
+                                            />
+                                            <button className="btn btn-danger px-3 fw-bold" type="button" onClick={handleForcePasswordUpdate} disabled={saving}>
+                                                UPDATE
+                                            </button>
+                                        </div>
+
+                                    </div>
+
                                     <button style={{ ...styles.primaryBtn, marginTop: '1rem' }} type="submit" disabled={saving}>{saving ? 'Saving...' : 'SAVE CHANGES'}</button>
                                 </form>
                             )}

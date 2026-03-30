@@ -302,7 +302,7 @@ class QueueOnlyService {
     }
   }
 
-  async getQueueAnalytics(date = new Date().toISOString().split('T')[0]) {
+  async getQueueAnalytics(date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })) {
     try {
       const { data, error } = await supabase
         .from('appointments')

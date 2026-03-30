@@ -736,7 +736,6 @@ const ManageProducts = () => {
               <div style={styles.detailsColumn}>
                 <div className="d-flex align-items-center gap-2 mb-1">
                   <span style={{fontSize: '0.65rem', fontWeight: '800', color: '#888', textTransform: 'uppercase', letterSpacing: '1px'}}>{product.category || 'General'}</span>
-                  {!product.is_active && <span className="badge bg-warning text-dark" style={{fontSize: '0.6rem', borderRadius: '4px'}}>DRAFT</span>}
                 </div>
                 <h5 className="fw-800 mb-1" style={{color: '#1a1a1a'}}>{product.name}</h5>
                 <h6 className="fw-700 mb-0" style={{color: '#5D4037'}}>{formatPrice(product.price)}</h6>
@@ -763,8 +762,6 @@ const ManageProducts = () => {
                       <i className="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul className="dropdown-menu dropdown-menu-end border-0 shadow-lg p-2" style={{borderRadius: '16px'}}>
-                      <li><button className="dropdown-item rounded-3 py-2" onClick={() => handleToggleStatus(product.id, product.is_active)}><i className={`bi bi-eye${product.is_active ? '-slash' : ''} me-2`}></i>{product.is_active ? 'Hide from Shop' : 'Make Visible'}</button></li>
-                      <li><hr className="dropdown-divider opacity-50" /></li>
                       <li><button className="dropdown-item rounded-3 py-2 text-danger" onClick={() => handleDeleteProduct(product.id)}><i className="bi bi-trash3-fill me-2"></i>Delete Item</button></li>
                     </ul>
                   </div>
@@ -772,6 +769,7 @@ const ManageProducts = () => {
               </div>
             </div>
           ))
+
         )}
       </div>
 
@@ -830,17 +828,8 @@ const ManageProducts = () => {
                         <label htmlFor="description">Product Description</label>
                       </div>
                     </div>
-                    <div className="col-12 mb-3">
-                      <div className="p-3 rounded-4 bg-light border d-flex align-items-center justify-content-between">
-                        <div>
-                          <div className="fw-bold">Active Visibility</div>
-                          <div className="small text-muted">Show in catalog</div>
-                        </div>
-                        <div className="form-check form-switch fs-4">
-                          <input className="form-check-input custom-switch" type="checkbox" id="is_active" name="is_active" checked={formData.is_active} onChange={handleInputChange} />
-                        </div>
-                      </div>
-                    </div>
+                    {/* Active Visibility toggle removed as requested */}
+
                   </div>
 
                   <div className="d-grid gap-2">

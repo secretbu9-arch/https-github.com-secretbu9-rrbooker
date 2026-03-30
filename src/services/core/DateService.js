@@ -19,28 +19,35 @@ class DateService {
    */
   getCurrentDateFormats() {
     const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: this.defaultTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    // Format parts to get the date component
+    const parts = formatter.formatToParts(now);
+    const dateStr = `${parts.find(p => p.type === 'year').value}-${parts.find(p => p.type === 'month').value}-${parts.find(p => p.type === 'day').value}`;
+    const timeStr = `${parts.find(p => p.type === 'hour').value}:${parts.find(p => p.type === 'minute').value}:${parts.find(p => p.type === 'second').value}`;
     
     return {
-      // ISO formats
-      iso: now.toISOString(),
-      isoDate: now.toISOString().split('T')[0],
-      isoDateTime: now.toISOString().replace('T', ' ').split('.')[0],
+      // ISO-like formats but for the business timezone
+      iso: now.toISOString(), // Keep raw ISO for audit
+      isoDate: dateStr, // Today's date in PHT
+      isoDateTime: `${dateStr} ${timeStr}`,
       
       // Local formats
-      localDate: now.toLocaleDateString('en-CA'), // YYYY-MM-DD
-      localDateTime: now.toLocaleString('en-CA', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }),
+      localDate: dateStr,
+      localDateTime: `${dateStr} ${timeStr}`,
       
       // Timezone-aware formats
-      timezoneDate: this.formatDateForTimezone(now, this.defaultTimezone),
-      timezoneDateTime: this.formatDateTimeForTimezone(now, this.defaultTimezone),
+      timezoneDate: dateStr,
+      timezoneDateTime: `${dateStr} ${timeStr}`,
       
       // Raw date object
       raw: now,
@@ -164,7 +171,7 @@ class DateService {
 
       // Get normalized formats
       result.formats = this.getCurrentDateFormats();
-      result.normalized = date.toISOString().split('T')[0];
+      result.normalized = this.formatDateForTimezone(date);
       result.isValid = true;
 
     } catch (error) {
@@ -227,8 +234,8 @@ class DateService {
       sunday.setDate(monday.getDate() + 6);
       
       return {
-        start: monday.toISOString().split('T')[0],
-        end: sunday.toISOString().split('T')[0],
+        start: this.formatDateForTimezone(monday),
+        end: this.formatDateForTimezone(sunday),
         startDate: monday,
         endDate: sunday
       };

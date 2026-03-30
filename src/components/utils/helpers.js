@@ -11,8 +11,15 @@ import addOnsService from '../../services/booking/AddOnsService';
 export const formatDate = (date, options = DATE_FORMATS.MEDIUM) => {
   if (!date) return '';
 
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-US', options).format(dateObj);
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    // Always use Philippines timezone for all displays
+    const optionsWithTz = { ...options, timeZone: 'Asia/Manila' };
+    return new Intl.DateTimeFormat('en-US', optionsWithTz).format(dateObj);
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return typeof date === 'string' ? date : '';
+  }
 };
 
 /**
@@ -58,7 +65,7 @@ export const formatDuration = (durationMinutes) => {
  * @returns {string} - Formatted price string
  */
 export const formatPrice = (price, currency = 'PHP') => {
-  if (price === undefined || price === null) return '';
+  if (price === undefined || price === null) return '₱0.00';
 
   // Format price for Philippine Peso with ₱ symbol and comma separators
   if (currency === 'PHP') {
@@ -82,8 +89,13 @@ export const formatPrice = (price, currency = 'PHP') => {
  * @returns {string} - Today's date as ISO string
  */
 export const getTodayISOString = () => {
-  const today = new Date();
-  return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  // Always return the date in Philippine Time (PHT)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
 };
 
 /**
@@ -93,8 +105,18 @@ export const getTodayISOString = () => {
  */
 export const toISODateString = (date) => {
   if (!date) return '';
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(dateObj);
+  } catch (error) {
+    console.error('Error converting to ISO date string:', error);
+    return '';
+  }
 };
 
 /**

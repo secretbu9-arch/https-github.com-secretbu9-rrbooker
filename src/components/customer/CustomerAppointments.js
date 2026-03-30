@@ -8,6 +8,7 @@ import RatingForm from '../common/RatingForm';
 import addOnsService from '../../services/booking/AddOnsService';
 import AdvancedHybridQueueService from '../../services/queue/AdvancedHybridQueueService';
 import QueueTimeCalculator from '../../services/queue/QueueTimeCalculator';
+import { getTodayISOString } from '../utils/helpers';
 
 const CustomerAppointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -646,7 +647,7 @@ const CustomerAppointments = () => {
           // Calculate start time
           const nowLocal = new Date();
           const currentMinutes = nowLocal.getHours() * 60 + nowLocal.getMinutes();
-          const todayString = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth() + 1).padStart(2, '0') + '-' + String(nowLocal.getDate()).padStart(2, '0');
+          const todayString = getTodayISOString();
           const isToday = appointment.appointment_date === todayString;
           
           let startTime = isToday ? Math.max(WORK_START, currentMinutes) : WORK_START;
@@ -683,7 +684,7 @@ const CustomerAppointments = () => {
   const applyFilters = async () => {
     if (!appointments.length) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayISOString();
 
     let filtered = [...appointments];
 
@@ -1900,6 +1901,15 @@ const CustomerAppointments = () => {
                       <div className="status-badge-premium" style={{ background: '#e8f5e9', color: '#2e7d32' }}>
                         <i className="bi bi-check-all"></i>
                         <span>Finished</span>
+                      </div>
+                    )}
+
+                    {appointment.status === 'cancelled' && appointment.cancellation_reason && (
+                      <div className="alert alert-danger py-2 mb-3 border-0 bg-danger bg-opacity-10 rounded-3">
+                        <small className="extra-small d-block fw-bold text-danger mb-1" style={{ fontSize: '0.6rem', letterSpacing: '0.5px' }}>
+                          REASON FOR CANCELLATION
+                        </small>
+                        <p className="small mb-0 text-danger fw-700" style={{ fontSize: '0.75rem' }}>{appointment.cancellation_reason}</p>
                       </div>
                     )}
 

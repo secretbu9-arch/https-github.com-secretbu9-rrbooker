@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { ROUTES } from '../utils/constants';
+import { formatPrice } from '../utils/helpers';
 
 const barberRevenueStyles = `
   :root {
@@ -524,7 +525,7 @@ const BarberRevenue = () => {
         <div className="main-stat-card">
           <div className="rev-label text-white opacity-50 mb-2">Current Month Revenue</div>
           <h2 className="display-4 fw-black mb-2 text-white">
-            ₱{revenueData.thisMonth.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {formatPrice(revenueData.thisMonth)}
           </h2>
           <div className="d-flex align-items-center gap-3 mt-4">
             <div className="px-3 py-2 bg-white bg-opacity-10 rounded-pill small fw-bold">
@@ -546,19 +547,19 @@ const BarberRevenue = () => {
         <div className="grid-2x2">
           <div className="rev-box">
             <div className="rev-label">Today</div>
-            <h4 className="rev-value">₱{revenueData.today.toLocaleString()}</h4>
+            <h4 className="rev-value">{formatPrice(revenueData.today)}</h4>
           </div>
           <div className="rev-box">
             <div className="rev-label">This Week</div>
-            <h4 className="rev-value">₱{revenueData.thisWeek.toLocaleString()}</h4>
+            <h4 className="rev-value">{formatPrice(revenueData.thisWeek)}</h4>
           </div>
           <div className="rev-box">
             <div className="rev-label">Last Month</div>
-            <h4 className="rev-value">₱{revenueData.lastMonth.toLocaleString()}</h4>
+            <h4 className="rev-value">{formatPrice(revenueData.lastMonth)}</h4>
           </div>
           <div className="rev-box">
             <div className="rev-label">Annual</div>
-            <h4 className="rev-value">₱{revenueData.thisYear.toLocaleString()}</h4>
+            <h4 className="rev-value">{formatPrice(revenueData.thisYear)}</h4>
           </div>
         </div>
 
@@ -572,11 +573,11 @@ const BarberRevenue = () => {
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
                   <div className="rev-label mb-1">Daily Average</div>
-                  <h3 className="fw-black mb-0">₱{(revenueData.thisMonth / new Date().getDate()).toLocaleString(undefined, { maximumFractionDigits: 0 })}</h3>
+                  <h3 className="fw-black mb-0">{formatPrice(revenueData.thisMonth / new Date().getDate())}</h3>
                 </div>
                 <div className="text-end">
                   <div className="rev-label mb-1">Target Pace</div>
-                  <h3 className="fw-black mb-0">₱{(revenueData.thisMonth * 1.2).toLocaleString(undefined, { maximumFractionDigits: 0 })}</h3>
+                  <h3 className="fw-black mb-0">{formatPrice(revenueData.thisMonth * 1.2)}</h3>
                 </div>
               </div>
               <div className="p-3 bg-light rounded-4">
@@ -603,11 +604,11 @@ const BarberRevenue = () => {
               <div className="d-flex flex-column gap-3">
                 <div className="d-flex justify-content-between align-items-center p-3 bg-light rounded-4">
                   <span className="fw-bold small">TOTAL YEAR REVENUE</span>
-                  <span className="fw-black">₱{revenueData.thisYear.toLocaleString()}</span>
+                  <span className="fw-black">{formatPrice(revenueData.thisYear)}</span>
                 </div>
                 <div className="d-flex justify-content-between align-items-center p-3 bg-light rounded-4">
                   <span className="fw-bold small">MONTHLY PROJECTION</span>
-                  <span className="fw-black">₱{(revenueData.thisYear / (new Date().getMonth() + 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                  <span className="fw-black">{formatPrice(revenueData.thisYear / (new Date().getMonth() + 1))}</span>
                 </div>
                 <div className="d-flex justify-content-between align-items-center p-3 bg-light rounded-4">
                   <span className="fw-bold small">SYSTEM RANK</span>

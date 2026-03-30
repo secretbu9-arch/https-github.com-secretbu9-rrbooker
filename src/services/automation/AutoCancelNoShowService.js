@@ -21,9 +21,9 @@ class AutoCancelNoShowService {
     try {
       const gracePeriod = gracePeriodMinutes || this.GRACE_PERIOD_MINUTES;
       const now = new Date();
-      // Use local date instead of UTC to avoid skipping appointments due to timezone offsets
-      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-      const currentTime = now.toTimeString().slice(0, 5); // HH:MM format (local time)
+      // Use PHT for today and current time
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      const currentTime = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false }).split(' ')[0];
 
       console.log('🔍 Checking for no-show appointments...', { today, currentTime, gracePeriod });
 
@@ -275,7 +275,7 @@ class AutoCancelNoShowService {
    */
   calculateQueueStartTime(appointmentDate, queuePosition, barberId, previousQueueAppointments) {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const isToday = appointmentDate === today;
 
     // First customer starts at 8:00 AM

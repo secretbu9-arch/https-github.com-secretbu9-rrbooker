@@ -102,16 +102,6 @@ const NotificationsPage = () => {
     return true;
   });
 
-  const getIcon = (type) => {
-    switch (type) {
-      case 'appointment': return 'bi-calendar-check-fill text-primary';
-      case 'queue': return 'bi-people-fill text-success';
-      case 'reminder': return 'bi-bell-fill text-warning';
-      case 'booking': return 'bi-calendar-plus-fill text-info';
-      case 'announcement': return 'bi-megaphone-fill text-danger';
-      default: return 'bi-info-circle-fill text-secondary';
-    }
-  };
 
   return (
     <div className="container py-5 mt-4">
@@ -121,9 +111,6 @@ const NotificationsPage = () => {
             <div className="card-header bg-dark text-white p-4">
               <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
                 <div className="d-flex align-items-center">
-                  <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
-                    <i className="bi bi-bell-fill fs-4 text-white"></i>
-                  </div>
                   <div>
                     <h3 className="mb-0 fw-bold">Notifications</h3>
                     <p className="mb-0 text-white-50 small">Manage your alerts and stay updated</p>
@@ -197,11 +184,6 @@ const NotificationsPage = () => {
                       style={{ borderLeft: !n.read ? '4px solid #007bff' : '4px solid transparent', transition: 'all 0.2s' }}
                     >
                       <div className="d-flex">
-                        <div className="me-3">
-                          <div className="bg-white rounded-circle shadow-sm p-3 d-flex align-items-center justify-content-center" style={{ width: '50px', height: '50px' }}>
-                            <i className={`bi ${getIcon(n.type)} fs-4`}></i>
-                          </div>
-                        </div>
                         <div className="flex-grow-1">
                           <div className="d-flex justify-content-between align-items-start mb-1">
                             <h6 className={`mb-0 ${!n.read ? 'fw-bold' : ''}`}>{n.title}</h6>

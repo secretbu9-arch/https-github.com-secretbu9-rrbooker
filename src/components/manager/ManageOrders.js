@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import OrdersService from '../../services/booking/OrdersService';
+import { getTodayISOString } from '../utils/helpers';
 import LoadingSpinner from '../common/LoadingSpinner';
 import OrderConfirmationModal from '../orders/OrderConfirmationModal';
 import OrderDetailsModal from '../orders/OrderDetailsModal';
@@ -23,12 +24,7 @@ const ManageOrders = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const getTodayString = () => {
-    const now = new Date();
-    const offset = now.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(now - offset)).toISOString().split('T')[0];
-    return localISOTime;
-  };
+  const getTodayString = () => getTodayISOString();
 
   // Filters
   const [filters, setFilters] = useState({
@@ -176,15 +172,15 @@ const ManageOrders = () => {
         setFilters(prev => ({ ...prev, dateFrom: today, dateTo: today }));
         break;
       case 'upcoming':
-        const tomorrow = new Date();
+        const tomorrow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
         tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        const tomorrowStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
         setFilters(prev => ({ ...prev, dateFrom: tomorrowStr, dateTo: '' }));
         break;
       case 'previous':
-        const yesterday = new Date();
+        const yesterday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
         setFilters(prev => ({ ...prev, dateFrom: '', dateTo: yesterdayStr }));
         break;
       case 'all':

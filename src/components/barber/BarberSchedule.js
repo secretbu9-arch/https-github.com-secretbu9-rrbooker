@@ -9,7 +9,7 @@ import BulkCancellationModal from './BulkCancellationModal';
 import RescheduleModal from './RescheduleModal';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import ComprehensiveQueueManager from '../../services/queue/ComprehensiveQueueManager';
-import { toISODateString, getStatusColor, getStatusIcon } from '../utils/helpers';
+import { toISODateString, getStatusColor, getStatusIcon, formatPrice } from '../utils/helpers';
 import '../../styles/barber-appointments.css';
 
 const barberScheduleStyles = `
@@ -1793,7 +1793,7 @@ const BarberSchedule = () => {
                                 </div>
                               </div>
                               <div className="text-end">
-                                <div className="fw-bold text-primary fs-4">₱{totalPrice.toLocaleString()}</div>
+                                <div className="fw-bold text-primary fs-4">{formatPrice(totalPrice)}</div>
                                 <span className={`badge rounded-pill px-3 py-1 ${appointment.status === 'ongoing' ? 'bg-info-subtle text-info' :
                                   (appointment.status === 'pending' ? 'bg-warning-subtle text-warning' :
                                     (appointment.status === 'completed' || appointment.status === 'done' ? 'bg-black text-white px-3' : 'bg-primary-subtle text-primary'))

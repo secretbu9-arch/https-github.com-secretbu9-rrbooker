@@ -6,6 +6,7 @@ import { apiService } from '../../services/core/ApiService';
 import { PushService } from '../../services/notifications/PushService';
 import NotificationModal from '../manager/NotificationModal';
 import logoImage from '../../assets/images/raf-rok-logo.png';
+import { getTodayISOString, toISODateString, formatPrice } from '../utils/helpers';
 
 const managerDashboardStyles = `
   :root {
@@ -332,9 +333,8 @@ const ManagerDashboard = () => {
       setIsFetchingData(true);
       setError('');
 
-      // Get today's date
-      const today = new Date();
-      const todayString = today.toISOString().split('T')[0];
+      // Get today's date (PHT)
+      const todayString = getTodayISOString();
 
       // Fetch all statistics in parallel
       const [
@@ -586,12 +586,14 @@ const ManagerDashboard = () => {
 
   const fetchQueueAnalytics = async () => {
     try {
-      const today = new Date();
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const todayHelper = getTodayISOString();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = toISODateString(weekAgo);
 
       const analytics = await apiService.getQueueAnalytics(
-        weekAgo.toISOString().split('T')[0],
-        today.toISOString().split('T')[0]
+        weekAgoStr,
+        todayHelper
       );
 
       setQueueAnalytics(analytics);
@@ -602,8 +604,9 @@ const ManagerDashboard = () => {
 
   const fetchCapacityOverview = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const capacity = await apiService.getAllBarbersCapacity(today);
+      const today = new Date();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      const capacity = await apiService.getAllBarbersCapacity(todayStr);
       setCapacityOverview(capacity);
     } catch (error) {
       console.error('Error fetching capacity overview:', error);
@@ -882,14 +885,14 @@ const ManagerDashboard = () => {
             <div className="metric-label">
               <i className="bi bi-calendar-event"></i> TODAY'S GROSS
             </div>
-            <div className="metric-val">₱{stats.todayRevenue.toLocaleString()}</div>
+            <div className="metric-val">{formatPrice(stats.todayRevenue)}</div>
             <div className="mt-2 small text-muted">Current Sales</div>
           </div>
           <div className="metric-box">
             <div className="metric-label">
               <i className="bi bi-cash-stack"></i> TOTAL GROSS
             </div>
-            <div className="metric-val">₱{stats.totalRevenue.toLocaleString()}</div>
+            <div className="metric-val">{formatPrice(stats.totalRevenue)}</div>
             <div className="mt-2 small text-muted">All Time Revenue</div>
           </div>
           <div className="metric-box">
@@ -941,7 +944,7 @@ const ManagerDashboard = () => {
                           </td>
                           <td className="px-4 py-3">
                             <div className="small fw-bold">{apt.service?.name}</div>
-                            <div className="small text-muted">₱{apt.total_price || apt.service?.price}</div>
+                            <div className="small text-muted">{formatPrice(apt.total_price || apt.service?.price)}</div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="small fw-bold">{apt.appointment_date}</div>

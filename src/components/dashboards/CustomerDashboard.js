@@ -238,7 +238,8 @@ const CustomerDashboard = () => {
       if (!user) return;
 
       // Fetch upcoming appointments with all related data in one query
-      const today = new Date().toISOString().split('T')[0];
+      // Fetch upcoming appointments
+      const today = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
 
       // Try to fetch with priority request fields, fallback if they don't exist
       let appointments, appointmentsError;
@@ -408,7 +409,7 @@ const CustomerDashboard = () => {
 
   const updateQueuePositions = async (appointments = upcomingAppointments) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
       const todayAppointments = appointments.filter(apt =>
         apt.appointment_date === today && apt.status === 'scheduled'
       );
@@ -444,21 +445,21 @@ const CustomerDashboard = () => {
       console.error('Error fetching queue positions:', err);
     }
   };
-
   const fetchLiveQueueStatus = async () => {
     if (isFetchingQueue) return; // Prevent multiple simultaneous calls
 
     try {
-      setIsFetchingQueue(true);
       if (!user) return;
+      setIsFetchingQueue(true);
 
-      // Get all barbers that the customer has appointments with
+      const today = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
+      
       const { data: barberData, error: barberError } = await supabase
         .from('appointments')
         .select('barber_id, barber:barber_id(id, full_name)')
         .eq('customer_id', user.id)
         .in('status', ['scheduled', 'pending', 'ongoing', 'confirmed'])
-        .gte('appointment_date', new Date().toISOString().split('T')[0]);
+        .gte('appointment_date', today);
 
       if (barberError) throw barberError;
 
@@ -466,7 +467,10 @@ const CustomerDashboard = () => {
       const uniqueBarbers = [...new Map(barberData.map(item => [item.barber_id, item.barber])).values()];
 
       const queueStatusData = {};
-      const today = new Date().toISOString().split('T')[0];
+      // today variable is already declared above at function start or previous block if in same scope
+      // but let's ensure it's available. In this function, it's declared at line 452.
+      // So we don't need to redeclare it.
+
 
       // Fetch queue status for all barbers in parallel
       const queuePromises = uniqueBarbers.map(async (barber) => {

@@ -110,8 +110,9 @@ class QueueTimeCalculator {
 
     // If this is today, start from current time or work start, whichever is later
     if (isToday) {
-      const currentHour = nowLocal.getHours();
-      const currentMinute = nowLocal.getMinutes();
+      const nowManila = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      const currentHour = nowManila.getHours();
+      const currentMinute = nowManila.getMinutes();
       const currentMinutes = currentHour * 60 + currentMinute;
       currentTime = Math.max(currentTime, currentMinutes);
 
@@ -266,8 +267,9 @@ class QueueTimeCalculator {
     const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth() + 1).padStart(2, '0') + '-' + String(nowLocal.getDate()).padStart(2, '0');
     const isToday = targetDate === today;
 
-    const currentHour = nowLocal.getHours();
-    const currentMinute = nowLocal.getMinutes();
+    const nowManila = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const currentHour = nowManila.getHours();
+    const currentMinute = nowManila.getMinutes();
     const currentMinutes = currentHour * 60 + currentMinute;
 
     const workStart = this.timeToMinutes(this.BUSINESS_HOURS.start);

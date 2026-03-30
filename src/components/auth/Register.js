@@ -89,7 +89,7 @@ const Register = () => {
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/verify-email`,
+          emailRedirectTo: 'https://rrbooker.vercel.app/login',
           data: {
             full_name: formData.fullName,
             role: formData.role,

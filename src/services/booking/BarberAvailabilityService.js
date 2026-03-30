@@ -213,7 +213,7 @@ class BarberAvailabilityService {
    */
   checkBusinessHours(date, timeSlot = null) {
     const requestedDate = new Date(date);
-    const today = new Date();
+    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
     today.setHours(0, 0, 0, 0);
     requestedDate.setHours(0, 0, 0, 0);
 
@@ -297,8 +297,8 @@ class BarberAvailabilityService {
   async checkCurrentBusyStatus(barberId, date) {
     try {
       const now = new Date();
-      const currentTime = now.toTimeString().slice(0, 5);
-      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false }).split(' ')[0];
+      const currentDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
       // Only check if it's the current date
       if (date !== currentDate) {
@@ -577,7 +577,7 @@ class BarberAvailabilityService {
       // If no time available today, suggest next available date
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
-      return nextDate.toISOString().split('T')[0];
+      return nextDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
     } catch (error) {
       console.error('❌ Error finding next available time:', error);
@@ -587,7 +587,7 @@ class BarberAvailabilityService {
 
   // Helper methods
   isCurrentTime(date) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     return date === today;
   }
 
@@ -619,7 +619,7 @@ class BarberAvailabilityService {
     const end = new Date(endDate);
 
     for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
       const isDayOff = dayOffs.some(dayOff =>
         dateStr >= dayOff.start_date && dateStr <= dayOff.end_date
       );

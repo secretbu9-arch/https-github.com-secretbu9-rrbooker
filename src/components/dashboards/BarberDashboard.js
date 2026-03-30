@@ -8,6 +8,7 @@ import RescheduleModal from '../barber/RescheduleModal';
 import addOnsService from '../../services/booking/AddOnsService';
 import FriendBookingDisplay from '../common/FriendBookingDisplay';
 import NotificationPermission from '../common/NotificationPermission';
+import { formatPrice } from '../utils/helpers';
 import './BarberDashboard.css';
 
 const BarberDashboard = () => {
@@ -1114,7 +1115,7 @@ const BarberDashboard = () => {
 
   const statsCards = [
     { label: 'COMPLETED', value: todayStats.completedAppointments, icon: 'check2-circle', color: 'success' },
-    { label: "TODAY'S REVENUE", value: `₱${todayStats.revenue.toLocaleString()}`, icon: 'cash-stack', color: 'primary' },
+    { label: "TODAY'S REVENUE", value: formatPrice(todayStats.revenue), icon: 'cash-stack', color: 'primary' },
     { label: 'PENDING', value: todayStats.pendingRequests, icon: 'hourglass-split', color: 'warning' },
     { label: 'QUEUE', value: todayStats.queueLength, icon: 'people-fill', color: 'info' }
   ];
@@ -1299,7 +1300,7 @@ const BarberDashboard = () => {
                           <h5 className="fw-black mb-0">{currentAppointment.customer?.full_name}</h5>
                           <p className="text-muted small mb-0"><i className="bi bi-clock me-1 text-primary"></i>Started {formatTime(currentAppointment.appointment_time)}</p>
                         </div>
-                        <div className="h4 mb-0 fw-black text-success">₱{Number(getTotalPrice(currentAppointment)).toLocaleString()}</div>
+                        <div className="h4 mb-0 fw-black text-success">{formatPrice(Number(getTotalPrice(currentAppointment)))}</div>
                       </div>
                       <div className="d-flex flex-wrap gap-2 mb-3">
                         <span className="badge bg-light text-dark border-0 rounded-pill px-2 py-1 small fw-medium">{getServicesDisplay(currentAppointment)}</span>
@@ -1350,7 +1351,7 @@ const BarberDashboard = () => {
                           <div className="text-muted" style={{ fontSize: '0.7rem' }}>{getServicesDisplay(appointment).split(',')[0]} • {appointment.total_duration || 30}m</div>
                         </div>
                         <div className="text-end">
-                          <div className="fw-bold text-success small">₱{Number(getTotalPrice(appointment)).toLocaleString()}</div>
+                          <div className="fw-bold text-success small">{formatPrice(Number(getTotalPrice(appointment)))}</div>
                           <button
                             className="btn btn-primary btn-sm rounded-circle p-0 mt-1"
                             style={{ width: '28px', height: '28px' }}

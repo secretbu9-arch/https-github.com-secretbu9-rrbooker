@@ -1,9 +1,10 @@
 // components/common/SearchAndFilter.js
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { getTodayISOString } from '../utils/helpers';
 
 const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayISOString();
   const [filters, setFilters] = useState({
     status: '',
     barber_id: '',
@@ -198,7 +199,7 @@ const SearchAndFilter = ({ type, onResults, initialFilters = {} }) => {
   };
 
   const resetFilters = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
     setFilters({
       status: '',
       barber_id: '',
